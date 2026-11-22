@@ -1,27 +1,42 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Award,
+  BookOpen,
+  Bug,
   Check,
   Flame,
   Gamepad2,
   Gem,
+  Hammer,
   History,
   Home,
+  KeyRound,
   LayoutGrid,
   Lock,
   Play,
   Puzzle,
   RotateCcw,
   Settings,
+  Shield,
+  Square,
   Star,
   Timer,
   Trophy,
+  Volume2,
   X,
   Zap
 } from 'lucide-react';
-import { BONUS_LEVELS, LEVELS, type SaveProfile, type StemPillarId } from '../game/engine';
+import { BONUS_LEVELS, LEVELS, type SaveProfile } from '../game/engine';
 import { formatChallengeTime, type SpeedRunEvaluation } from '../game/challengeTimer';
 import { buildBeatenLevelHistory } from '../game/levelHistory';
+import {
+  normalizeStreakShields,
+  STORY_CHAPTERS,
+  STREAK_SHIELD_MAX,
+  type AcademyPillarId,
+  type StemFactCardDef
+} from '../game/educationStrategy';
+import { SPEECH, useReadAloud } from '../game/readAloud';
 
 export interface VictorySpeedRunSummary {
   evaluation: SpeedRunEvaluation;
@@ -43,12 +58,16 @@ interface VictoryModalProps {
   energyCost: number;
   parBudget: number;
   hasNextLevel: boolean;
-  upgradedPillars?: StemPillarId[];
+  isSandbox?: boolean;
+  upgradedPillars?: AcademyPillarId[];
   speedRun?: VictorySpeedRunSummary | null;
+  bugFixerBonus?: boolean;
+  unlockedFacts?: StemFactCardDef[];
   onPlayDash: () => void;
   onReplay: () => void;
   onOpenMap: () => void;
   onOpenTrophies?: () => void;
+  onOpenSandbox?: () => void;
   onNextLevel: () => void;
 }
 
@@ -66,12 +85,16 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   energyCost,
   parBudget,
   hasNextLevel,
+  isSandbox = false,
   upgradedPillars = [],
   speedRun = null,
+  bugFixerBonus = false,
+  unlockedFacts = [],
   onPlayDash,
   onReplay,
   onOpenMap,
   onOpenTrophies,
+  onOpenSandbox,
   onNextLevel
 }) => {
   if (!visible) return null;
@@ -202,7 +225,56 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
         )}
 
-        {/* Enter Mission Game Room CTA (Wall Breaker, Power Connect, Robot Run, Space Shooter & Planet Expedition) */}
+        {/* Growth-Mindset Bug Fixer Reward */}
+        {bugFixerBonus && (
+          <div
+            data-testid="victory-bug-fixer-card"
+            className="flex w-full items-center justify-between gap-2.5 rounded-2xl border border-sky-400/75 bg-sky-500/15 px-3.5 py-2 text-left"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-400/20 text-sky-300">
+                <Bug className="h-4.5 w-4.5" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="text-xs font-black text-white">Bug Fixer Bonus!</div>
+                <div className="text-[11px] font-medium text-sky-200">
+                  Tested, debugged, and fixed your robot code
+                </div>
+              </div>
+            </div>
+            <span className="tabular inline-flex shrink-0 items-center gap-1 rounded-lg bg-slate-950/75 px-2 py-0.5 text-xs font-black text-amber-300">
+              <Zap className="h-3.5 w-3.5 fill-amber-300 text-amber-300" aria-hidden="true" />
+              +15
+            </span>
+          </div>
+        )}
+
+        {/* Newly Collected Real-World STEM Fact Card Preview */}
+        {unlockedFacts.length > 0 && (
+          <button
+            type="button"
+            onClick={onOpenTrophies}
+            data-testid="victory-fact-card-preview"
+            className="flex w-full items-center justify-between gap-2.5 rounded-2xl border border-emerald-400/60 bg-emerald-500/12 px-3.5 py-2 text-left transition-colors hover:bg-emerald-500/20 active:scale-[0.99]"
+          >
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-400/20 text-emerald-300">
+                <BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-xs font-black text-white">
+                  New STEM Card Unlocked · {unlockedFacts[0].title}
+                </div>
+                <div className="truncate text-[11px] font-medium text-emerald-200">
+                  {unlockedFacts[0].realWorldExample}
+                </div>
+              </div>
+            </div>
+            <span className="shrink-0 text-[11px] font-black text-emerald-300">View</span>
+          </button>
+        )}
+
+        {/* Enter Mission Game Room CTA */}
         <button
           id="victoryWallRunBtn"
           type="button"
@@ -266,6 +338,18 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               )}
             </button>
           )}
+          {isSandbox && onOpenSandbox && (
+            <button
+              id="victoryEditSandboxBtn"
+              type="button"
+              onClick={onOpenSandbox}
+              aria-label="Edit Sandbox Mission"
+              className="flex h-16 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border-2 border-amber-300 bg-amber-400 px-4 text-sm font-black text-slate-950 shadow-[0_5px_0_#b45309] active:translate-y-0.5"
+            >
+              <Hammer className="h-5 w-5" aria-hidden="true" />
+              <span>Edit Lab</span>
+            </button>
+          )}
           {hasNextLevel && (
             <button
               type="button"
@@ -289,6 +373,8 @@ interface LevelMapModalProps {
   currentLevelId: number;
   onSelectLevel: (id: number) => void;
   onStartDaily: () => void;
+  onOpenSandbox?: () => void;
+  onOpenClassCode?: () => void;
   onClose: () => void;
 }
 
@@ -298,11 +384,23 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
   currentLevelId,
   onSelectLevel,
   onStartDaily,
+  onOpenSandbox,
+  onOpenClassCode,
   onClose
 }) => {
+  const speech = useReadAloud();
+
+  useEffect(() => {
+    if (!visible) {
+      SPEECH.stop();
+    }
+  }, [visible]);
+
   if (!visible) return null;
 
   const history = buildBeatenLevelHistory(save);
+  const shields = normalizeStreakShields(save.streakShields);
+  const allLevelsById = new Map([...LEVELS, ...BONUS_LEVELS].map((l) => [l.id, l]));
 
   return (
     <div
@@ -311,10 +409,10 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
       aria-label="Level Map"
       className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/82 p-3 sm:p-4"
     >
-      <div className="anim-pop touch-pan-y flex max-h-[92dvh] w-full max-w-xl flex-col gap-3.5 overflow-y-auto rounded-3xl border-2 border-slate-600 bg-slate-900 p-4 shadow-2xl sm:gap-4 sm:p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sky-300">
-            <LayoutGrid className="h-7 w-7" />
+      <div className="anim-pop touch-pan-y flex max-h-[92dvh] w-full max-w-2xl flex-col gap-3.5 overflow-y-auto rounded-3xl border-2 border-slate-600 bg-slate-900 p-4 shadow-2xl sm:gap-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-sky-300">
+            <LayoutGrid className="h-7 w-7 shrink-0" />
             <button
               type="button"
               onClick={onStartDaily}
@@ -324,10 +422,51 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
               <Flame className="h-5 w-5 fill-orange-400" />
               <span className="tabular font-black">{save.daily.streak || 0}</span>
             </button>
+            <div
+              data-testid="map-streak-shields"
+              aria-label={`Streak Shields ${shields} of ${STREAK_SHIELD_MAX}`}
+              className="flex h-11 items-center gap-1.5 rounded-2xl border border-cyan-400/50 bg-cyan-500/15 px-3 text-xs font-black text-cyan-200 tabular-nums"
+            >
+              <Shield className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+              <span>{shields}/{STREAK_SHIELD_MAX}</span>
+            </div>
+            {onOpenSandbox && (
+              <button
+                id="mapOpenSandboxBtn"
+                type="button"
+                onClick={() => {
+                  SPEECH.stop();
+                  onClose();
+                  onOpenSandbox();
+                }}
+                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-2xl border-2 border-amber-400/75 bg-amber-500/20 px-3 text-xs font-black text-amber-200 hover:bg-amber-500/30 active:scale-95"
+              >
+                <Hammer className="h-4 w-4" aria-hidden="true" />
+                <span>Sandbox</span>
+              </button>
+            )}
+            {onOpenClassCode && (
+              <button
+                id="mapOpenClassCodeBtn"
+                type="button"
+                onClick={() => {
+                  SPEECH.stop();
+                  onClose();
+                  onOpenClassCode();
+                }}
+                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-2xl border-2 border-cyan-400/75 bg-cyan-500/20 px-3 text-xs font-black text-cyan-200 hover:bg-cyan-500/30 active:scale-95"
+              >
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                <span>Class Code</span>
+              </button>
+            )}
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              SPEECH.stop();
+              onClose();
+            }}
             aria-label="Close Map"
             className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400"
           >
@@ -335,83 +474,137 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
           </button>
         </div>
 
-        {/* Main 8 Levels */}
-        <div className="grid grid-cols-4 gap-3">
-          {LEVELS.map((lvl) => {
-            const unlocked = lvl.id <= save.unlockedLevel;
-            const st = save.stars[lvl.id] || 0;
-            const active = currentLevelId === lvl.id;
+        {/* 3-Chapter Story Campaign (Ages 6–11) */}
+        <div className="flex flex-col gap-3">
+          {STORY_CHAPTERS.map((chapter) => {
+            const chapterSpeechId = `chapter_${chapter.id}`;
+            const isSpeakingChapter = speech.speaking && speech.activeId === chapterSpeechId;
             return (
-              <button
-                key={lvl.id}
-                type="button"
-                disabled={!unlocked}
-                onClick={() => onSelectLevel(lvl.id)}
-                aria-label={`Level ${lvl.id}`}
-                className={`flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 transition-transform active:scale-95 ${
-                  active
-                    ? 'border-amber-300 bg-amber-400/20'
-                    : unlocked
-                      ? 'border-sky-400/70 bg-slate-800 hover:border-sky-300'
-                      : 'border-slate-800 bg-slate-950 opacity-50'
-                }`}
+              <section
+                key={chapter.id}
+                data-story-chapter={chapter.id}
+                aria-label={chapter.title}
+                className="flex flex-col gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/75 p-3"
               >
-                {unlocked ? (
-                  <span className="tabular text-2xl font-black text-white">{lvl.id}</span>
-                ) : (
-                  <Lock className="h-6 w-6 text-slate-500" />
-                )}
-                <div className="flex gap-0.5">
-                  {[1, 2, 3].map((s) => (
-                    <Star
-                      key={s}
-                      className={`h-3.5 w-3.5 ${
-                        s <= st ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
-                      }`}
-                    />
-                  ))}
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-black text-white">
+                      {chapter.title}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-slate-300">
+                        {chapter.ageBand} · {chapter.stemFocus}
+                      </span>
+                      {speech.supported && (
+                        <button
+                          type="button"
+                          data-listen-chapter={chapter.id}
+                          onClick={() =>
+                            SPEECH.toggleSpeak(
+                              `${chapter.title}. ${chapter.briefingLines.join(' ')}`,
+                              chapterSpeechId
+                            )
+                          }
+                          aria-label={
+                            isSpeakingChapter
+                              ? `Stop reading ${chapter.title}`
+                              : `Listen to ${chapter.title} briefing`
+                          }
+                          className={`flex h-8 items-center gap-1 whitespace-nowrap rounded-lg border px-2 text-[11px] font-black transition-transform active:scale-95 ${
+                            isSpeakingChapter
+                              ? 'border-rose-400 bg-rose-500/20 text-rose-100'
+                              : 'border-slate-700 bg-slate-900 text-sky-200 hover:border-sky-400'
+                          }`}
+                        >
+                          {isSpeakingChapter ? (
+                            <>
+                              <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                              <span>Stop</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span>Listen</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs font-medium leading-snug text-slate-400">
+                    {chapter.briefingLines[0]}
+                  </p>
                 </div>
-              </button>
+
+                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
+                  {chapter.levelIds.map((lvlId) => {
+                    const lvl = allLevelsById.get(lvlId);
+                    if (!lvl) return null;
+                    const isBonus = Boolean(lvl.isBonus);
+                    const unlocked = isBonus ? true : lvl.id <= save.unlockedLevel;
+                    const rec = isBonus ? save.bonusStars[lvl.id] : undefined;
+                    const st = isBonus
+                      ? typeof rec === 'object'
+                        ? rec.stars
+                        : typeof rec === 'number'
+                          ? rec
+                          : 0
+                      : save.stars[lvl.id] || 0;
+                    const bStar = isBonus && typeof rec === 'object' ? rec.bonusStar : false;
+                    const active = currentLevelId === lvl.id;
+
+                    return (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        disabled={!unlocked}
+                        onClick={() => onSelectLevel(lvl.id)}
+                        aria-label={isBonus ? `Bonus Level ${lvl.id}` : `Level ${lvl.id}`}
+                        className={`relative flex h-20 flex-col items-center justify-center gap-1 rounded-2xl border-2 px-1 transition-transform active:scale-95 ${
+                          active
+                            ? 'border-amber-300 bg-amber-400/20'
+                            : isBonus
+                              ? 'border-violet-500/70 bg-slate-800 hover:border-violet-300'
+                              : unlocked
+                                ? 'border-sky-400/70 bg-slate-800 hover:border-sky-300'
+                                : 'border-slate-800 bg-slate-950 opacity-50'
+                        }`}
+                      >
+                        {bStar && <Award className="absolute right-1.5 top-1.5 h-4 w-4 text-amber-300" />}
+                        {unlocked ? (
+                          <span
+                            className={`tabular text-xl font-black leading-none ${
+                              isBonus ? 'text-violet-200' : 'text-white'
+                            }`}
+                          >
+                            {lvl.id}
+                          </span>
+                        ) : (
+                          <Lock className="h-5 w-5 text-slate-500" />
+                        )}
+                        <span className="max-w-full truncate text-[10px] font-bold text-slate-300">
+                          {lvl.name}
+                        </span>
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3].map((s) => (
+                            <Star
+                              key={s}
+                              className={`h-3 w-3 ${
+                                s <= st ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             );
           })}
         </div>
 
-        {/* Bonus Sector Levels (9-12) */}
-        <div className="grid grid-cols-4 gap-3 pt-1">
-          {BONUS_LEVELS.map((lvl) => {
-            const rec = save.bonusStars[lvl.id];
-            const st = typeof rec === 'object' ? rec.stars : typeof rec === 'number' ? rec : 0;
-            const bStar = typeof rec === 'object' ? rec.bonusStar : false;
-            return (
-              <button
-                key={lvl.id}
-                type="button"
-                onClick={() => onSelectLevel(lvl.id)}
-                aria-label={`Bonus Level ${lvl.id}`}
-                className={`relative flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 transition-transform active:scale-95 ${
-                  currentLevelId === lvl.id
-                    ? 'border-violet-300 bg-violet-500/25'
-                    : 'border-violet-500/70 bg-slate-800 hover:border-violet-300'
-                }`}
-              >
-                {bStar && <Award className="absolute right-1.5 top-1.5 h-4 w-4 text-amber-300" />}
-                <span className="tabular text-2xl font-black text-violet-200">{lvl.id}</span>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3].map((s) => (
-                    <Star
-                      key={s}
-                      className={`h-3.5 w-3.5 ${
-                        s <= st ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Beaten Levels History: Best Times & Star Ratings */}
+        {/* Beaten Levels History */}
         <section
           aria-label="Mission History"
           data-testid="level-map-history"

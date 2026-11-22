@@ -55,6 +55,7 @@ interface BuildDockProps {
   lowGraphics?: boolean;
   installPhase?: 'idle' | 'working' | 'celebrating';
   lastPlacement?: { id: number; part: PartId; r: number; c: number } | null;
+  hintBanner?: React.ReactNode;
   onSelectPart: (part: PartId | null) => void;
   onChangeBotTheme: (theme: BotThemeId) => void;
   onHoverSlot: (hover: { r: number; c: number; valid: boolean; part: PartId } | null) => void;
@@ -66,6 +67,7 @@ interface BuildDockProps {
   onToggleInspect: () => void;
   onTalkToBot: () => void;
   onOpenDemo?: (topic: DemoTopic) => void;
+  onRequestHint?: () => void;
 }
 
 const SWATCH_BG: Record<BotThemeId, string> = {
@@ -92,6 +94,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   lowGraphics = false,
   installPhase = 'idle',
   lastPlacement = null,
+  hintBanner = null,
   onSelectPart,
   onChangeBotTheme,
   onHoverSlot,
@@ -102,7 +105,8 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   onOpenProfile,
   onToggleInspect,
   onTalkToBot,
-  onOpenDemo
+  onOpenDemo,
+  onRequestHint
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [showGuide, setShowGuide] = useState(() => !level.isBonus && !level.isDaily && level.id <= 5);
@@ -478,7 +482,8 @@ export const BuildDock: React.FC<BuildDockProps> = ({
       )}
 
       {/* Collapsible Bottom 3D Workshop Part Dock */}
-      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center px-2 sm:px-3">
+      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-2 sm:px-3">
+        {hintBanner}
         <div className="pointer-events-auto w-full max-w-4xl rounded-2xl border border-slate-600/80 bg-slate-900/95 px-2.5 py-1.5 shadow-2xl sm:rounded-3xl sm:border-2 sm:border-slate-700 sm:px-3.5 sm:py-2">
           {/* Top Dock Bar: Energy Meter + Live Hover Preview + Bot Painter + Collapse + Next Button */}
           <div className="flex items-center justify-between gap-1.5 sm:gap-2.5">
@@ -644,7 +649,10 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                 id="toggleBuildGuideBtn"
                 type="button"
                 aria-pressed={showGuide}
-                onClick={() => setShowGuide((v) => !v)}
+                onClick={() => {
+                  setShowGuide((v) => !v);
+                  onRequestHint?.();
+                }}
                 aria-label={showGuide ? 'Hide Equipment Hint' : 'Show Equipment Hint'}
                 className={`flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-2 text-[11px] font-black transition-transform active:scale-95 sm:px-2.5 sm:text-xs ${
                   showGuide

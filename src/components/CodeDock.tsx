@@ -6,6 +6,7 @@ import {
   Cpu,
   Diamond,
   Eye,
+  Lightbulb,
   MapPin,
   Pause,
   Play,
@@ -44,6 +45,8 @@ interface CodeDockProps {
   tutorialStep: TutorialStep | null;
   ghostHelp: boolean;
   lastFeedbackTier?: CodeComplexityTier | null;
+  failingBlockId?: string | null;
+  hintBanner?: React.ReactNode;
   onChangeProgram: (next: CodeBlock[]) => void;
   onBlockPlaced?: (info: { block: CodeBlock; nestingDepth: number }) => void;
   onRunProgram: () => void;
@@ -51,6 +54,7 @@ interface CodeDockProps {
   onToggleSimPause?: () => void;
   onNextSimStep?: () => void;
   onStopSim?: () => void;
+  onRequestHint?: () => void;
   onOpenDemo?: (topic: DemoTopic, condition?: SensorCondition) => void;
 }
 
@@ -142,6 +146,8 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   tutorialStep,
   ghostHelp,
   lastFeedbackTier = null,
+  failingBlockId = null,
+  hintBanner = null,
   onChangeProgram,
   onBlockPlaced,
   onRunProgram,
@@ -149,6 +155,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   onToggleSimPause,
   onNextSimStep,
   onStopSim,
+  onRequestHint,
   onOpenDemo
 }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -301,6 +308,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
 
   function renderBlock(blk: CodeBlock) {
     const isActive = activeBlockId === blk.id;
+    const isFailing = !simulating && !isActive && failingBlockId === blk.id;
     const isAncestor = !isActive && ancestorIdSet.has(blk.id);
     const isContainerFocused = activeContainerId === blk.id;
 
@@ -311,6 +319,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           key={blk.id}
           data-block-id={blk.id}
           data-block-active={isActive ? 'true' : 'false'}
+          data-block-failing={isFailing ? 'true' : 'false'}
           data-block-ancestor={isAncestor ? 'true' : 'false'}
           data-drop-zone={blk.id}
           onPointerDown={(e) => handleExistingDown(e, blk)}
@@ -319,17 +328,24 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           className={`relative flex shrink-0 items-center gap-1.5 rounded-2xl border-2 px-2 py-1.5 transition-all ${
             isActive
               ? 'border-amber-300 bg-amber-400/25 ring-2 ring-amber-300/80 shadow-[0_0_20px_rgba(251,191,36,0.7)]'
-              : isAncestor
-                ? 'border-cyan-300 bg-cyan-500/15 shadow-[0_0_16px_rgba(34,211,238,0.45)]'
-                : isContainerFocused
-                  ? isLoop
-                    ? 'border-emerald-300 bg-emerald-500/20'
-                    : 'border-violet-300 bg-violet-500/20'
-                  : isLoop
-                    ? 'border-emerald-500/70 bg-slate-800/95'
-                    : 'border-violet-500/70 bg-slate-800/95'
+              : isFailing
+                ? 'border-rose-400 bg-rose-500/20 ring-2 ring-rose-400/75 shadow-[0_0_16px_rgba(251,113,133,0.45)]'
+                : isAncestor
+                  ? 'border-cyan-300 bg-cyan-500/15 shadow-[0_0_16px_rgba(34,211,238,0.45)]'
+                  : isContainerFocused
+                    ? isLoop
+                      ? 'border-emerald-300 bg-emerald-500/20'
+                      : 'border-violet-300 bg-violet-500/20'
+                    : isLoop
+                      ? 'border-emerald-500/70 bg-slate-800/95'
+                      : 'border-violet-500/70 bg-slate-800/95'
           }`}
         >
+          {isFailing && (
+            <span className="absolute -left-1.5 -top-2.5 z-10 rounded-md border border-rose-200 bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow">
+              Check
+            </span>
+          )}
           {isActive && stepInspection && (
             <span className="tabular absolute -left-1.5 -top-2.5 z-10 rounded-md border border-amber-200 bg-amber-400 px-1.5 py-0.5 text-[10px] font-black leading-none text-slate-950 shadow">
               #{stepInspection.stepNumber}
@@ -399,15 +415,23 @@ export const CodeDock: React.FC<CodeDockProps> = ({
         key={blk.id}
         data-block-id={blk.id}
         data-block-active={isActive ? 'true' : 'false'}
+        data-block-failing={isFailing ? 'true' : 'false'}
         onPointerDown={(e) => handleExistingDown(e, blk)}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 bg-slate-800 transition-all ${
           isActive
             ? 'border-amber-300 bg-amber-400/30 scale-110 ring-2 ring-amber-300/80 shadow-[0_0_22px_rgba(251,191,36,0.78)]'
-            : border
+            : isFailing
+              ? 'border-rose-400 bg-rose-500/25 ring-2 ring-rose-400/80 shadow-[0_0_16px_rgba(251,113,133,0.5)]'
+              : border
         }`}
       >
+        {isFailing && (
+          <span className="absolute -left-2 -top-2.5 z-10 rounded-md border border-rose-200 bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow">
+            Check
+          </span>
+        )}
         {isActive && stepInspection && (
           <span className="tabular absolute -left-2 -top-2.5 z-10 rounded-md border border-amber-200 bg-amber-400 px-1.5 py-0.5 text-[10px] font-black leading-none text-slate-950 shadow">
             #{stepInspection.stepNumber}
@@ -448,7 +472,8 @@ export const CodeDock: React.FC<CodeDockProps> = ({
         </div>
       )}
 
-      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center px-2 sm:px-3">
+      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-2 sm:px-3">
+        {hintBanner}
         <div
           data-code-feedback-tier={lastFeedbackTier || ''}
           className="pointer-events-auto w-full max-w-5xl rounded-3xl border border-slate-600/80 bg-slate-900/95 px-2.5 py-2 shadow-2xl sm:border-2 sm:border-slate-700 sm:px-3.5 sm:py-2.5"
@@ -661,6 +686,19 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                 >
                   <Trash2 className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                 </button>
+
+                {onRequestHint && !simulating && (
+                  <button
+                    id="codeNeedHintBtn"
+                    type="button"
+                    onClick={onRequestHint}
+                    aria-label="Need a Hint"
+                    className="flex h-10 items-center gap-1 rounded-xl border border-amber-400/70 bg-amber-500/15 px-2.5 text-xs font-black text-amber-200 transition-colors hover:border-amber-300 hover:bg-amber-500/25 active:scale-95 sm:h-12"
+                  >
+                    <Lightbulb className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="hidden sm:inline">Hint</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

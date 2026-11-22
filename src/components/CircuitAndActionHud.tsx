@@ -8,6 +8,7 @@ import {
   Cpu,
   Flame,
   Gauge,
+  Lightbulb,
   Magnet,
   RotateCw,
   Zap
@@ -18,16 +19,22 @@ interface CircuitOverlayProps {
   circuitGrid: CircuitGrid;
   tutorialStep: TutorialStep | null;
   ghostHelp: boolean;
+  highlightCell?: { r: number; c: number } | null;
+  hintBanner?: React.ReactNode;
   onTapCell: (r: number, c: number) => void;
   onOpenDemo?: (topic: 'CIRCUIT_MIRROR' | 'CIRCUIT_SPLITTER') => void;
+  onRequestHint?: () => void;
 }
 
 export const CircuitOverlay: React.FC<CircuitOverlayProps> = ({
   circuitGrid,
   tutorialStep,
   ghostHelp,
+  highlightCell = null,
+  hintBanner = null,
   onTapCell,
-  onOpenDemo
+  onOpenDemo,
+  onRequestHint
 }) => {
   const trace = traceCircuit(circuitGrid);
 
@@ -44,6 +51,7 @@ export const CircuitOverlay: React.FC<CircuitOverlayProps> = ({
 
   return (
     <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2.5 px-2.5 sm:gap-3 sm:px-4">
+      {hintBanner}
       <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-3xl border-2 border-cyan-400/70 bg-slate-900/95 px-3 py-2.5 shadow-2xl sm:gap-3 sm:px-4 sm:py-3">
         {/* Core Power Tally */}
         <div
@@ -74,14 +82,27 @@ export const CircuitOverlay: React.FC<CircuitOverlayProps> = ({
           </button>
         )}
 
+        {onRequestHint && (
+          <button
+            id="circuitNeedHintBtn"
+            type="button"
+            onClick={onRequestHint}
+            aria-label="Circuit Hint"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-amber-400/70 bg-amber-500/15 text-amber-300 shadow hover:border-amber-200 active:scale-95 sm:h-12 sm:w-12"
+          >
+            <Lightbulb className="h-5 w-5" />
+          </button>
+        )}
+
         {/* Accessible Mirror / Splitter Quick-Rotate Tactile Chips */}
         <div className="no-scrollbar touch-pan-x flex items-center gap-2 overflow-x-auto py-0.5">
           {mirrors.map((m) => {
             const isHint =
-              ghostHelp &&
-              tutorialStep?.targetType === 'circuit' &&
-              tutorialStep.circuitTarget?.r === m.r &&
-              tutorialStep.circuitTarget?.c === m.c;
+              (ghostHelp &&
+                tutorialStep?.targetType === 'circuit' &&
+                tutorialStep.circuitTarget?.r === m.r &&
+                tutorialStep.circuitTarget?.c === m.c) ||
+              (highlightCell?.r === m.r && highlightCell?.c === m.c);
             return (
               <button
                 key={`${m.r},${m.c}`}

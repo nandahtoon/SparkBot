@@ -5,7 +5,9 @@ import * as E from './engine';
 import {
   composeWallEPhrase,
   getEmoteWaveBars,
+  getRobotMoodEmoji,
   VOWEL_FORMANTS,
+  type RobotMoodCue,
   type WallEPhraseId
 } from './robotVoice';
 import { computeBuildEquipmentGuide } from './buildHints';
@@ -248,10 +250,45 @@ test('WALL-E vocal formant composer generates valid phrases with zero human Spee
   const maxAllowed = composeWallEPhrase('greeting', 1.28, 0);
   assert.deepEqual(clampedHigh, maxAllowed);
 
-  // Equalizer wave bars return 5 normalized heights
-  const bars = getEmoteWaveBars('playful', 1);
-  assert.equal(bars.length, 5);
-  assert.ok(bars.every((b) => b > 0 && b <= 1));
+  // Equalizer wave bars return 5 normalized heights across all engine mood cues
+  const moodList: RobotMoodCue[] = [
+    'happy',
+    'playful',
+    'excited',
+    'proud',
+    'sad',
+    'confused',
+    'curious',
+    'celebrate',
+    'boost',
+    'build',
+    'neutral'
+  ];
+  const emojis = new Set<string>();
+  for (const m of moodList) {
+    const bars = getEmoteWaveBars(m, 1);
+    assert.equal(bars.length, 5);
+    assert.ok(bars.every((b) => b > 0 && b <= 1));
+    const info = getRobotMoodEmoji(m);
+    assert.ok(info.emoji.length > 0 && info.label.length > 0);
+    emojis.add(info.emoji);
+  }
+  // Distinct robot emoji characters across moods
+  assert.equal(emojis.size, moodList.length);
+  assert.equal(getRobotMoodEmoji('happy', 'greeting').emoji, '🤖');
+  assert.equal(getRobotMoodEmoji('playful', 'curious', 'curious').emoji, '🧐');
+
+  // Verify RobotSpeechBubble consumes moodCue, renders robot-mood-emoji, and applies speaking bounce animation
+  const bubbleSrc = fs.readFileSync('src/components/RobotSpeechBubble.tsx', 'utf8');
+  assert.match(bubbleSrc, /getRobotMoodEmoji/);
+  assert.match(bubbleSrc, /moodCue/);
+  assert.match(bubbleSrc, /robot-mood-emoji/);
+  assert.match(bubbleSrc, /data-speaking/);
+  assert.match(bubbleSrc, /anim-speech-bounce/);
+
+  const cssSrc = fs.readFileSync('src/index.css', 'utf8');
+  assert.match(cssSrc, /speechHoverBounce/);
+  assert.match(cssSrc, /\.anim-speech-bounce/);
 
   // Verify zero human SpeechSynthesis usage remains in audio.ts
   const audioSrc = fs.readFileSync('src/game/audio.ts', 'utf8');

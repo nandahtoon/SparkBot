@@ -12,6 +12,16 @@ export type RobotTouchZone =
 
 export type RobotVoiceMood = 'happy' | 'excited' | 'playful' | 'proud';
 
+export type RobotMoodCue =
+  | RobotVoiceMood
+  | 'sad'
+  | 'confused'
+  | 'curious'
+  | 'celebrate'
+  | 'boost'
+  | 'build'
+  | 'neutral';
+
 export type VowelShape = 'oo' | 'aa' | 'ee' | 'oh' | 'uh';
 
 export type WallEPhraseId =
@@ -687,16 +697,69 @@ export function composeWallEPhrase(
   }));
 }
 
+export interface RobotMoodEmojiInfo {
+  emoji: string;
+  label: string;
+}
+
 /**
- * Pure helper generating 5 normalized equalizer heights (0.35..1.0)
+ * Maps game-engine mood cues and vocal phrases to distinct robot expression emoji characters.
+ */
+export function getRobotMoodEmoji(
+  mood: RobotMoodCue,
+  phrase?: WallEPhraseId,
+  emote?: RobotEmoteKind
+): RobotMoodEmojiInfo {
+  if (mood === 'sad' || phrase === 'sad') {
+    return { emoji: '😢', label: 'Sad robot' };
+  }
+  if (mood === 'confused') {
+    return { emoji: '🤔', label: 'Confused robot' };
+  }
+  if (mood === 'curious' || phrase === 'curious' || emote === 'curious') {
+    return { emoji: '🧐', label: 'Curious robot' };
+  }
+  if (mood === 'celebrate' || phrase === 'celebrate' || emote === 'celebrate') {
+    return { emoji: '🥳', label: 'Celebrating robot' };
+  }
+  if (mood === 'boost') {
+    return { emoji: '🚀', label: 'Turbo boost robot' };
+  }
+  if (mood === 'build') {
+    return { emoji: '🦾', label: 'Builder robot' };
+  }
+  if (mood === 'playful') {
+    return { emoji: '😜', label: 'Playful robot' };
+  }
+  if (mood === 'excited') {
+    return { emoji: '🤩', label: 'Excited robot' };
+  }
+  if (mood === 'proud') {
+    return { emoji: '😎', label: 'Proud robot' };
+  }
+  if (phrase === 'greeting' || mood === 'neutral') {
+    return { emoji: '🤖', label: 'Friendly robot' };
+  }
+  return { emoji: '😄', label: 'Happy robot' };
+}
+
+/**
+ * Pure helper generating 5 normalized equalizer heights (0.3..1.0)
  * for the non-verbal visual voice wave bubble.
  */
-export function getEmoteWaveBars(mood: RobotVoiceMood, variant = 0): number[] {
-  const base: Record<RobotVoiceMood, number[]> = {
+export function getEmoteWaveBars(mood: RobotMoodCue, variant = 0): number[] {
+  const base: Record<RobotMoodCue, number[]> = {
     playful: [0.55, 0.95, 0.65, 1.0, 0.5],
     excited: [0.65, 0.85, 1.0, 0.9, 0.7],
     proud: [0.45, 0.75, 0.95, 0.85, 0.6],
-    happy: [0.5, 0.85, 0.95, 0.75, 0.55]
+    happy: [0.5, 0.85, 0.95, 0.75, 0.55],
+    celebrate: [0.7, 1.0, 0.8, 1.0, 0.65],
+    curious: [0.45, 0.72, 0.42, 0.86, 0.52],
+    confused: [0.4, 0.68, 0.35, 0.75, 0.45],
+    sad: [0.35, 0.48, 0.38, 0.34, 0.3],
+    boost: [0.75, 0.92, 1.0, 0.95, 0.8],
+    build: [0.5, 0.8, 0.7, 0.9, 0.6],
+    neutral: [0.45, 0.65, 0.75, 0.65, 0.45]
   };
   const arr = base[mood] || base.happy;
   const shift = Math.abs(Math.floor(variant)) % arr.length;

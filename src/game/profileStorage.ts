@@ -17,6 +17,10 @@ import {
   type SaveProfile
 } from './engine';
 import { normalizeBestTimes } from './challengeTimer';
+import {
+  normalizeLearningTelemetry,
+  normalizeStreakShields
+} from './educationStrategy';
 
 export const DEFAULT_PROFILE_NAME = 'Cadet Engineer';
 export const MAX_PROFILE_NAME_LENGTH = 24;
@@ -77,6 +81,41 @@ export function renameSaveProfile(
   };
 }
 
+export function normalizeSaveProfileData(parsed: Partial<SaveProfile> | null | undefined): SaveProfile {
+  const base = defaultSaveProfile();
+  if (!parsed || typeof parsed !== 'object') return base;
+  const botTheme = normalizeBotTheme(parsed.botTheme);
+  const botCharacter = normalizeBotCharacter(parsed.botCharacter);
+  return {
+    ...base,
+    ...parsed,
+    profileName: normalizeProfileName(parsed.profileName),
+    audio: normalizeAudioSettings(parsed.audio),
+    lowGraphics: Boolean(parsed.lowGraphics),
+    challengeTimerEnabled: Boolean(parsed.challengeTimerEnabled),
+    readAloudEnabled: Boolean(parsed.readAloudEnabled),
+    bestTimes: normalizeBestTimes(parsed.bestTimes),
+    botTheme,
+    botCharacter,
+    paintBooth: parsed.paintBooth
+      ? normalizePaintConfig(parsed.paintBooth, botTheme, botCharacter)
+      : createDefaultPaintConfig(botTheme, botCharacter),
+    savedPaintThemes: normalizeSavedPaintThemes(parsed.savedPaintThemes),
+    stars: parsed.stars || base.stars,
+    bonusStars: parsed.bonusStars || base.bonusStars,
+    daily: { ...base.daily, ...(parsed.daily || {}) },
+    skillStats: { ...defaultSkillStats(), ...(parsed.skillStats || {}) },
+    streakShields: normalizeStreakShields(parsed.streakShields),
+    unlockedFactIds: Array.isArray(parsed.unlockedFactIds)
+      ? Array.from(new Set(parsed.unlockedFactIds.filter((x): x is string => typeof x === 'string')))
+      : [],
+    adaptiveHintsEnabled:
+      parsed.adaptiveHintsEnabled === undefined ? true : Boolean(parsed.adaptiveHintsEnabled),
+    learningTelemetry: normalizeLearningTelemetry(parsed.learningTelemetry),
+    sandbox: parsed.sandbox ? { ...base.sandbox, ...parsed.sandbox } : base.sandbox
+  };
+}
+
 export function loadSaveProfile(storage: Pick<Storage, 'getItem'> | null = typeof window !== 'undefined' ? window.localStorage : null): SaveProfile {
   const base = defaultSaveProfile();
   if (!storage) return base;
@@ -84,28 +123,7 @@ export function loadSaveProfile(storage: Pick<Storage, 'getItem'> | null = typeo
     const raw = storage.getItem(SAVE_KEY);
     if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<SaveProfile>;
-    const botTheme = normalizeBotTheme(parsed.botTheme);
-    const botCharacter = normalizeBotCharacter(parsed.botCharacter);
-    return {
-      ...base,
-      ...parsed,
-      profileName: normalizeProfileName(parsed.profileName),
-      audio: normalizeAudioSettings(parsed.audio),
-      lowGraphics: Boolean(parsed.lowGraphics),
-      challengeTimerEnabled: Boolean(parsed.challengeTimerEnabled),
-      bestTimes: normalizeBestTimes(parsed.bestTimes),
-      botTheme,
-      botCharacter,
-      paintBooth: parsed.paintBooth
-        ? normalizePaintConfig(parsed.paintBooth, botTheme, botCharacter)
-        : createDefaultPaintConfig(botTheme, botCharacter),
-      savedPaintThemes: normalizeSavedPaintThemes(parsed.savedPaintThemes),
-      stars: parsed.stars || base.stars,
-      bonusStars: parsed.bonusStars || base.bonusStars,
-      daily: { ...base.daily, ...(parsed.daily || {}) },
-      skillStats: { ...defaultSkillStats(), ...(parsed.skillStats || {}) },
-      sandbox: parsed.sandbox || base.sandbox
-    };
+    return normalizeSaveProfileData(parsed);
   } catch {
     return base;
   }
@@ -124,10 +142,6 @@ export function persistSaveProfile(
   }
 }
 
-/**
- * Ensures the robot always has a fun, full Action Dash loadout if launched
- * before the player attaches a drive system in the workshop.
- */
 export function ensureActionDashChassis(chassis: ChassisGrid): ChassisGrid {
   if (computeChassisInfo(chassis).hasDrive) return chassis;
   const fallback = createEmptyChassis();
@@ -151,6 +165,9 @@ export function computeTotalStarsEarned(save: Pick<SaveProfile, 'stars' | 'bonus
 }
 
 export function getLevelSavedStars(save: SaveProfile, level: LevelDef): number {
+  if (level.isSandbox || level.isClassCode) {
+    return 0;
+  }
   if (level.isDaily) {
     return save.daily.dateKey === level.dailyDateKey ? save.daily.stars : 0;
   }

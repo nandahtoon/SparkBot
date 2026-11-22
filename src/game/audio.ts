@@ -15,6 +15,7 @@ import {
 } from './robotVoice';
 import type { PartId } from './engine';
 import { getPartPlacementSoundProfile } from './partAudio';
+import { MILESTONE_SOUND_PROFILES, type MilestoneUnlockKind } from './milestoneParticles';
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
@@ -691,6 +692,88 @@ class SoundEngine {
     }
     if (this.glideGain) {
       this.glideGain.gain.setTargetAtTime(0.06 * gainScale, ctx.currentTime, 0.04);
+    }
+  }
+
+  /**
+   * Unique celebratory harmonic chime + celesta sparkle + soft shimmer chord
+   * played strictly when a new STEM Fact Card or Mastery Badge tier unlocks.
+   */
+  public milestoneUnlock(kind: MilestoneUnlockKind = 'both') {
+    const env = this.ensure('sfx');
+    if (!env) return;
+    const { ctx, out, gainScale } = env;
+    const profile = MILESTONE_SOUND_PROFILES[kind] || MILESTONE_SOUND_PROFILES.both;
+    const now = ctx.currentTime;
+
+    // 1. Warm foundational fifth pad to give the unlock chime emotional depth
+    for (const [idx, ratio] of [1, 1.5].entries()) {
+      const pad = ctx.createOscillator();
+      const padGain = ctx.createGain();
+      pad.type = 'sine';
+      pad.frequency.setValueAtTime(profile.chordRootHz * ratio, now);
+      const peak = (idx === 0 ? 0.14 : 0.09) * gainScale;
+      padGain.gain.setValueAtTime(0.0001, now);
+      padGain.gain.linearRampToValueAtTime(peak, now + 0.05);
+      padGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+      pad.connect(padGain);
+      padGain.connect(out);
+      pad.start(now);
+      pad.stop(now + 0.75);
+    }
+
+    // 2. Ascending celesta/bell arpeggio with +1 octave crystalline shimmer overtone
+    profile.notesHz.forEach((freq, i) => {
+      const t = now + i * profile.stepDelaySec;
+      const isFinal = i === profile.notesHz.length - 1;
+      const dur = isFinal ? 0.48 : 0.24;
+
+      const bell = ctx.createOscillator();
+      const bellGain = ctx.createGain();
+      bell.type = 'sine';
+      bell.frequency.setValueAtTime(freq, t);
+      bellGain.gain.setValueAtTime(0.0001, t);
+      bellGain.gain.linearRampToValueAtTime((isFinal ? 0.22 : 0.17) * gainScale, t + 0.012);
+      bellGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      bell.connect(bellGain);
+      bellGain.connect(out);
+      bell.start(t);
+      bell.stop(t + dur + 0.02);
+
+      const overtone = ctx.createOscillator();
+      const overGain = ctx.createGain();
+      overtone.type = 'triangle';
+      overtone.frequency.setValueAtTime(freq * 2, t);
+      overGain.gain.setValueAtTime(0.0001, t);
+      overGain.gain.linearRampToValueAtTime((isFinal ? 0.085 : 0.055) * gainScale, t + 0.01);
+      overGain.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.75);
+      overtone.connect(overGain);
+      overGain.connect(out);
+      overtone.start(t);
+      overtone.stop(t + dur);
+    });
+
+    // 3. Soft filtered sparkle-dust noise sweep synchronized with the climax note
+    if (this.noiseBuf) {
+      const shimmerStart = now + Math.max(0, (profile.notesHz.length - 2) * profile.stepDelaySec);
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(profile.shimmerHz * 0.72, shimmerStart);
+      filter.frequency.exponentialRampToValueAtTime(profile.shimmerHz * 1.25, shimmerStart + 0.28);
+      filter.Q.setValueAtTime(1.4, shimmerStart);
+
+      const nGain = ctx.createGain();
+      nGain.gain.setValueAtTime(0.0001, shimmerStart);
+      nGain.gain.linearRampToValueAtTime(0.08 * gainScale, shimmerStart + 0.03);
+      nGain.gain.exponentialRampToValueAtTime(0.0001, shimmerStart + 0.34);
+
+      src.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(out);
+      src.start(shimmerStart);
+      src.stop(shimmerStart + 0.36);
     }
   }
 }

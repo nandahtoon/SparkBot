@@ -2,6 +2,8 @@ import React from 'react';
 import {
   Bot,
   Gauge,
+  Lightbulb,
+  Lock,
   MousePointerClick,
   Rabbit,
   SlidersHorizontal,
@@ -22,6 +24,8 @@ interface SettingsModalProps {
   gentleSpeed: boolean;
   lowGraphics: boolean;
   challengeTimerEnabled: boolean;
+  adaptiveHintsEnabled?: boolean;
+  readAloudEnabled?: boolean;
   onToggleMute: () => void;
   onChangeAudio: (next: Partial<AudioSettings>) => void;
   onTestSfx: () => void;
@@ -30,6 +34,9 @@ interface SettingsModalProps {
   onToggleSpeed: () => void;
   onToggleLowGraphics: () => void;
   onToggleChallengeTimer: () => void;
+  onToggleAdaptiveHints?: () => void;
+  onToggleReadAloud?: () => void;
+  onOpenParentView?: () => void;
   onClose: () => void;
 }
 
@@ -40,6 +47,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   gentleSpeed,
   lowGraphics,
   challengeTimerEnabled,
+  adaptiveHintsEnabled = true,
+  readAloudEnabled = false,
   onToggleMute,
   onChangeAudio,
   onTestSfx,
@@ -48,6 +57,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleSpeed,
   onToggleLowGraphics,
   onToggleChallengeTimer,
+  onToggleAdaptiveHints,
+  onToggleReadAloud,
+  onOpenParentView,
   onClose
 }) => {
   if (!visible) return null;
@@ -78,7 +90,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-black tracking-tight text-white">Audio & Workshop</h2>
-              <p className="text-xs font-medium text-slate-400">Mixer & robot voice controls</p>
+              <p className="text-xs font-medium text-slate-400">Mixer & learning controls</p>
             </div>
           </div>
 
@@ -360,6 +372,116 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {challengeTimerEnabled ? 'On' : 'Off'}
           </button>
         </div>
+
+        {/* Adaptive Hints Row */}
+        {onToggleAdaptiveHints && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/65 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                  adaptiveHintsEnabled
+                    ? 'border-emerald-400/70 bg-emerald-500/20 text-emerald-200'
+                    : 'border-slate-700 bg-slate-900 text-slate-300'
+                }`}
+              >
+                <Lightbulb className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold uppercase tracking-wider text-slate-100">
+                  Adaptive Hints
+                </div>
+                <div className="text-[11px] font-medium leading-tight text-slate-400">
+                  {adaptiveHintsEnabled
+                    ? '3-tier learning clues activate on retries'
+                    : 'Manual hints only'}
+                </div>
+              </div>
+            </div>
+
+            <button
+              id="adaptiveHintsToggle"
+              type="button"
+              role="switch"
+              aria-checked={adaptiveHintsEnabled}
+              aria-label="Adaptive Hints"
+              onClick={onToggleAdaptiveHints}
+              className={`flex h-9 min-w-[74px] shrink-0 items-center justify-center rounded-xl border-2 px-3 text-xs font-black uppercase tracking-wide transition-transform active:scale-95 ${
+                adaptiveHintsEnabled
+                  ? 'border-emerald-300 bg-emerald-500/25 text-emerald-100'
+                  : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-emerald-300'
+              }`}
+            >
+              {adaptiveHintsEnabled ? 'On' : 'Off'}
+            </button>
+          </div>
+        )}
+
+        {/* Voice Read-Aloud Row */}
+        {onToggleReadAloud && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/65 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                  readAloudEnabled
+                    ? 'border-sky-400/70 bg-sky-500/20 text-sky-200'
+                    : 'border-slate-700 bg-slate-900 text-slate-300'
+                }`}
+              >
+                <Volume2 className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold uppercase tracking-wider text-slate-100">
+                  Auto Read-Aloud
+                </div>
+                <div className="text-[11px] font-medium leading-tight text-slate-400">
+                  {readAloudEnabled
+                    ? 'Automatically speaks new hints aloud'
+                    : 'Tap Listen anytime on hints & STEM cards'}
+                </div>
+              </div>
+            </div>
+
+            <button
+              id="readAloudToggle"
+              type="button"
+              role="switch"
+              aria-checked={readAloudEnabled}
+              aria-label="Auto Read-Aloud"
+              onClick={onToggleReadAloud}
+              className={`flex h-9 min-w-[74px] shrink-0 items-center justify-center rounded-xl border-2 px-3 text-xs font-black uppercase tracking-wide transition-transform active:scale-95 ${
+                readAloudEnabled
+                  ? 'border-sky-300 bg-sky-500/25 text-sky-100'
+                  : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-sky-300'
+              }`}
+            >
+              {readAloudEnabled ? 'On' : 'Off'}
+            </button>
+          </div>
+        )}
+
+        {/* Grown-Ups Progress View Entry */}
+        {onOpenParentView && (
+          <button
+            id="settingsOpenParentBtn"
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenParentView();
+            }}
+            className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-slate-700 bg-slate-800/85 px-4 text-left transition-colors hover:border-sky-400 active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-2.5">
+              <Lock className="h-4 w-4 shrink-0 text-sky-300" aria-hidden="true" />
+              <div>
+                <div className="text-xs font-black text-white">Grown-Ups · Progress View</div>
+                <div className="text-[11px] text-slate-400">
+                  8-pillar STEM mastery, resilience & JSON report
+                </div>
+              </div>
+            </div>
+            <span className="shrink-0 text-xs font-black text-sky-300">Open</span>
+          </button>
+        )}
       </div>
     </div>
   );

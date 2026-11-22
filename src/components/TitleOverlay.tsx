@@ -6,6 +6,8 @@ import {
   Flame,
   Gem,
   Gift,
+  Hammer,
+  KeyRound,
   LayoutGrid,
   Play,
   Rabbit,
@@ -43,6 +45,8 @@ interface TitleOverlayProps {
   onStartDaily: () => void;
   onStartActionDash: () => void;
   onOpenLevelMap: () => void;
+  onOpenSandbox: () => void;
+  onOpenClassCode: () => void;
   onOpenTrophies: () => void;
   onOpenSettings: () => void;
   onOpenProfile: () => void;
@@ -65,6 +69,8 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   onStartDaily,
   onStartActionDash,
   onOpenLevelMap,
+  onOpenSandbox,
+  onOpenClassCode,
   onOpenTrophies,
   onOpenSettings,
   onOpenProfile,
@@ -118,7 +124,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
 
   return (
     <div className="pointer-events-none safe-top safe-bottom fixed inset-0 z-20 flex flex-col justify-between px-2.5 sm:px-6 sm:py-5">
-      {/* Top Bar: Emblem & Settings on Left, Daily Ring + Trophy + Map + Endless Dash on Right */}
+      {/* Top Bar */}
       <div className="flex items-start justify-between gap-1.5 sm:gap-3">
         <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2.5">
           <button
@@ -203,8 +209,8 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           </button>
         </div>
 
-        {/* Right Controls: Daily Streak Ring, Trophy Shelf, Map Grid, Endless 3D Action Dash */}
-        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2.5">
+        {/* Right Controls */}
+        <div className="pointer-events-auto flex items-center gap-1 sm:gap-2">
           <button
             id="dailyChallengeBtn"
             type="button"
@@ -283,6 +289,26 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           </button>
 
           <button
+            id="titleSandboxBtn"
+            type="button"
+            onClick={onOpenSandbox}
+            aria-label="Sandbox Level Creator"
+            className="hidden h-10 w-10 items-center justify-center rounded-xl border border-amber-400/75 bg-slate-900/94 text-amber-300 shadow-xl transition-transform active:scale-95 hover:border-amber-300 sm:flex sm:h-14 sm:w-14 sm:rounded-2xl lg:h-16 lg:w-16"
+          >
+            <Hammer className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+          </button>
+
+          <button
+            id="titleClassCodeBtn"
+            type="button"
+            onClick={onOpenClassCode}
+            aria-label="Classroom Challenge Code"
+            className="hidden h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/75 bg-slate-900/94 text-cyan-300 shadow-xl transition-transform active:scale-95 hover:border-cyan-300 sm:flex sm:h-14 sm:w-14 sm:rounded-2xl lg:h-16 lg:w-16"
+          >
+            <KeyRound className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+          </button>
+
+          <button
             type="button"
             onClick={onOpenLevelMap}
             aria-label="Level Select Map"
@@ -302,7 +328,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         </div>
       </div>
 
-      {/* Bottom Bar: Stacked on narrow phones (thumb-friendly Start below compact Daily card), split Left/Right on sm+ */}
+      {/* Bottom Bar */}
       <div className="flex flex-col-reverse items-stretch gap-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:px-2 sm:pb-2">
         <button
           type="button"
@@ -319,7 +345,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           </span>
         </button>
 
-        {/* Daily Mission Section: Highlights current date's challenge + 7-day return reward ladder */}
+        {/* Daily Mission Section */}
         <section
           id="dailyMissionSection"
           aria-label="Daily Mission"
@@ -327,7 +353,6 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           data-streak={streak}
           className="pointer-events-auto flex w-full flex-col gap-2 rounded-3xl border-2 border-amber-400/80 bg-slate-900/95 p-2.5 shadow-[0_14px_34px_rgba(245,158,11,0.22)] sm:w-[308px] sm:gap-2.5 sm:p-3.5"
         >
-          {/* Row 1: Current Date Pill + Daily Reward Status */}
           <div className="flex items-center justify-between gap-1.5">
             <div
               aria-label={`Today ${todayKey}`}
@@ -385,7 +410,6 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             </div>
           </div>
 
-          {/* Row 2: Today's Visual Track Challenge Preview + Launch Button */}
           <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-700/90 bg-slate-950/75 px-2 py-1.5 sm:px-3 sm:py-2">
             <div className="flex items-center gap-1.5 sm:gap-2" aria-label="Today Track Preview">
               {dailyHazards.map((cond) => (
@@ -415,7 +439,6 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             </button>
           </div>
 
-          {/* Row 3: 7-Day Return-Daily Reward Ladder */}
           <div className="flex items-center justify-between gap-1" aria-label="Daily Return Reward Ladder">
             {[1, 2, 3, 4, 5, 6, 7].map((day) => {
               const completed =
@@ -468,4 +491,3 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
     </div>
   );
 };
-

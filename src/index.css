@@ -144,6 +144,18 @@ input:focus-visible {
   60% { transform: scale(0.95); }
 }
 
+@keyframes speechHoverBounce {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  28% { transform: translateY(-6px) scale(1.022); }
+  58% { transform: translateY(-2px) scale(0.992); }
+  80% { transform: translateY(-4px) scale(1.01); }
+}
+
+@keyframes speechGentleHover {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+}
+
 @keyframes partPuffFloat {
   0% {
     transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(0.32);
@@ -250,6 +262,14 @@ input:focus-visible {
   animation: heartBeatCute 0.95s ease-in-out infinite;
 }
 
+.anim-speech-bounce {
+  animation: speechHoverBounce 1.25s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+}
+
+.anim-speech-hover {
+  animation: speechGentleHover 2.4s ease-in-out infinite;
+}
+
 .anim-part-puff {
   animation-name: partPuffFloat;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
@@ -281,6 +301,67 @@ input:focus-visible {
   animation: tooltipPop 110ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes milestoneParticleFly {
+  0% {
+    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(0.25) rotate(var(--ms-rot0, 0deg));
+    opacity: 0;
+  }
+  16% {
+    transform: translate(-50%, -50%) translate3d(calc(var(--dx) * 0.42), calc(var(--dy) * 0.42), 0) scale(1.15) rotate(calc(var(--ms-rot0, 0deg) + var(--ms-spin, 90deg) * 0.45));
+    opacity: 1;
+  }
+  72% {
+    transform: translate(-50%, -50%) translate3d(calc(var(--dx) * 0.92), calc(var(--dy) * 0.92), 0) scale(0.9) rotate(calc(var(--ms-rot0, 0deg) + var(--ms-spin, 90deg) * 0.9));
+    opacity: 0.92;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate3d(var(--dx), calc(var(--dy) + 18px), 0) scale(0.15) rotate(calc(var(--ms-rot0, 0deg) + var(--ms-spin, 90deg)));
+    opacity: 0;
+  }
+}
+
+@keyframes milestoneHaloWave {
+  0% {
+    transform: translate(-50%, -50%) scale(0.35);
+    opacity: 0.9;
+  }
+  65% {
+    transform: translate(-50%, -50%) scale(calc(var(--ms-scale, 2.5) * 0.85));
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(var(--ms-scale, 2.5));
+    opacity: 0;
+  }
+}
+
+@keyframes milestoneBannerSlide {
+  0% {
+    transform: translateY(-14px) scale(0.95);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.anim-milestone-particle {
+  animation-name: milestoneParticleFly;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+.anim-milestone-halo {
+  animation-name: milestoneHaloWave;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+.anim-milestone-banner {
+  animation: milestoneBannerSlide 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .anim-bob,
   .anim-pop,
@@ -295,10 +376,15 @@ input:focus-visible {
   .anim-wave-bar,
   .anim-note-float,
   .anim-heart-cute,
+  .anim-speech-bounce,
+  .anim-speech-hover,
   .anim-part-puff,
   .anim-part-sparkle,
   .anim-part-halo,
-  .anim-tooltip-pop {
+  .anim-tooltip-pop,
+  .anim-milestone-particle,
+  .anim-milestone-halo,
+  .anim-milestone-banner {
     animation: none !important;
     transition: none !important;
   }

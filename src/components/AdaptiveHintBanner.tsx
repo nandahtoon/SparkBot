@@ -1,0 +1,210 @@
+import React, { useEffect } from 'react';
+import {
+  BookOpen,
+  Ghost,
+  Lightbulb,
+  Puzzle,
+  Sparkles,
+  Square,
+  StepForward,
+  Volume2,
+  X
+} from 'lucide-react';
+import type { SensorCondition } from '../game/engine';
+import type { AdaptiveHint, ParsonsStarterTemplate } from '../game/educationStrategy';
+import { SPEECH, useReadAloud } from '../game/readAloud';
+import type { DemoTopic } from './ConceptDemoPopover';
+
+interface AdaptiveHintBannerProps {
+  hint: AdaptiveHint | null;
+  isGentleRetry?: boolean;
+  autoReadAloud?: boolean;
+  onEscalateTier: () => void;
+  onOpenDemo?: (topic: DemoTopic, condition?: SensorCondition) => void;
+  onStepByStep?: () => void;
+  onApplyParsons?: (template: ParsonsStarterTemplate) => void;
+  onPlayGhostPreview?: () => void;
+  onDismiss: () => void;
+}
+
+export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
+  hint,
+  isGentleRetry = false,
+  autoReadAloud = false,
+  onEscalateTier,
+  onOpenDemo,
+  onStepByStep,
+  onApplyParsons,
+  onPlayGhostPreview,
+  onDismiss
+}) => {
+  const speech = useReadAloud();
+  const hintSpeechId = hint ? `hint_${hint.phase}_${hint.tier}` : '';
+  const isSpeakingThisHint = Boolean(
+    hint && speech.speaking && speech.activeId === hintSpeechId
+  );
+
+  useEffect(() => {
+    if (!hint || !autoReadAloud || !SPEECH.isSupported()) return;
+    SPEECH.speak(`${hint.headline}. ${hint.clue}`, `hint_${hint.phase}_${hint.tier}`);
+  }, [autoReadAloud, hint]);
+
+  useEffect(() => {
+    return () => {
+      SPEECH.stop();
+    };
+  }, []);
+
+  if (!hint) return null;
+
+  const tierTone =
+    hint.tier === 3
+      ? 'border-emerald-400/75 bg-slate-900/95'
+      : hint.tier === 2
+        ? 'border-sky-400/75 bg-slate-900/95'
+        : isGentleRetry
+          ? 'border-amber-400/80 bg-slate-900/95'
+          : 'border-sky-400/60 bg-slate-900/95';
+
+  const iconTone =
+    hint.tier === 3
+      ? 'text-emerald-300'
+      : hint.tier === 2
+        ? 'text-sky-300'
+        : 'text-amber-300';
+
+  return (
+    <div
+      role="region"
+      aria-label="Adaptive Learning Hint"
+      data-testid="adaptive-hint-banner"
+      data-hint-tier={hint.tier}
+      data-hint-phase={hint.phase}
+      className={`pointer-events-auto anim-pop flex w-full max-w-4xl flex-col gap-2 rounded-2xl border-2 px-3 py-2 shadow-xl sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${tierTone}`}
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/90 sm:mt-0">
+          {hint.tier === 3 ? (
+            <Sparkles className={`h-4.5 w-4.5 ${iconTone}`} aria-hidden="true" />
+          ) : (
+            <Lightbulb className={`h-4.5 w-4.5 ${iconTone}`} aria-hidden="true" />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1 text-left">
+          <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+            <span className={iconTone}>Hint {hint.tier}/3</span>
+            <span aria-hidden="true">·</span>
+            <span className="truncate text-white normal-case tracking-normal text-xs font-black">
+              {hint.headline}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs font-medium leading-snug text-slate-200">
+            {hint.clue}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        {speech.supported && (
+          <button
+            id="hintReadAloudBtn"
+            type="button"
+            onClick={() => SPEECH.toggleSpeak(`${hint.headline}. ${hint.clue}`, hintSpeechId)}
+            aria-label={isSpeakingThisHint ? 'Stop reading hint aloud' : 'Read hint aloud'}
+            className={`flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-2.5 text-xs font-black transition-transform active:scale-95 ${
+              isSpeakingThisHint
+                ? 'border-rose-400/80 bg-rose-500/20 text-rose-100'
+                : 'border-slate-600 bg-slate-800 text-sky-200 hover:border-sky-400'
+            }`}
+          >
+            {isSpeakingThisHint ? (
+              <>
+                <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                <span>Stop</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Listen</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {isGentleRetry && onStepByStep && hint.phase === 'code' && (
+          <button
+            id="hintStepDebugBtn"
+            type="button"
+            onClick={onStepByStep}
+            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-sky-300/80 bg-sky-500/20 px-3 text-xs font-black text-sky-100 transition-transform hover:bg-sky-500/30 active:scale-95"
+          >
+            <StepForward className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Step By Step</span>
+          </button>
+        )}
+
+        {hint.tier >= 2 && hint.demoTopic && onOpenDemo && (
+          <button
+            id="hintShowWhyBtn"
+            type="button"
+            onClick={() => onOpenDemo(hint.demoTopic!, hint.demoCondition)}
+            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-cyan-300/80 bg-cyan-500/20 px-3 text-xs font-black text-cyan-100 transition-transform hover:bg-cyan-500/30 active:scale-95"
+          >
+            <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Show Why</span>
+          </button>
+        )}
+
+        {hint.tier === 3 && hint.parsonsTemplate && onApplyParsons && (
+          <button
+            id="hintApplyParsonsBtn"
+            type="button"
+            onClick={() => onApplyParsons(hint.parsonsTemplate!)}
+            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-3 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95"
+          >
+            <Puzzle className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Try Starter Blocks</span>
+          </button>
+        )}
+
+        {hint.tier === 3 && hint.phase !== 'code' && onPlayGhostPreview && (
+          <button
+            id="hintGhostPreviewBtn"
+            type="button"
+            onClick={onPlayGhostPreview}
+            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-3 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95"
+          >
+            <Ghost className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Watch Ghost</span>
+          </button>
+        )}
+
+        {hint.tier < 3 && (
+          <button
+            id="hintNextTierBtn"
+            type="button"
+            onClick={onEscalateTier}
+            className="flex h-10 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl border border-amber-300/80 bg-amber-400 px-3 text-xs font-black text-slate-950 transition-transform hover:bg-amber-300 active:scale-95"
+          >
+            <Lightbulb className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Next Hint</span>
+          </button>
+        )}
+
+        <button
+          id="dismissAdaptiveHintBtn"
+          type="button"
+          onClick={() => {
+            SPEECH.stop();
+            onDismiss();
+          }}
+          aria-label="Dismiss Hint"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-white active:scale-95"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+};

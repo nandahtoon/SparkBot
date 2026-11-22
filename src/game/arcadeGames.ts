@@ -4,6 +4,8 @@
  */
 
 export type ArcadeGameId =
+  | 'bug_detective'
+  | 'logic_gate_lab'
   | 'break_wall'
   | 'connect_nodes'
   | 'robot_run'
@@ -17,7 +19,29 @@ export interface ArcadeGameCardDef {
   controlsHint: string;
   accentHex: string;
   baseBolts: number;
+  isEducational?: boolean;
 }
+
+export const EDUCATIONAL_MINI_GAMES: ArcadeGameCardDef[] = [
+  {
+    id: 'bug_detective',
+    title: 'Bug Detective',
+    subtitle: 'Spot logic bugs, reorder Parsons blocks, and step-test SparkBot repairs',
+    controlsHint: 'Tap blocks to edit or swap · Test Fix',
+    accentHex: '#38bdf8',
+    baseBolts: 35,
+    isEducational: true
+  },
+  {
+    id: 'logic_gate_lab',
+    title: 'Logic Gate Lab',
+    subtitle: 'Flip binary sensors and wire AND, OR, and NOT gates to unlock vault cores',
+    controlsHint: 'Toggle switches · Select gate chip · Verify',
+    accentHex: '#a78bfa',
+    baseBolts: 35,
+    isEducational: true
+  }
+];
 
 export const ARCADE_GAMES: ArcadeGameCardDef[] = [
   {
@@ -60,6 +84,11 @@ export const ARCADE_GAMES: ArcadeGameCardDef[] = [
     accentHex: '#10b981',
     baseBolts: 65
   }
+];
+
+export const ALL_GAME_ROOM_GAMES: ArcadeGameCardDef[] = [
+  ...EDUCATIONAL_MINI_GAMES,
+  ...ARCADE_GAMES
 ];
 
 /* ============================================================================

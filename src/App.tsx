@@ -10,7 +10,6 @@ import {
   cloneCircuitGrid,
   computeChassisInfo,
   computeGhostPreviewPlan,
-  computeStemSkillBadges,
   countBlocks,
   createDefaultPaintConfig,
   createEmptyChassis,
@@ -29,8 +28,6 @@ import {
   normalizePaintConfig,
   normalizeSavedPaintThemes,
   PAINT_PART_LABELS,
-  recordDailyCompletion,
-  recordDailyLogin,
   recordSkillMastery,
   setPartPaint,
   buildStepInspection,
@@ -53,20 +50,26 @@ import {
   type SaveProfile,
   type SavedPaintTheme,
   type SimEvent,
-  type SimResult,
-  type StemPillarId
+  type SimResult
 } from './game/engine';
 import {
   computeTotalStarsEarned,
   ensureActionDashChassis,
   getLevelSavedStars,
-  loadSaveProfile,
   normalizeProfileName,
-  persistSaveProfile,
   renameSaveProfile,
   validateProfileName
 } from './game/profileStorage';
+import {
+  createRosterSlot,
+  deleteRosterSlot,
+  loadProfileRoster,
+  saveActiveRosterProfile,
+  switchRosterSlot,
+  type ProfileRosterState
+} from './game/profileRoster';
 import { SFX } from './game/audio';
+import { SPEECH } from './game/readAloud';
 import { getPartPlacementSoundProfile } from './game/partAudio';
 import {
   pickCharacterSwitchResponse,
@@ -89,7 +92,14 @@ import {
   getTimerKeyForLevel,
   updateBestCompletionTime
 } from './game/challengeTimer';
-import { UnifiedWorldController, type WorldMode } from './three/worldScene';
+import {
+  createDefaultSandboxDraft,
+  normalizeSandboxDraft,
+  SANDBOX_MAX_SAVED,
+  sandboxDraftToLevelDef
+} from './game/sandboxCodec';
+import type { SandboxMissionDraft } from './game/engine';
+import type { UnifiedWorldController, WorldMode } from './three/worldScene';
 import type { HeadScreenPoint, SlotScreenPoint } from './three/robotRig';
 import { TitleOverlay } from './components/TitleOverlay';
 import { TopHud, type MoodCue } from './components/TopHud';
@@ -106,29 +116,80 @@ import {
 } from './components/Modals';
 import { GhostHand } from './components/GhostHand';
 import { ConceptDemoPopover, type DemoRequest } from './components/ConceptDemoPopover';
-import { TrophyShelfModal } from './components/TrophyShelfModal';
 import { SettingsModal } from './components/SettingsModal';
 import { RobotSpeechBubble } from './components/RobotSpeechBubble';
-import { GameRoomModal, type GameRoomRoundSummary } from './components/GameRoomModal';
+import type { GameRoomRoundSummary } from './components/GameRoomModal';
 import { PlanetAdventureHud } from './components/PlanetAdventureHud';
+import { AdaptiveHintBanner } from './components/AdaptiveHintBanner';
+import type { ArcadeGameId } from './game/arcadeGames';
+import {
+  computeAcademySkillBadges,
+  computeAdaptiveHint,
+  detectLearningMilestoneUnlocks,
+  getFactCardById,
+  getUnlockedFactCardsForLevel,
+  normalizeLearningTelemetry,
+  recordLevelAttemptResult,
+  syncStreakWithShieldsOnCompletion,
+  syncStreakWithShieldsOnLogin,
+  type AcademyBadgeProgress,
+  type AcademyPillarId,
+  type AdaptiveHintTier,
+  type ParsonsStarterTemplate,
+  type StemFactCardDef
+} from './game/educationStrategy';
+import {
+  MilestoneCelebrationOverlay,
+  type MilestoneCelebrationEvent
+} from './components/MilestoneCelebrationOverlay';
+import type { MilestoneUnlockKind } from './game/milestoneParticles';
 import {
   computePlanetAdventureReward,
   type PlanetAdventureMetrics
 } from './game/planetAdventure';
 import type { WorkshopCameraControls } from './components/WorkshopOrbitStrip';
+import { useChallengeTimer } from './hooks/useChallengeTimer';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+
+const TrophyShelfModal = React.lazy(() =>
+  import('./components/TrophyShelfModal').then((m) => ({ default: m.TrophyShelfModal }))
+);
+const GameRoomModal = React.lazy(() =>
+  import('./components/GameRoomModal').then((m) => ({ default: m.GameRoomModal }))
+);
+const ParentDashboardModal = React.lazy(() =>
+  import('./components/ParentDashboardModal').then((m) => ({ default: m.ParentDashboardModal }))
+);
+const SandboxCreatorModal = React.lazy(() =>
+  import('./components/SandboxCreatorModal').then((m) => ({ default: m.SandboxCreatorModal }))
+);
+const ClassroomCodeModal = React.lazy(() =>
+  import('./components/ClassroomCodeModal').then((m) => ({ default: m.ClassroomCodeModal }))
+);
 
 export default function App() {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<UnifiedWorldController | null>(null);
 
-  const [save, setSave] = useState<SaveProfile>(() => {
-    const loaded = loadSaveProfile();
+  const initialSessionRef = useRef<{ save: SaveProfile; roster: ProfileRosterState } | null>(null);
+  if (!initialSessionRef.current) {
+    const { roster: initRoster, activeSave } = loadProfileRoster();
     const today = getDailyDateKey();
-    const loginRes = recordDailyLogin(loaded.daily, today);
-    const updated: SaveProfile = { ...loaded, daily: loginRes.daily };
-    persistSaveProfile(updated);
-    return updated;
-  });
+    const loginRes = syncStreakWithShieldsOnLogin(activeSave.daily, activeSave.streakShields, today);
+    const updated: SaveProfile = {
+      ...activeSave,
+      daily: loginRes.daily,
+      streakShields: loginRes.streakShields
+    };
+    const syncedRoster = saveActiveRosterProfile(updated);
+    initialSessionRef.current = {
+      save: updated,
+      roster: syncedRoster || initRoster
+    };
+  }
+
+  const [save, setSave] = useState<SaveProfile>(() => initialSessionRef.current!.save);
+  const [roster, setRoster] = useState<ProfileRosterState>(() => initialSessionRef.current!.roster);
 
   const [mode, setMode] = useState<WorldMode>('TITLE');
   const [paused, setPaused] = useState(false);
@@ -137,9 +198,26 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showGameRoom, setShowGameRoom] = useState(false);
+  const [showParentDashboard, setShowParentDashboard] = useState(false);
+  const [showSandbox, setShowSandbox] = useState(false);
+  const [showClassCode, setShowClassCode] = useState(false);
+  const [trophyInitialTab, setTrophyInitialTab] = useState<'badges' | 'facts'>('badges');
+  const [adaptiveHintTier, setAdaptiveHintTier] = useState<0 | AdaptiveHintTier>(0);
+  const [, setMaxHintTierUsed] = useState<0 | AdaptiveHintTier>(0);
+  const [consecutiveFails, setConsecutiveFails] = useState(0);
+  const [, setHadPriorFail] = useState(false);
+  const [failingBlockId, setFailingBlockId] = useState<string | null>(null);
+  const [lastFailedSim, setLastFailedSim] = useState<SimResult | null>(null);
+  const [bugFixerEarned, setBugFixerEarned] = useState(false);
+  const [newlyUnlockedFacts, setNewlyUnlockedFacts] = useState<StemFactCardDef[]>([]);
+  const maxHintTierRef = useRef<0 | AdaptiveHintTier>(0);
+  const consecutiveFailsRef = useRef(0);
+  const hadPriorFailRef = useRef(false);
   const [selectedPaintPart, setSelectedPaintPart] = useState<PaintPartKey>('chassis');
   const [activeDemo, setActiveDemo] = useState<DemoRequest | null>(null);
-  const [upgradedPillars, setUpgradedPillars] = useState<StemPillarId[]>([]);
+  const [upgradedPillars, setUpgradedPillars] = useState<AcademyPillarId[]>([]);
+  const [milestoneCelebration, setMilestoneCelebration] =
+    useState<MilestoneCelebrationEvent | null>(null);
   const [webglLost, setWebglLost] = useState(false);
   const [workshopAutoSpin, setWorkshopAutoSpin] = useState(false);
   const [inspect3D, setInspect3D] = useState(false);
@@ -149,6 +227,8 @@ export default function App() {
 
   const speechTimerRef = useRef<number | null>(null);
   const speechIdRef = useRef(0);
+  const milestoneTimerRef = useRef<number | null>(null);
+  const milestoneIdRef = useRef(0);
   const touchCounterRef = useRef(0);
   const installCounterRef = useRef(0);
   const paintCounterRef = useRef(0);
@@ -209,11 +289,21 @@ export default function App() {
   );
   const lowGraphics = Boolean(save.lowGraphics);
   const challengeTimerEnabled = Boolean(save.challengeTimerEnabled);
-  const [levelElapsedMs, setLevelElapsedMs] = useState(0);
-  const levelElapsedRef = useRef(0);
   const [circuitSolvedFreeze, setCircuitSolvedFreeze] = useState(false);
   const [lastVictorySpeedRun, setLastVictorySpeedRun] =
     useState<VictorySpeedRunSummary | null>(null);
+
+  const currentSandboxDraft = useMemo(
+    () => normalizeSandboxDraft(save.sandbox || createDefaultSandboxDraft()),
+    [save.sandbox]
+  );
+  const savedSandboxLevels = useMemo(
+    () =>
+      Array.isArray(save.sandbox?.savedLevels)
+        ? save.sandbox.savedLevels.map((d) => normalizeSandboxDraft(d))
+        : [],
+    [save.sandbox?.savedLevels]
+  );
 
   const currentTimeTargets = useMemo(
     () => getLevelTimeTargets(currentLevel),
@@ -233,29 +323,35 @@ export default function App() {
     !showSettings &&
     !showProfile &&
     !showGameRoom &&
+    !showParentDashboard &&
+    !showSandbox &&
+    !showClassCode &&
     (mode === 'BUILD_3D' ||
       mode === 'CODE_3D' ||
       mode === 'SIMULATING' ||
       mode === 'CIRCUIT_3D');
 
-  // Tick optional challenge timer during active mission gameplay only
-  useEffect(() => {
-    if (!isChallengeTimerRunning) return;
-    let lastTick = performance.now();
-    const id = window.setInterval(() => {
-      const now = performance.now();
-      const delta = Math.max(0, Math.min(500, now - lastTick));
-      lastTick = now;
-      levelElapsedRef.current += delta;
-      setLevelElapsedMs(levelElapsedRef.current);
-    }, 100);
-    return () => window.clearInterval(id);
-  }, [isChallengeTimerRunning]);
+  const {
+    elapsedMs: levelElapsedMs,
+    elapsedRef: levelElapsedRef,
+    setElapsedMs: setLevelElapsedMs,
+    resetTimer
+  } = useChallengeTimer(isChallengeTimerRunning);
 
-  // Sync master mute + granular channel volume sliders
+  // Keep cadet roster state & active localStorage slot synced whenever active save changes
+  useEffect(() => {
+    setRoster(saveActiveRosterProfile(save));
+  }, [save]);
+
+  // Sync master mute + granular channel volume sliders (+ Web Speech Read-Aloud)
   useEffect(() => {
     SFX.applySettings(save.muted, normalizedAudio);
+    SPEECH.applySettings(save.muted, normalizedAudio.voiceVolume);
   }, [save.muted, normalizedAudio]);
+
+  useEffect(() => {
+    SPEECH.setEnabled(Boolean(save.readAloudEnabled));
+  }, [save.readAloudEnabled]);
 
   // Sync low-graphics mode with 3D world & document attribute
   useEffect(() => {
@@ -280,9 +376,37 @@ export default function App() {
       if (codeFeedbackTimerRef.current !== null) {
         window.clearTimeout(codeFeedbackTimerRef.current);
       }
+      if (milestoneTimerRef.current !== null) {
+        window.clearTimeout(milestoneTimerRef.current);
+      }
       SFX.cancelSpeech();
+      SPEECH.stop();
     };
   }, []);
+
+  const triggerMilestoneCelebration = useCallback(
+    (facts: StemFactCardDef[], badges: AcademyBadgeProgress[]) => {
+      if (facts.length === 0 && badges.length === 0) return;
+      const kind: MilestoneUnlockKind =
+        facts.length > 0 && badges.length > 0
+          ? 'both'
+          : facts.length > 0
+            ? 'fact'
+            : 'badge';
+
+      SFX.milestoneUnlock(kind);
+      const id = ++milestoneIdRef.current;
+      setMilestoneCelebration({ id, kind, facts, badges });
+
+      if (milestoneTimerRef.current !== null) {
+        window.clearTimeout(milestoneTimerRef.current);
+      }
+      milestoneTimerRef.current = window.setTimeout(() => {
+        setMilestoneCelebration((cur) => (cur && cur.id === id ? null : cur));
+      }, 4000);
+    },
+    []
+  );
 
   const triggerRobotSpeech = useCallback((ev: RobotSpeechEvent) => {
     SFX.speakWallE(ev.phrase, ev.pitchScale, ev.variant);
@@ -363,11 +487,30 @@ export default function App() {
       setShowSettings(false);
       setShowProfile(false);
       setShowGameRoom(false);
+      setShowParentDashboard(false);
+      setShowSandbox(false);
+      setShowClassCode(false);
+      setTrophyInitialTab('badges');
+      setAdaptiveHintTier(0);
+      setMaxHintTierUsed(0);
+      maxHintTierRef.current = 0;
+      setConsecutiveFails(0);
+      consecutiveFailsRef.current = 0;
+      setHadPriorFail(false);
+      hadPriorFailRef.current = false;
+      setFailingBlockId(null);
+      setLastFailedSim(null);
+      setBugFixerEarned(false);
+      setNewlyUnlockedFacts([]);
+      setMilestoneCelebration(null);
+      if (milestoneTimerRef.current !== null) {
+        window.clearTimeout(milestoneTimerRef.current);
+        milestoneTimerRef.current = null;
+      }
       setWorkshopAutoSpin(false);
       setInspect3D(false);
       setInstallPhase('idle');
-      levelElapsedRef.current = 0;
-      setLevelElapsedMs(0);
+      resetTimer();
       setCircuitSolvedFreeze(false);
       setLastVictorySpeedRun(null);
       setPlanetMetrics(null);
@@ -380,7 +523,7 @@ export default function App() {
       worldRef.current?.updateChassis(nextChassis, null);
       worldRef.current?.setMode('BUILD_3D');
     },
-    [chassis, save.tutorialDone]
+    [chassis, resetTimer, save.tutorialDone]
   );
 
   // Refs for WebGL callbacks so canvas never unmounts
@@ -441,6 +584,12 @@ export default function App() {
       }
 
       setLastSimCrystals({ collected: sim.collectedCrystals, total: sim.totalCrystals });
+      const fixedBug = hadPriorFailRef.current;
+      setBugFixerEarned(fixedBug);
+      const levelFacts = getUnlockedFactCardsForLevel(cur.currentLevel.id);
+      const debugFact = fixedBug ? getFactCardById('debugging_mindset') : null;
+      const candidateFacts = debugFact ? [...levelFacts, debugFact] : levelFacts;
+
       const mastery = recordSkillMastery(
         cur.save.skillStats,
         cur.currentLevel,
@@ -448,26 +597,52 @@ export default function App() {
         cur.program,
         sim
       );
-      setUpgradedPillars(mastery.upgradedPillars);
+      if (fixedBug) {
+        mastery.next.bugsDebugged = (mastery.next.bugsDebugged || 0) + 1;
+      }
+
+      const unlocks = detectLearningMilestoneUnlocks({
+        prevSkillStats: cur.save.skillStats,
+        nextSkillStats: mastery.next,
+        prevUnlockedFactIds: cur.save.unlockedFactIds,
+        candidateFacts
+      });
+      const newFactIds = unlocks.newlyUnlockedFacts.map((f) => f.id);
+      setNewlyUnlockedFacts(unlocks.newlyUnlockedFacts);
+      setUpgradedPillars(unlocks.newlyUpgradedBadges.map((b) => b.id));
+
       setSave((prev) => {
+        const mergedFacts = Array.from(
+          new Set([...(prev.unlockedFactIds || []), ...newFactIds])
+        );
         const next: SaveProfile = {
           ...prev,
           stars: { ...prev.stars },
           bonusStars: { ...prev.bonusStars },
           tutorialDone: true,
-          totalBolts: prev.totalBolts + 50 + speedRunEval.bonusBolts,
+          totalBolts: prev.totalBolts + 50 + speedRunEval.bonusBolts + (fixedBug ? 15 : 0),
           passes: prev.passes + 1,
           skillStats: mastery.next,
+          unlockedFactIds: mergedFacts,
+          learningTelemetry: recordLevelAttemptResult(prev.learningTelemetry, {
+            levelId: cur.currentLevel.id,
+            won: true,
+            hintTierUsed: maxHintTierRef.current,
+            fixedPriorFail: fixedBug
+          }),
           bestTimes: speedRunEval.enabled
             ? updateBestCompletionTime(prev.bestTimes, levelTimerKey, speedRunEval.elapsedMs).next
             : prev.bestTimes
         };
         if (cur.currentLevel.isDaily) {
-          next.daily = recordDailyCompletion(
+          const streakSync = syncStreakWithShieldsOnCompletion(
             prev.daily,
+            prev.streakShields,
             cur.currentLevel.dailyDateKey || getDailyDateKey(),
             starRes.stars
           );
+          next.daily = streakSync.daily;
+          next.streakShields = streakSync.streakShields;
         } else if (cur.currentLevel.isBonus) {
           const oldRec = prev.bonusStars[cur.currentLevel.id];
           const oldStars = typeof oldRec === 'object' ? oldRec.stars : typeof oldRec === 'number' ? oldRec : 0;
@@ -476,6 +651,8 @@ export default function App() {
             stars: Math.max(oldStars, starRes.stars),
             bonusStar: oldBonus || isBonusStar
           };
+        } else if (cur.currentLevel.isSandbox || cur.currentLevel.isClassCode) {
+          // Custom Sandbox & Classroom Code runs award bolts/telemetry without altering campaign stars
         } else {
           next.stars[cur.currentLevel.id] = Math.max(
             prev.stars[cur.currentLevel.id] || 0,
@@ -485,16 +662,19 @@ export default function App() {
             next.unlockedLevel = cur.currentLevel.id + 1;
           }
         }
-        persistSaveProfile(next);
+        saveActiveRosterProfile(next);
         return next;
       });
 
       window.setTimeout(() => {
         setMode('VICTORY');
         worldRef.current?.setMode('VICTORY');
+        if (unlocks.shouldCelebrate) {
+          triggerMilestoneCelebration(unlocks.newlyUnlockedFacts, unlocks.newlyUpgradedBadges);
+        }
       }, 650);
     }
-  }, []);
+  }, [triggerMilestoneCelebration]);
 
   const handleSimProgress = useCallback((idx: number, ev: SimEvent) => {
     setActiveBlockId(ev.blockId);
@@ -514,13 +694,54 @@ export default function App() {
     setSimAwaitingStep(false);
     setLastSimCrystals({ collected: res.collectedCrystals, total: res.totalCrystals });
     if (res.status === 'win') {
+      setFailingBlockId(null);
+      setLastFailedSim(null);
+      setAdaptiveHintTier(0);
       setMoodCue({ mood: 'happy' });
       window.setTimeout(() => {
         setMoodCue(null);
         setMode('CIRCUIT_3D');
         worldRef.current?.setMode('CIRCUIT_3D');
       }, 850);
-    } else if (res.failCode === 'empty' || res.failCode === 'empty_container' || res.failCode === 'short') {
+      return;
+    }
+
+    const lastEv = res.events[res.events.length - 1];
+    setFailingBlockId(lastEv?.blockId || null);
+    setLastFailedSim(res);
+    hadPriorFailRef.current = true;
+    setHadPriorFail(true);
+    const nextFails = consecutiveFailsRef.current + 1;
+    consecutiveFailsRef.current = nextFails;
+    setConsecutiveFails(nextFails);
+
+    const cur = stateRef.current;
+    if (cur.save.adaptiveHintsEnabled !== false && nextFails >= 1) {
+      const targetTier: AdaptiveHintTier = nextFails >= 3 ? 2 : 1;
+      setAdaptiveHintTier((t) => (t < targetTier ? targetTier : t));
+      setMaxHintTierUsed((m) => {
+        const nextMax = Math.max(m, targetTier) as 0 | AdaptiveHintTier;
+        maxHintTierRef.current = nextMax;
+        return nextMax;
+      });
+    }
+
+    setSave((prev) => {
+      const next: SaveProfile = {
+        ...prev,
+        learningTelemetry: recordLevelAttemptResult(prev.learningTelemetry, {
+          levelId: cur.currentLevel.id,
+          won: false,
+          hintTierUsed: maxHintTierRef.current,
+          fixedPriorFail: false,
+          failureKind: res.failCode
+        })
+      };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+
+    if (res.failCode === 'empty' || res.failCode === 'empty_container' || res.failCode === 'short') {
       setMoodCue({ mood: 'confused' });
       setMode('CODE_3D');
     } else {
@@ -549,7 +770,7 @@ export default function App() {
         totalBolts: prev.totalBolts + metrics.bolts,
         bestDashDistance: Math.max(prev.bestDashDistance || 0, Math.floor(metrics.distance))
       };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
     setMode('VICTORY');
@@ -566,7 +787,7 @@ export default function App() {
           ...prev,
           totalBolts: prev.totalBolts + reward.boltsEarned
         };
-        persistSaveProfile(next);
+        saveActiveRosterProfile(next);
         return next;
       });
     }
@@ -586,200 +807,115 @@ export default function App() {
     setShowGameRoom(true);
   }, []);
 
-  // Mount Three.js World ONCE
+  // Lazy-load and mount Three.js World ONCE so Title 2D overlay renders immediately
   useEffect(() => {
     const el = mountRef.current;
     if (!el) return;
-    const ctrl = new UnifiedWorldController(el, {
-      onBotTap: (zone: RobotTouchZone) => {
-        triggerRobotSpeech(pickTouchResponse(zone, touchCounterRef.current++));
-      },
-      onPaintPartPick: (part: PaintPartKey) => {
-        SFX.uiTick();
-        setSelectedPaintPart(part);
-      },
-      onInstallCelebrate: (part: PartId) => {
-        triggerRobotSpeech(pickInstallResponse(part, installCounterRef.current++));
-      },
-      onInstallPhaseChange: (phase) => {
-        setInstallPhase(phase);
-      },
-      onCircuitCellTap: (r, c) => handleCircuitCellTap(r, c),
-      onSimProgress: (idx, ev) => handleSimProgress(idx, ev),
-      onSimPauseChange: (isPaused, awaitingStep) => handleSimPauseChange(isPaused, awaitingStep),
-      onSimComplete: (res) => handleSimComplete(res),
-      onActionMetrics: (m) => setActionMetrics(m),
-      onActionFinish: (m) => handleActionFinish(m),
-      onPlanetMetrics: (m) => setPlanetMetrics(m),
-      onPlanetFinish: (m) => handlePlanetFinish(m),
-      onSlotScreenUpdate: (pts) => setSlotPoints(pts),
-      onHeadScreenUpdate: (pt) => {
-        const prev = lastHeadRef.current;
-        if (
-          !prev ||
-          prev.visible !== pt.visible ||
-          Math.abs(prev.x - pt.x) > 3 ||
-          Math.abs(prev.y - pt.y) > 3
-        ) {
-          lastHeadRef.current = pt;
-          setHeadPoint(pt);
+    let disposed = false;
+
+    import('./three/worldScene')
+      .then(({ UnifiedWorldController }) => {
+        if (disposed || !mountRef.current) return;
+        const ctrl = new UnifiedWorldController(mountRef.current, {
+          onBotTap: (zone: RobotTouchZone) => {
+            triggerRobotSpeech(pickTouchResponse(zone, touchCounterRef.current++));
+          },
+          onPaintPartPick: (part: PaintPartKey) => {
+            SFX.uiTick();
+            setSelectedPaintPart(part);
+          },
+          onInstallCelebrate: (part: PartId) => {
+            triggerRobotSpeech(pickInstallResponse(part, installCounterRef.current++));
+          },
+          onInstallPhaseChange: (phase) => {
+            setInstallPhase(phase);
+          },
+          onCircuitCellTap: (r, c) => handleCircuitCellTap(r, c),
+          onSimProgress: (idx, ev) => handleSimProgress(idx, ev),
+          onSimPauseChange: (isPaused, awaitingStep) => handleSimPauseChange(isPaused, awaitingStep),
+          onSimComplete: (res) => handleSimComplete(res),
+          onActionMetrics: (m) => setActionMetrics(m),
+          onActionFinish: (m) => handleActionFinish(m),
+          onPlanetMetrics: (m) => setPlanetMetrics(m),
+          onPlanetFinish: (m) => handlePlanetFinish(m),
+          onSlotScreenUpdate: (pts) => setSlotPoints(pts),
+          onHeadScreenUpdate: (pt) => {
+            const prev = lastHeadRef.current;
+            if (
+              !prev ||
+              prev.visible !== pt.visible ||
+              Math.abs(prev.x - pt.x) > 3 ||
+              Math.abs(prev.y - pt.y) > 3
+            ) {
+              lastHeadRef.current = pt;
+              setHeadPoint(pt);
+            }
+          },
+          onWebglLost: (lost) => setWebglLost(lost)
+        });
+        worldRef.current = ctrl;
+
+        const latest = stateRef.current;
+        const initTheme = normalizeBotTheme(latest.save.botTheme);
+        const initChar = normalizeBotCharacter(latest.save.botCharacter);
+        const initPaint = normalizePaintConfig(latest.save.paintBooth, initTheme, initChar);
+        ctrl.setLevel(latest.currentLevel);
+        ctrl.setGentleSpeed(latest.save.gentleSpeed);
+        ctrl.setLowGraphics(Boolean(latest.save.lowGraphics));
+        ctrl.setBotTheme(initTheme);
+        ctrl.setBotCharacter(initChar, false);
+        ctrl.setPaintConfig(initPaint, null);
+        ctrl.updateChassis(latest.chassis, null);
+
+        const params = new URLSearchParams(window.location.search);
+        if (latest.mode === 'TITLE' && params.get('autostart') === '1') {
+          setMode('BUILD_3D');
+          setGhostHelp(latest.currentLevel.id === 1 && !latest.save.tutorialDone);
+          ctrl.setMode('BUILD_3D');
+        } else {
+          ctrl.setMode(latest.mode);
+          if (latest.mode === 'CIRCUIT_3D') {
+            ctrl.setCircuitGrid(latest.circuitGrid);
+          }
         }
-      },
-      onWebglLost: (lost) => setWebglLost(lost)
-    });
-    worldRef.current = ctrl;
-
-    const initialLvl = getLevelById(Math.min(LEVELS.length, Math.max(1, save.unlockedLevel || 1))) || LEVELS[0];
-    const initTheme = normalizeBotTheme(save.botTheme);
-    const initChar = normalizeBotCharacter(save.botCharacter);
-    const initPaint = normalizePaintConfig(save.paintBooth, initTheme, initChar);
-    ctrl.setLevel(initialLvl);
-    ctrl.setGentleSpeed(save.gentleSpeed);
-    ctrl.setLowGraphics(Boolean(save.lowGraphics));
-    ctrl.setBotTheme(initTheme);
-    ctrl.setBotCharacter(initChar, false);
-    ctrl.setPaintConfig(initPaint, null);
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('autostart') === '1') {
-      setMode('BUILD_3D');
-      setGhostHelp(initialLvl.id === 1 && !save.tutorialDone);
-      ctrl.updateChassis(chassis, null);
-      ctrl.setMode('BUILD_3D');
-    } else {
-      ctrl.setMode('TITLE');
-    }
+      })
+      .catch(() => {
+        if (!disposed) setWebglLost(true);
+      });
 
     return () => {
-      ctrl.dispose();
+      disposed = true;
+      worldRef.current?.dispose();
       worldRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Global Keyboard Shortcuts (Enter/Space on Title, Esc/P Pause, WASD/Arrows/Space in Action Dash)
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-        if (e.key === 'Escape') target.blur();
-        return;
-      }
-
-      if (showGameRoom) {
-        if (e.key === 'Escape') setShowGameRoom(false);
-        return;
-      }
-
-      if (showProfile) {
-        if (e.key === 'Escape') setShowProfile(false);
-        return;
-      }
-
-      if (showSettings) {
-        if (e.key === 'Escape') setShowSettings(false);
-        return;
-      }
-
-      if (mode === 'TITLE' && !showMap) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          SFX.click();
-          beginLevel(currentLevel);
-        }
-        return;
-      }
-
-      if (e.key === 'Escape' || e.key.toLowerCase() === 'p') {
-        if (showMap) {
-          setShowMap(false);
-        } else if (mode === 'PAINT_BOOTH' && e.key === 'Escape') {
-          setWorkshopAutoSpin(false);
-          worldRef.current?.setWorkshopAutoSpin(false);
-          setMode('BUILD_3D');
-          worldRef.current?.setMode('BUILD_3D');
-        } else if (mode !== 'TITLE' && mode !== 'VICTORY') {
-          setPaused((p) => !p);
-        }
-        return;
-      }
-
-      if (mode === 'ACTION_RUN_3D' && !paused) {
-        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
-          e.preventDefault();
-          worldRef.current?.steerActionDash(-1);
-        } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
-          e.preventDefault();
-          worldRef.current?.steerActionDash(1);
-        } else if (e.key === ' ' || e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') {
-          e.preventDefault();
-          worldRef.current?.jumpActionDash();
-        }
-      }
-
-      if (mode === 'PLANET_ADVENTURE_3D' && !paused) {
-        const k = e.key.toLowerCase();
-        if (
-          k === 'w' ||
-          k === 's' ||
-          k === 'a' ||
-          k === 'd' ||
-          e.key === 'ArrowUp' ||
-          e.key === 'ArrowDown' ||
-          e.key === 'ArrowLeft' ||
-          e.key === 'ArrowRight'
-        ) {
-          e.preventDefault();
-          planetKeysRef.current.add(k === e.key.toLowerCase() ? k : e.key);
-          const keys = planetKeysRef.current;
-          const forward =
-            (keys.has('w') || keys.has('ArrowUp') ? 1 : 0) -
-            (keys.has('s') || keys.has('ArrowDown') ? 1 : 0);
-          const strafe =
-            (keys.has('d') || keys.has('ArrowRight') ? 1 : 0) -
-            (keys.has('a') || keys.has('ArrowLeft') ? 1 : 0);
-          worldRef.current?.setPlanetMoveInput(forward, strafe);
-        } else if (e.key === ' ') {
-          e.preventDefault();
-          worldRef.current?.jumpPlanetAdventure();
-        } else if (e.key === 'Shift') {
-          e.preventDefault();
-          worldRef.current?.triggerPlanetBoost();
-        } else if (k === 'e' || k === 'f') {
-          e.preventDefault();
-          worldRef.current?.firePlanetLaser();
-        }
-      }
-    };
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (mode !== 'PLANET_ADVENTURE_3D') return;
-      const k = e.key.toLowerCase();
-      planetKeysRef.current.delete(k === e.key.toLowerCase() ? k : e.key);
-      const keys = planetKeysRef.current;
-      const forward =
-        (keys.has('w') || keys.has('ArrowUp') ? 1 : 0) -
-        (keys.has('s') || keys.has('ArrowDown') ? 1 : 0);
-      const strafe =
-        (keys.has('d') || keys.has('ArrowRight') ? 1 : 0) -
-        (keys.has('a') || keys.has('ArrowLeft') ? 1 : 0);
-      worldRef.current?.setPlanetMoveInput(forward, strafe);
-    };
-
-    const onBlur = () => {
-      planetKeysRef.current.clear();
-      worldRef.current?.setPlanetMoveInput(0, 0);
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, [beginLevel, currentLevel, mode, paused, showGameRoom, showMap, showProfile, showSettings]);
+  useKeyboardShortcuts({
+    mode,
+    paused,
+    showMap,
+    showProfile,
+    showSettings,
+    showGameRoom,
+    showParentDashboard,
+    showSandbox,
+    showClassCode,
+    currentLevel,
+    worldRef,
+    planetKeysRef,
+    beginLevel,
+    setShowParentDashboard,
+    setShowSandbox,
+    setShowClassCode,
+    setShowGameRoom,
+    setShowProfile,
+    setShowSettings,
+    setShowMap,
+    setWorkshopAutoSpin,
+    setMode,
+    setPaused
+  });
 
   const handlePlacePart = (part: PartId, r: number, c: number) => {
     const check = canPlacePartInSlot(chassis, currentLevel.budget, part, r, c);
@@ -835,6 +971,18 @@ export default function App() {
     SFX.uiTick();
     setMoodCue(null);
     setLastCodeFeedbackTier(null);
+    setSave((prev) => {
+      const tel = normalizeLearningTelemetry(prev.learningTelemetry);
+      const next: SaveProfile = {
+        ...prev,
+        learningTelemetry: {
+          ...tel,
+          stepDebugRuns: tel.stepDebugRuns + 1
+        }
+      };
+      saveActiveRosterProfile(next);
+      return next;
+    });
     const sim = simulateProgram(currentLevel, chassis, program);
     setActiveSimResult(sim);
     setActiveSimStepIdx(sim.events.length > 0 ? 0 : -1);
@@ -906,7 +1054,7 @@ export default function App() {
         ...prev,
         totalBolts: prev.totalBolts + safeBolts
       };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   }, []);
@@ -914,10 +1062,11 @@ export default function App() {
   const handleToggleMute = () => {
     const nextMuted = !save.muted;
     SFX.applySettings(nextMuted, normalizedAudio);
+    SPEECH.applySettings(nextMuted, normalizedAudio.voiceVolume);
     if (!nextMuted) SFX.click();
     setSave((prev) => {
       const next = { ...prev, muted: nextMuted };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   };
@@ -929,8 +1078,9 @@ export default function App() {
         ...partial
       });
       SFX.applySettings(prev.muted, merged);
+      SPEECH.applySettings(prev.muted, merged.voiceVolume);
       const next: SaveProfile = { ...prev, audio: merged };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   };
@@ -939,7 +1089,7 @@ export default function App() {
     setSave((prev) => {
       const next = { ...prev, gentleSpeed: !prev.gentleSpeed };
       worldRef.current?.setGentleSpeed(next.gentleSpeed);
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   };
@@ -950,7 +1100,28 @@ export default function App() {
       const nextLow = !Boolean(prev.lowGraphics);
       const next: SaveProfile = { ...prev, lowGraphics: nextLow };
       worldRef.current?.setLowGraphics(nextLow);
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  };
+
+  const handleToggleAdaptiveHints = () => {
+    SFX.uiTick();
+    setSave((prev) => {
+      const nextEnabled = prev.adaptiveHintsEnabled === false;
+      const next: SaveProfile = { ...prev, adaptiveHintsEnabled: nextEnabled };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  };
+
+  const handleToggleReadAloud = () => {
+    SFX.uiTick();
+    setSave((prev) => {
+      const nextEnabled = !Boolean(prev.readAloudEnabled);
+      SPEECH.setEnabled(nextEnabled);
+      const next: SaveProfile = { ...prev, readAloudEnabled: nextEnabled };
+      saveActiveRosterProfile(next);
       return next;
     });
   };
@@ -959,15 +1130,14 @@ export default function App() {
     SFX.uiTick();
     const nextEnabled = !challengeTimerEnabled;
     if (nextEnabled && mode !== 'VICTORY') {
-      levelElapsedRef.current = 0;
-      setLevelElapsedMs(0);
+      resetTimer();
     }
     if (!nextEnabled) {
       setLastVictorySpeedRun(null);
     }
     setSave((prev) => {
       const next: SaveProfile = { ...prev, challengeTimerEnabled: nextEnabled };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   };
@@ -984,7 +1154,7 @@ export default function App() {
       const curPaint = normalizePaintConfig(prev.paintBooth, nextTheme, charId);
       const syncedPaint = setPartPaint(curPaint, 'chassis', { color: bodyHex });
       const next: SaveProfile = { ...prev, botTheme: nextTheme, paintBooth: syncedPaint };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   };
@@ -1007,7 +1177,7 @@ export default function App() {
         { color: def.defaultAccentHex }
       );
       const next: SaveProfile = { ...prev, botCharacter: normChar, paintBooth: nextPaint };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
     triggerRobotSpeech(
@@ -1026,7 +1196,7 @@ export default function App() {
       setSave((prev) => {
         const res = renameSaveProfile(prev, nextName);
         if (!res.ok) return prev;
-        persistSaveProfile(res.save);
+        saveActiveRosterProfile(res.save);
         return res.save;
       });
       return { ok: true, error: null };
@@ -1050,7 +1220,7 @@ export default function App() {
       const curPaint = normalizePaintConfig(prev.paintBooth, theme, charId);
       const nextPaint = setPartPaint(curPaint, part, patch);
       const next: SaveProfile = { ...prev, paintBooth: nextPaint };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
     if (announce) {
@@ -1078,7 +1248,7 @@ export default function App() {
         charId
       );
       const next: SaveProfile = { ...prev, savedPaintThemes: nextThemes };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
     const def = BOT_CHARACTERS[activeCharacter];
@@ -1091,7 +1261,7 @@ export default function App() {
     worldRef.current?.setPaintConfig(nextPaint, 'chassis');
     setSave((prev) => {
       const next: SaveProfile = { ...prev, paintBooth: nextPaint };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
     const def = BOT_CHARACTERS[activeCharacter];
@@ -1105,7 +1275,7 @@ export default function App() {
     setSave((prev) => {
       const nextThemes = deleteSavedPaintTheme(normalizeSavedPaintThemes(prev.savedPaintThemes), id);
       const next: SaveProfile = { ...prev, savedPaintThemes: nextThemes };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   };
@@ -1119,10 +1289,164 @@ export default function App() {
       const charId = normalizeBotCharacter(prev.botCharacter);
       const nextFresh = createDefaultPaintConfig(theme, charId);
       const next: SaveProfile = { ...prev, paintBooth: nextFresh };
-      persistSaveProfile(next);
+      saveActiveRosterProfile(next);
       return next;
     });
   };
+
+  const applyLoadedSlotSave = useCallback(
+    (nextSave: SaveProfile, nextRoster: ProfileRosterState) => {
+      SPEECH.stop();
+      setRoster(nextRoster);
+      setSave(nextSave);
+      const targetLvl =
+        getLevelById(Math.min(LEVELS.length, Math.max(1, nextSave.unlockedLevel || 1))) ||
+        LEVELS[0];
+      const nextTheme = normalizeBotTheme(nextSave.botTheme);
+      const nextChar = normalizeBotCharacter(nextSave.botCharacter);
+      const nextPaint = normalizePaintConfig(nextSave.paintBooth, nextTheme, nextChar);
+      worldRef.current?.setBotTheme(nextTheme, false);
+      worldRef.current?.setBotCharacter(nextChar, false);
+      worldRef.current?.setPaintConfig(nextPaint, null);
+      worldRef.current?.setGentleSpeed(nextSave.gentleSpeed);
+      worldRef.current?.setLowGraphics(Boolean(nextSave.lowGraphics));
+      beginLevel(targetLvl);
+      setMode('TITLE');
+      worldRef.current?.setMode('TITLE');
+    },
+    [beginLevel]
+  );
+
+  const handleSwitchRosterSlot = useCallback(
+    (slotId: string) => {
+      const res = switchRosterSlot(slotId);
+      if (!res.ok) {
+        SFX.chirpConfused();
+        return;
+      }
+      SFX.installComplete();
+      applyLoadedSlotSave(res.save, res.roster);
+    },
+    [applyLoadedSlotSave]
+  );
+
+  const handleCreateRosterSlot = useCallback(
+    (name: string, botCharacter: BotCharacterId): { ok: boolean; error: string | null } => {
+      const res = createRosterSlot(name, botCharacter);
+      if (!res.ok) {
+        SFX.chirpConfused();
+        return { ok: false, error: res.error };
+      }
+      SFX.installComplete();
+      applyLoadedSlotSave(res.save, res.roster);
+      return { ok: true, error: null };
+    },
+    [applyLoadedSlotSave]
+  );
+
+  const handleDeleteRosterSlot = useCallback(
+    (slotId: string): { ok: boolean; error: string | null } => {
+      const res = deleteRosterSlot(slotId);
+      if (!res.ok) {
+        SFX.chirpConfused();
+        return { ok: false, error: res.error };
+      }
+      SFX.click();
+      applyLoadedSlotSave(res.save, res.roster);
+      return { ok: true, error: null };
+    },
+    [applyLoadedSlotSave]
+  );
+
+  const handleSaveSandboxDraft = useCallback(
+    (draft: SandboxMissionDraft, addToSavedSlot = false) => {
+      const normDraft = normalizeSandboxDraft(draft);
+      setSave((prev) => {
+        const prevSaved = Array.isArray(prev.sandbox?.savedLevels)
+          ? prev.sandbox.savedLevels.map((d) => normalizeSandboxDraft(d))
+          : [];
+        let nextSaved = prevSaved;
+        if (addToSavedSlot) {
+          const idx = prevSaved.findIndex((item) => item.id === normDraft.id);
+          if (idx >= 0) {
+            nextSaved = prevSaved.map((item, i) => (i === idx ? normDraft : item));
+          } else {
+            nextSaved = [normDraft, ...prevSaved].slice(0, SANDBOX_MAX_SAVED);
+          }
+        }
+        const next: SaveProfile = {
+          ...prev,
+          sandbox: {
+            name: normDraft.name,
+            budget: normDraft.budget,
+            parBudget: normDraft.parBudget,
+            parBlocks: normDraft.parBlocks,
+            loopUnlocked: normDraft.loopUnlocked,
+            ifUnlocked: normDraft.ifUnlocked,
+            track: normDraft.track,
+            circuit: normDraft.circuit,
+            savedLevels: nextSaved
+          }
+        };
+        saveActiveRosterProfile(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleDeleteSavedSandbox = useCallback((id: string) => {
+    SFX.click();
+    setSave((prev) => {
+      const prevSaved = Array.isArray(prev.sandbox?.savedLevels)
+        ? prev.sandbox.savedLevels
+        : [];
+      const curSandbox = normalizeSandboxDraft(prev.sandbox || createDefaultSandboxDraft());
+      const next: SaveProfile = {
+        ...prev,
+        sandbox: {
+          name: curSandbox.name,
+          budget: curSandbox.budget,
+          parBudget: curSandbox.parBudget,
+          parBlocks: curSandbox.parBlocks,
+          loopUnlocked: curSandbox.loopUnlocked,
+          ifUnlocked: curSandbox.ifUnlocked,
+          track: curSandbox.track,
+          circuit: curSandbox.circuit,
+          savedLevels: prevSaved.filter((item) => item.id !== id)
+        }
+      };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  }, []);
+
+  const handleTestSandboxDraft = useCallback(
+    (draft: SandboxMissionDraft) => {
+      SFX.boost();
+      handleSaveSandboxDraft(draft, false);
+      setShowSandbox(false);
+      beginLevel(sandboxDraftToLevelDef(draft));
+    },
+    [beginLevel, handleSaveSandboxDraft]
+  );
+
+  const handlePlayClassCode = useCallback(
+    (draft: SandboxMissionDraft) => {
+      SFX.boost();
+      setShowClassCode(false);
+      beginLevel(sandboxDraftToLevelDef(draft, { isClassCode: true }));
+    },
+    [beginLevel]
+  );
+
+  const handleSaveClassCodeToSandbox = useCallback(
+    (draft: SandboxMissionDraft) => {
+      SFX.installComplete();
+      handleSaveSandboxDraft(draft, true);
+    },
+    [handleSaveSandboxDraft]
+  );
 
   const handleEnterPaintBooth = () => {
     SFX.click();
@@ -1153,7 +1477,7 @@ export default function App() {
 
   const activeStreak = getActiveDailyStreak(save.daily, getDailyDateKey());
   const trophyTiers = useMemo(
-    () => computeStemSkillBadges(save.skillStats).reduce((s, b) => s + b.tier, 0),
+    () => computeAcademySkillBadges(save.skillStats).reduce((s, b) => s + b.tier, 0),
     [save.skillStats]
   );
 
@@ -1173,6 +1497,108 @@ export default function App() {
       worldRef.current?.playGhostPreview(plan);
     }
   }, [chassis, circuitGrid, currentLevel, mode, program]);
+
+  const handleRequestHint = useCallback(() => {
+    SFX.uiTick();
+    const nextTier = (
+      adaptiveHintTier === 0 ? 1 : Math.min(3, adaptiveHintTier + 1)
+    ) as AdaptiveHintTier;
+    setAdaptiveHintTier(nextTier);
+    setMaxHintTierUsed((prev) => {
+      const maxT = Math.max(prev, nextTier) as 0 | AdaptiveHintTier;
+      maxHintTierRef.current = maxT;
+      return maxT;
+    });
+    if (nextTier === 3 && (mode === 'BUILD_3D' || mode === 'CIRCUIT_3D')) {
+      triggerGhostPreview();
+    }
+  }, [adaptiveHintTier, mode, triggerGhostPreview]);
+
+  const handleApplyParsons = useCallback((template: ParsonsStarterTemplate) => {
+    SFX.installComplete();
+    setProgram(template.blocks);
+    setFailingBlockId(null);
+    setMoodCue(null);
+  }, []);
+
+  const handleEducationalMiniGameProgress = useCallback(
+    (info: {
+      gameId: ArcadeGameId;
+      won: boolean;
+      perfectFixes?: number;
+      gatesSolved?: number;
+    }) => {
+      const prev = stateRef.current.save;
+      const tel = normalizeLearningTelemetry(prev.learningTelemetry);
+      const nextSkills = {
+        chassisBuilds: 0,
+        jumpsCleared: 0,
+        mudCleared: 0,
+        loopsCompressed: 0,
+        sensorsUsed: 0,
+        circuitsSolved: 0,
+        ...(prev.skillStats || {})
+      };
+      const candidateFacts: StemFactCardDef[] = [];
+
+      if (info.gameId === 'bug_detective') {
+        tel.miniGames.bugDetectivePlayed += 1;
+        if (info.won) {
+          tel.miniGames.bugDetectiveWon += 1;
+          nextSkills.bugsDebugged = (nextSkills.bugsDebugged || 0) + 1;
+          const fact = getFactCardById('debugging_mindset');
+          if (fact) candidateFacts.push(fact);
+        }
+        if (info.perfectFixes) {
+          tel.miniGames.bugDetectivePerfect += info.perfectFixes;
+        }
+      } else if (info.gameId === 'logic_gate_lab') {
+        tel.miniGames.logicLabPlayed += 1;
+        if (info.won) {
+          tel.miniGames.logicLabWon += 1;
+          const fact = getFactCardById('digital_logic_gates');
+          if (fact) candidateFacts.push(fact);
+        }
+        const solvedCount = info.gatesSolved ?? (info.won ? 1 : 0);
+        tel.miniGames.logicGatesSolved += solvedCount;
+        nextSkills.logicGatesSolved = (nextSkills.logicGatesSolved || 0) + solvedCount;
+      }
+
+      const unlocks = detectLearningMilestoneUnlocks({
+        prevSkillStats: prev.skillStats,
+        nextSkillStats: nextSkills,
+        prevUnlockedFactIds: prev.unlockedFactIds,
+        candidateFacts
+      });
+
+      const mergedFacts = Array.from(
+        new Set([
+          ...(prev.unlockedFactIds || []),
+          ...unlocks.newlyUnlockedFacts.map((f) => f.id)
+        ])
+      );
+      const next: SaveProfile = {
+        ...prev,
+        skillStats: nextSkills,
+        unlockedFactIds: mergedFacts,
+        learningTelemetry: tel
+      };
+      stateRef.current = { ...stateRef.current, save: next };
+      saveActiveRosterProfile(next);
+      setSave(next);
+
+      if (unlocks.shouldCelebrate) {
+        if (unlocks.newlyUpgradedBadges.length > 0) {
+          setUpgradedPillars(unlocks.newlyUpgradedBadges.map((b) => b.id));
+        }
+        if (unlocks.newlyUnlockedFacts.length > 0) {
+          setNewlyUnlockedFacts(unlocks.newlyUnlockedFacts);
+        }
+        triggerMilestoneCelebration(unlocks.newlyUnlockedFacts, unlocks.newlyUpgradedBadges);
+      }
+    },
+    [triggerMilestoneCelebration]
+  );
 
   const totalStarsEarned = useMemo(() => computeTotalStarsEarned(save), [save]);
 
@@ -1260,6 +1686,53 @@ export default function App() {
   }, [currentLevel]);
 
   const currentLevelSavedStars = getLevelSavedStars(save, currentLevel);
+  const currentAdaptiveHint = useMemo(() => {
+    if (adaptiveHintTier === 0) return null;
+    if (mode !== 'BUILD_3D' && mode !== 'CODE_3D' && mode !== 'CIRCUIT_3D') return null;
+    const phase = mode === 'BUILD_3D' ? 'build' : mode === 'CIRCUIT_3D' ? 'circuit' : 'code';
+    return computeAdaptiveHint({
+      level: currentLevel,
+      phase,
+      chassis,
+      program,
+      circuitGrid,
+      tier: adaptiveHintTier,
+      lastSimResult: lastFailedSim,
+      failingBlockId
+    });
+  }, [
+    adaptiveHintTier,
+    chassis,
+    circuitGrid,
+    currentLevel,
+    failingBlockId,
+    lastFailedSim,
+    mode,
+    program
+  ]);
+
+  const adaptiveHintElement = currentAdaptiveHint ? (
+    <AdaptiveHintBanner
+      hint={currentAdaptiveHint}
+      isGentleRetry={consecutiveFails > 0}
+      autoReadAloud={Boolean(save.readAloudEnabled)}
+      onEscalateTier={handleRequestHint}
+      onOpenDemo={(topic, condition) => {
+        SFX.click();
+        setActiveDemo({ topic, condition });
+      }}
+      onStepByStep={() => handleStepProgram()}
+      onApplyParsons={handleApplyParsons}
+      onPlayGhostPreview={() => {
+        SFX.click();
+        triggerGhostPreview();
+      }}
+      onDismiss={() => {
+        SFX.uiTick();
+        setAdaptiveHintTier(0);
+      }}
+    />
+  ) : null;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#0b1222]">
@@ -1291,6 +1764,14 @@ export default function App() {
           onOpenLevelMap={() => {
             SFX.click();
             setShowMap(true);
+          }}
+          onOpenSandbox={() => {
+            SFX.click();
+            setShowSandbox(true);
+          }}
+          onOpenClassCode={() => {
+            SFX.click();
+            setShowClassCode(true);
           }}
           onOpenTrophies={() => {
             SFX.click();
@@ -1349,6 +1830,7 @@ export default function App() {
           onSwitchPhase={(target) => {
             SFX.click();
             setMoodCue(null);
+            setAdaptiveHintTier(0);
             if (target !== 'BUILD_3D') {
               setWorkshopAutoSpin(false);
               setInspect3D(false);
@@ -1407,6 +1889,7 @@ export default function App() {
           lowGraphics={lowGraphics}
           installPhase={installPhase}
           lastPlacement={lastPlacement}
+          hintBanner={mode === 'BUILD_3D' ? adaptiveHintElement : null}
           onSelectPart={(p) => {
             SFX.click();
             setSelectedPart(p);
@@ -1419,6 +1902,7 @@ export default function App() {
             SFX.click();
             setSelectedPart(null);
             setMoodCue(null);
+            setAdaptiveHintTier(0);
             setWorkshopAutoSpin(false);
             setInspect3D(false);
             worldRef.current?.setWorkshopAutoSpin(false);
@@ -1439,6 +1923,7 @@ export default function App() {
             SFX.click();
             setActiveDemo({ topic });
           }}
+          onRequestHint={handleRequestHint}
         />
       )}
 
@@ -1487,10 +1972,13 @@ export default function App() {
           tutorialStep={tutorialStep}
           ghostHelp={ghostHelp}
           lastFeedbackTier={lastCodeFeedbackTier}
+          failingBlockId={failingBlockId}
+          hintBanner={mode === 'CODE_3D' ? adaptiveHintElement : null}
           onBlockPlaced={handleCodeBlockPlaced}
           onChangeProgram={(next) => {
             SFX.click();
             setMoodCue(null);
+            setFailingBlockId(null);
             setProgram(next);
           }}
           onRunProgram={handleRunProgram}
@@ -1498,6 +1986,7 @@ export default function App() {
           onToggleSimPause={handleToggleSimPause}
           onNextSimStep={handleNextSimStep}
           onStopSim={handleStopSim}
+          onRequestHint={handleRequestHint}
           onOpenDemo={(topic, condition) => {
             SFX.click();
             setActiveDemo({ topic, condition });
@@ -1511,11 +2000,14 @@ export default function App() {
           circuitGrid={circuitGrid}
           tutorialStep={tutorialStep}
           ghostHelp={ghostHelp}
+          highlightCell={currentAdaptiveHint?.circuitTarget || null}
+          hintBanner={adaptiveHintElement}
           onTapCell={handleCircuitCellTap}
           onOpenDemo={(topic) => {
             SFX.click();
             setActiveDemo({ topic });
           }}
+          onRequestHint={handleRequestHint}
         />
       )}
 
@@ -1544,9 +2036,15 @@ export default function App() {
       )}
 
       {/* Expressive Robot Voice Speech Bubble */}
-      {!showSettings && !showProfile && !showMap && !showTrophies && !showGameRoom && !paused && (
-        <RobotSpeechBubble speech={robotSpeech} headPoint={headPoint} />
-      )}
+      {!showSettings &&
+        !showProfile &&
+        !showMap &&
+        !showTrophies &&
+        !showGameRoom &&
+        !showParentDashboard &&
+        !showSandbox &&
+        !showClassCode &&
+        !paused && <RobotSpeechBubble speech={robotSpeech} moodCue={moodCue} headPoint={headPoint} />}
 
       {/* Ghost Hand Visual Demo */}
       <GhostHand
@@ -1558,6 +2056,9 @@ export default function App() {
           !showSettings &&
           !showProfile &&
           !showGameRoom &&
+          !showParentDashboard &&
+          !showSandbox &&
+          !showClassCode &&
           !activeDemo &&
           !inspect3D &&
           (mode === 'BUILD_3D' || mode === 'CODE_3D' || mode === 'CIRCUIT_3D')
@@ -1568,7 +2069,7 @@ export default function App() {
       {/* Interactive Visual Learning Demo Popover */}
       <ConceptDemoPopover demo={activeDemo} onClose={() => setActiveDemo(null)} />
 
-      {/* Bot Character Profile Selector Modal */}
+      {/* Bot Character Profile & Cadet Roster Selector Modal */}
       <BotProfileModal
         visible={showProfile}
         profileName={activeProfileName}
@@ -1577,8 +2078,13 @@ export default function App() {
         totalBolts={save.totalBolts}
         savedThemes={savedPaintThemes}
         canOpenPaintBooth={mode === 'BUILD_3D' || mode === 'TITLE'}
+        rosterSlots={roster.slots}
+        activeSlotId={roster.activeSlotId}
         onRenameProfile={handleRenameProfile}
         onSelectCharacter={handleSelectCharacter}
+        onSwitchSlot={handleSwitchRosterSlot}
+        onCreateSlot={handleCreateRosterSlot}
+        onDeleteSlot={handleDeleteRosterSlot}
         onOpenPaintBooth={() => {
           if (mode === 'TITLE') {
             beginLevel(currentLevel);
@@ -1587,19 +2093,15 @@ export default function App() {
             handleEnterPaintBooth();
           }
         }}
+        onOpenParentView={() => {
+          SFX.click();
+          setShowProfile(false);
+          setShowParentDashboard(true);
+        }}
         onClose={() => {
           SFX.click();
           setShowProfile(false);
         }}
-      />
-
-      {/* STEM Skill Trophy Shelf */}
-      <TrophyShelfModal
-        visible={showTrophies}
-        profileName={activeProfileName}
-        skillStats={save.skillStats}
-        upgradedPillars={upgradedPillars}
-        onClose={() => setShowTrophies(false)}
       />
 
       {/* Audio & Workshop Settings Modal */}
@@ -1610,6 +2112,8 @@ export default function App() {
         gentleSpeed={save.gentleSpeed}
         lowGraphics={lowGraphics}
         challengeTimerEnabled={challengeTimerEnabled}
+        adaptiveHintsEnabled={save.adaptiveHintsEnabled !== false}
+        readAloudEnabled={Boolean(save.readAloudEnabled)}
         onToggleMute={handleToggleMute}
         onChangeAudio={handleChangeAudio}
         onTestSfx={() => SFX.weldSparks()}
@@ -1624,11 +2128,94 @@ export default function App() {
         onToggleSpeed={handleToggleSpeed}
         onToggleLowGraphics={handleToggleLowGraphics}
         onToggleChallengeTimer={handleToggleChallengeTimer}
+        onToggleAdaptiveHints={handleToggleAdaptiveHints}
+        onToggleReadAloud={handleToggleReadAloud}
+        onOpenParentView={() => {
+          SFX.click();
+          setShowSettings(false);
+          setShowParentDashboard(true);
+        }}
         onClose={() => {
           SFX.click();
           setShowSettings(false);
         }}
       />
+
+      {/* Lazy-Loaded Feature Modals */}
+      <React.Suspense fallback={null}>
+        {showTrophies && (
+          <TrophyShelfModal
+            visible={showTrophies}
+            profileName={activeProfileName}
+            skillStats={save.skillStats}
+            upgradedPillars={upgradedPillars}
+            unlockedFactIds={save.unlockedFactIds || []}
+            initialTab={trophyInitialTab}
+            onClose={() => setShowTrophies(false)}
+          />
+        )}
+
+        {showParentDashboard && (
+          <ParentDashboardModal
+            visible={showParentDashboard}
+            save={save}
+            adaptiveHintsEnabled={save.adaptiveHintsEnabled !== false}
+            challengeTimerEnabled={challengeTimerEnabled}
+            onToggleAdaptiveHints={handleToggleAdaptiveHints}
+            onToggleChallengeTimer={handleToggleChallengeTimer}
+            onClose={() => {
+              SFX.click();
+              setShowParentDashboard(false);
+            }}
+          />
+        )}
+
+        {showGameRoom && (
+          <GameRoomModal
+            visible={showGameRoom}
+            activeCharacter={activeCharacter}
+            totalBolts={save.totalBolts}
+            hasNextLevel={Boolean(nextLevelDef)}
+            chassisInfo={chassisInfo}
+            externalSummary={planetSummary}
+            onClearExternalSummary={() => setPlanetSummary(null)}
+            onAwardBolts={(bolts) => handleAwardArcadeBolts(bolts)}
+            onEducationalProgress={handleEducationalMiniGameProgress}
+            onLaunchRobotRun={handlePlayGateDash}
+            onLaunchPlanetAdventure={handlePlayPlanetAdventure}
+            onNextLevel={() => {
+              setPlanetSummary(null);
+              setShowGameRoom(false);
+              if (nextLevelDef) beginLevel(nextLevelDef);
+            }}
+            onClose={() => {
+              setPlanetSummary(null);
+              setShowGameRoom(false);
+            }}
+          />
+        )}
+
+        {showSandbox && (
+          <SandboxCreatorModal
+            visible={showSandbox}
+            initialDraft={currentSandboxDraft}
+            savedLevels={savedSandboxLevels}
+            onSaveDraft={handleSaveSandboxDraft}
+            onDeleteSavedLevel={handleDeleteSavedSandbox}
+            onTestMission={handleTestSandboxDraft}
+            onClose={() => setShowSandbox(false)}
+          />
+        )}
+
+        {showClassCode && (
+          <ClassroomCodeModal
+            visible={showClassCode}
+            onPlayDraft={handlePlayClassCode}
+            onSaveToSandbox={handleSaveClassCodeToSandbox}
+            onClose={() => setShowClassCode(false)}
+          />
+        )}
+      </React.Suspense>
 
       {/* Modals */}
       <VictoryModal
@@ -1645,8 +2232,11 @@ export default function App() {
         energyCost={victoryBonusInfo.energyCost}
         parBudget={victoryBonusInfo.parBudget}
         hasNextLevel={Boolean(nextLevelDef)}
+        isSandbox={Boolean(currentLevel.isSandbox && !currentLevel.isClassCode)}
         upgradedPillars={upgradedPillars}
         speedRun={lastVictorySpeedRun}
+        bugFixerBonus={bugFixerEarned}
+        unlockedFacts={newlyUnlockedFacts}
         onPlayDash={() => {
           SFX.click();
           setShowGameRoom(true);
@@ -1661,34 +2251,20 @@ export default function App() {
         }}
         onOpenTrophies={() => {
           SFX.click();
+          setTrophyInitialTab(newlyUnlockedFacts.length > 0 ? 'facts' : 'badges');
           setShowTrophies(true);
         }}
+        onOpenSandbox={
+          currentLevel.isSandbox && !currentLevel.isClassCode
+            ? () => {
+                SFX.click();
+                setShowSandbox(true);
+              }
+            : undefined
+        }
         onNextLevel={() => {
           SFX.click();
           if (nextLevelDef) beginLevel(nextLevelDef);
-        }}
-      />
-
-      {/* Post-Mission Arcade Game Room */}
-      <GameRoomModal
-        visible={showGameRoom}
-        activeCharacter={activeCharacter}
-        totalBolts={save.totalBolts}
-        hasNextLevel={Boolean(nextLevelDef)}
-        chassisInfo={chassisInfo}
-        externalSummary={planetSummary}
-        onClearExternalSummary={() => setPlanetSummary(null)}
-        onAwardBolts={(bolts) => handleAwardArcadeBolts(bolts)}
-        onLaunchRobotRun={handlePlayGateDash}
-        onLaunchPlanetAdventure={handlePlayPlanetAdventure}
-        onNextLevel={() => {
-          setPlanetSummary(null);
-          setShowGameRoom(false);
-          if (nextLevelDef) beginLevel(nextLevelDef);
-        }}
-        onClose={() => {
-          setPlanetSummary(null);
-          setShowGameRoom(false);
         }}
       />
 
@@ -1704,6 +2280,16 @@ export default function App() {
         onStartDaily={() => {
           SFX.click();
           beginLevel(generateDailyChallenge(getDailyDateKey()));
+        }}
+        onOpenSandbox={() => {
+          SFX.click();
+          setShowMap(false);
+          setShowSandbox(true);
+        }}
+        onOpenClassCode={() => {
+          SFX.click();
+          setShowMap(false);
+          setShowClassCode(true);
         }}
         onClose={() => setShowMap(false)}
       />
@@ -1731,6 +2317,20 @@ export default function App() {
           setMode('TITLE');
           worldRef.current?.setMode('TITLE');
         }}
+      />
+
+      {/* Milestone Unlock Particle Burst & Sound Celebration Overlay */}
+      <MilestoneCelebrationOverlay
+        event={milestoneCelebration}
+        lowGraphics={lowGraphics}
+        onOpenTrophies={() => {
+          SFX.click();
+          setTrophyInitialTab(milestoneCelebration?.facts.length ? 'facts' : 'badges');
+          setMilestoneCelebration(null);
+          setShowGameRoom(false);
+          setShowTrophies(true);
+        }}
+        onDismiss={() => setMilestoneCelebration(null)}
       />
 
       {/* WebGL Context Lost Recovery */}

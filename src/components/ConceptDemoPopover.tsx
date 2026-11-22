@@ -265,6 +265,85 @@ const RightOutcomeSvg: React.FC<{ demo: DemoRequest }> = ({ demo }) => {
   );
 };
 
+function getDemoExplanation(demo: DemoRequest): { title: string; why: string } {
+  if (demo.topic === 'CIRCUIT_MIRROR') {
+    return {
+      title: 'Law of Reflection',
+      why: 'A flat mirror bounces a straight laser beam 90 degrees so light can reach around corners.'
+    };
+  }
+  if (demo.topic === 'CIRCUIT_SPLITTER') {
+    return {
+      title: 'Beam Splitter',
+      why: 'Half the beam passes straight through while the rest bounces sideways, powering two cores at once!'
+    };
+  }
+  if (demo.topic === 'LOOP') {
+    return {
+      title: 'Pattern Loops',
+      why: 'A LOOP repeats the blocks inside it, shrinking long sequences so you stay under your block budget.'
+    };
+  }
+  if (demo.topic === 'IF') {
+    if (demo.condition === 'MUD') {
+      return {
+        title: 'Sensor Check · Mud Ahead',
+        why: 'IF [MUD] looks 1 tile ahead and only runs its action when sticky mud is detected.'
+      };
+    }
+    if (demo.condition === 'RAMP') {
+      return {
+        title: 'Sensor Check · Ramp Ahead',
+        why: 'IF [RAMP] spots steep slopes ahead so SparkBot triggers BOOST right before climbing.'
+      };
+    }
+    return {
+      title: 'Sensor Check · Gap Ahead',
+      why: 'IF [GAP] scans 1 tile ahead and triggers JUMP only when there is an open pit!'
+    };
+  }
+  if (demo.topic === 'MOVE') {
+    return {
+      title: 'Step Move (+1 Tile)',
+      why: 'Each MOVE rolls SparkBot forward 1 flat tile using wheels or treads.'
+    };
+  }
+  if (demo.topic === 'JUMP' || demo.topic === 'thrusters') {
+    return {
+      title: 'Thruster Leap (+2 Tiles)',
+      why: 'Downward thrust lifts SparkBot into a parabolic arc so it clears an open gap.'
+    };
+  }
+  if (demo.topic === 'BOOST' || demo.topic === 'booster') {
+    return {
+      title: 'Turbo Boost (+3 Tiles)',
+      why: 'Extra forward force lets SparkBot climb steep inclined ramps without sliding back.'
+    };
+  }
+  if (demo.topic === 'treads') {
+    return {
+      title: 'Wide Traction Treads',
+      why: 'Treads spread robot weight across wide tracks so it grips soft mud instead of sinking.'
+    };
+  }
+  if (demo.topic === 'laser') {
+    return {
+      title: 'Front Column Laser',
+      why: 'Attaching the Laser Emitter to a right-hand FRONT slot aims its beam straight at the exit gate.'
+    };
+  }
+  if (demo.topic === 'magnet') {
+    return {
+      title: 'Magnet Collector',
+      why: 'Magnetic coils pull nearby shiny crystals and bolts straight toward SparkBot.'
+    };
+  }
+  return {
+    title: 'Low-Friction Wheels',
+    why: 'Spinning wheels reduce ground drag so SparkBot rolls smoothly on flat workshop tracks.'
+  };
+}
+
 export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({ demo, onClose }) => {
   useEffect(() => {
     if (!demo) return;
@@ -281,6 +360,7 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({ demo, on
   const partCost = isPart ? PARTS[demo.topic as PartId].cost : null;
   const distanceChip =
     demo.topic === 'MOVE' ? '+1' : demo.topic === 'JUMP' ? '+2' : demo.topic === 'BOOST' ? '+3' : null;
+  const info = getDemoExplanation(demo);
 
   return (
     <div
@@ -295,28 +375,29 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({ demo, on
         onClick={(e) => e.stopPropagation()}
         className="anim-pop flex w-full max-w-md flex-col gap-3 rounded-3xl border-2 border-sky-400/80 bg-slate-900 p-4 shadow-2xl sm:p-5"
       >
-        {/* Header: Topic Icon + Metric Badge + Close Button */}
+        {/* Header: Topic Icon + Title + Metric + Close Button */}
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800">
               <DemoHeaderEmblem demo={demo} />
             </div>
             {demo.topic === 'IF' && demo.condition && (
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-400/70 bg-violet-500/20">
-                <HazardIcon cond={demo.condition} className="h-7 w-7" />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-violet-400/70 bg-violet-500/20">
+                <HazardIcon cond={demo.condition} className="h-6 w-6" />
               </div>
             )}
-            {partCost !== null && (
-              <div className="flex items-center gap-1 rounded-xl border border-amber-400/60 bg-amber-500/15 px-3 py-1.5 text-amber-300 tabular text-base font-black">
-                <Zap className="h-4 w-4 fill-amber-400 text-amber-400" />
-                <span>{partCost}</span>
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-black text-white sm:text-base">{info.title}</h3>
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-300 tabular-nums">
+                {partCost !== null && (
+                  <span className="inline-flex items-center gap-1 text-amber-300">
+                    <Zap className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    {partCost} Energy
+                  </span>
+                )}
+                {distanceChip && <span className="text-sky-300">Distance {distanceChip}</span>}
               </div>
-            )}
-            {distanceChip && (
-              <div className="rounded-xl border border-sky-400/60 bg-sky-500/15 px-3 py-1.5 text-sky-200 tabular text-base font-black">
-                {distanceChip}
-              </div>
-            )}
+            </div>
           </div>
 
           <button
@@ -324,9 +405,9 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({ demo, on
             type="button"
             onClick={onClose}
             aria-label="Close Visual Demo"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -334,23 +415,46 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({ demo, on
         <div className="grid grid-cols-2 gap-3">
           <div
             aria-label="Wrong setup"
-            className="flex flex-col items-center gap-2 rounded-2xl border-2 border-rose-400/70 bg-rose-950/35 p-3"
+            className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-rose-400/70 bg-rose-950/35 p-3"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-500 text-slate-950 shadow">
-              <X className="h-5 w-5 stroke-[3]" />
+            <div className="flex items-center gap-1.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-slate-950 shadow">
+                <X className="h-4 w-4 stroke-[3]" />
+              </div>
+              <span className="text-[11px] font-black uppercase tracking-wide text-rose-200">
+                Problem
+              </span>
             </div>
             <WrongOutcomeSvg demo={demo} />
           </div>
 
           <div
             aria-label="Right setup"
-            className="flex flex-col items-center gap-2 rounded-2xl border-2 border-emerald-400/80 bg-emerald-950/35 p-3 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+            className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-emerald-400/80 bg-emerald-950/35 p-3 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400 text-slate-950 shadow">
-              <Check className="h-5 w-5 stroke-[3]" />
+            <div className="flex items-center gap-1.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400 text-slate-950 shadow">
+                <Check className="h-4 w-4 stroke-[3]" />
+              </div>
+              <span className="text-[11px] font-black uppercase tracking-wide text-emerald-200">
+                Solution
+              </span>
             </div>
             <RightOutcomeSvg demo={demo} />
           </div>
+        </div>
+
+        {/* Plain-English STEM Principle ("Why It Works") */}
+        <div
+          data-testid="concept-demo-why"
+          className="rounded-2xl border border-sky-400/35 bg-slate-950/85 px-3.5 py-2.5 text-left"
+        >
+          <div className="text-[10px] font-black uppercase tracking-wider text-sky-300">
+            Why It Works
+          </div>
+          <p className="mt-0.5 text-xs font-medium leading-relaxed text-slate-200">
+            {info.why}
+          </p>
         </div>
       </div>
     </div>
