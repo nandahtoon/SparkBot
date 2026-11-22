@@ -109,7 +109,12 @@ import { ConceptDemoPopover, type DemoRequest } from './components/ConceptDemoPo
 import { TrophyShelfModal } from './components/TrophyShelfModal';
 import { SettingsModal } from './components/SettingsModal';
 import { RobotSpeechBubble } from './components/RobotSpeechBubble';
-import { GameRoomModal } from './components/GameRoomModal';
+import { GameRoomModal, type GameRoomRoundSummary } from './components/GameRoomModal';
+import { PlanetAdventureHud } from './components/PlanetAdventureHud';
+import {
+  computePlanetAdventureReward,
+  type PlanetAdventureMetrics
+} from './game/planetAdventure';
 import type { WorkshopCameraControls } from './components/WorkshopOrbitStrip';
 
 export default function App() {
@@ -181,6 +186,9 @@ export default function App() {
     total: 0
   });
   const [actionMetrics, setActionMetrics] = useState<ActionDashMetrics | null>(null);
+  const [planetMetrics, setPlanetMetrics] = useState<PlanetAdventureMetrics | null>(null);
+  const [planetSummary, setPlanetSummary] = useState<GameRoomRoundSummary | null>(null);
+  const planetKeysRef = useRef<Set<string>>(new Set());
 
   const normalizedAudio = useMemo(() => normalizeAudioSettings(save.audio), [save.audio]);
   const activeCharacter = useMemo(
@@ -362,6 +370,8 @@ export default function App() {
       setLevelElapsedMs(0);
       setCircuitSolvedFreeze(false);
       setLastVictorySpeedRun(null);
+      setPlanetMetrics(null);
+      setPlanetSummary(null);
       setMode('BUILD_3D');
       setGhostHelp(lvl.id === 1 && !save.tutorialDone);
       worldRef.current?.setLevel(lvl);
@@ -546,6 +556,36 @@ export default function App() {
     worldRef.current?.setMode('VICTORY');
   }, []);
 
+  const handlePlanetFinish = useCallback((metrics: PlanetAdventureMetrics) => {
+    setPlanetMetrics(metrics);
+    planetKeysRef.current.clear();
+    const reward = computePlanetAdventureReward(metrics);
+    if (reward.boltsEarned > 0) {
+      setSave((prev) => {
+        const next: SaveProfile = {
+          ...prev,
+          totalBolts: prev.totalBolts + reward.boltsEarned
+        };
+        persistSaveProfile(next);
+        return next;
+      });
+    }
+    const won = metrics.status === 'won';
+    setPlanetSummary({
+      gameId: 'planet_adventure',
+      title: 'Planet Expedition',
+      score: reward.score,
+      boltsEarned: reward.boltsEarned,
+      won,
+      detail: won
+        ? `Collected ${metrics.coresCollected}/${metrics.totalCores} Energy Cores and escaped through the Exit Gate!`
+        : `Collected ${metrics.coresCollected}/${metrics.totalCores} Energy Cores · ${metrics.boltsCollected} Bolts scavenged.`
+    });
+    setMode('VICTORY');
+    worldRef.current?.setMode('VICTORY');
+    setShowGameRoom(true);
+  }, []);
+
   // Mount Three.js World ONCE
   useEffect(() => {
     const el = mountRef.current;
@@ -570,6 +610,8 @@ export default function App() {
       onSimComplete: (res) => handleSimComplete(res),
       onActionMetrics: (m) => setActionMetrics(m),
       onActionFinish: (m) => handleActionFinish(m),
+      onPlanetMetrics: (m) => setPlanetMetrics(m),
+      onPlanetFinish: (m) => handlePlanetFinish(m),
       onSlotScreenUpdate: (pts) => setSlotPoints(pts),
       onHeadScreenUpdate: (pt) => {
         const prev = lastHeadRef.current;
@@ -674,9 +716,69 @@ export default function App() {
           worldRef.current?.jumpActionDash();
         }
       }
+
+      if (mode === 'PLANET_ADVENTURE_3D' && !paused) {
+        const k = e.key.toLowerCase();
+        if (
+          k === 'w' ||
+          k === 's' ||
+          k === 'a' ||
+          k === 'd' ||
+          e.key === 'ArrowUp' ||
+          e.key === 'ArrowDown' ||
+          e.key === 'ArrowLeft' ||
+          e.key === 'ArrowRight'
+        ) {
+          e.preventDefault();
+          planetKeysRef.current.add(k === e.key.toLowerCase() ? k : e.key);
+          const keys = planetKeysRef.current;
+          const forward =
+            (keys.has('w') || keys.has('ArrowUp') ? 1 : 0) -
+            (keys.has('s') || keys.has('ArrowDown') ? 1 : 0);
+          const strafe =
+            (keys.has('d') || keys.has('ArrowRight') ? 1 : 0) -
+            (keys.has('a') || keys.has('ArrowLeft') ? 1 : 0);
+          worldRef.current?.setPlanetMoveInput(forward, strafe);
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          worldRef.current?.jumpPlanetAdventure();
+        } else if (e.key === 'Shift') {
+          e.preventDefault();
+          worldRef.current?.triggerPlanetBoost();
+        } else if (k === 'e' || k === 'f') {
+          e.preventDefault();
+          worldRef.current?.firePlanetLaser();
+        }
+      }
     };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (mode !== 'PLANET_ADVENTURE_3D') return;
+      const k = e.key.toLowerCase();
+      planetKeysRef.current.delete(k === e.key.toLowerCase() ? k : e.key);
+      const keys = planetKeysRef.current;
+      const forward =
+        (keys.has('w') || keys.has('ArrowUp') ? 1 : 0) -
+        (keys.has('s') || keys.has('ArrowDown') ? 1 : 0);
+      const strafe =
+        (keys.has('d') || keys.has('ArrowRight') ? 1 : 0) -
+        (keys.has('a') || keys.has('ArrowLeft') ? 1 : 0);
+      worldRef.current?.setPlanetMoveInput(forward, strafe);
+    };
+
+    const onBlur = () => {
+      planetKeysRef.current.clear();
+      worldRef.current?.setPlanetMoveInput(0, 0);
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
   }, [beginLevel, currentLevel, mode, paused, showGameRoom, showMap, showProfile, showSettings]);
 
   const handlePlacePart = (part: PartId, r: number, c: number) => {
@@ -784,6 +886,16 @@ export default function App() {
     worldRef.current?.updateChassis(dashChassis, null);
     worldRef.current?.startActionDash(false, save.gentleSpeed);
     setMode('ACTION_RUN_3D');
+  };
+
+  const handlePlayPlanetAdventure = () => {
+    SFX.boost();
+    setPlanetSummary(null);
+    setShowGameRoom(false);
+    planetKeysRef.current.clear();
+    worldRef.current?.updateChassis(chassis, null);
+    worldRef.current?.startPlanetAdventure(save.gentleSpeed);
+    setMode('PLANET_ADVENTURE_3D');
   };
 
   const handleAwardArcadeBolts = useCallback((bolts: number) => {
@@ -1259,6 +1371,8 @@ export default function App() {
             SFX.click();
             if (mode === 'ACTION_RUN_3D') {
               handlePlayGateDash();
+            } else if (mode === 'PLANET_ADVENTURE_3D') {
+              handlePlayPlanetAdventure();
             } else {
               beginLevel(currentLevel);
             }
@@ -1414,6 +1528,21 @@ export default function App() {
         />
       )}
 
+      {/* Stage 5: Playable 3D Alien Planet Equipment Adventure */}
+      {mode === 'PLANET_ADVENTURE_3D' && planetMetrics && (
+        <PlanetAdventureHud
+          metrics={planetMetrics}
+          onMoveInput={(forward, strafe) => worldRef.current?.setPlanetMoveInput(forward, strafe)}
+          onJump={() => worldRef.current?.jumpPlanetAdventure()}
+          onBoost={() => worldRef.current?.triggerPlanetBoost()}
+          onLaser={() => worldRef.current?.firePlanetLaser()}
+          onExit={() => {
+            SFX.click();
+            handlePlanetFinish({ ...planetMetrics, status: 'exited' });
+          }}
+        />
+      )}
+
       {/* Expressive Robot Voice Speech Bubble */}
       {!showSettings && !showProfile && !showMap && !showTrophies && !showGameRoom && !paused && (
         <RobotSpeechBubble speech={robotSpeech} headPoint={headPoint} />
@@ -1546,13 +1675,21 @@ export default function App() {
         activeCharacter={activeCharacter}
         totalBolts={save.totalBolts}
         hasNextLevel={Boolean(nextLevelDef)}
+        chassisInfo={chassisInfo}
+        externalSummary={planetSummary}
+        onClearExternalSummary={() => setPlanetSummary(null)}
         onAwardBolts={(bolts) => handleAwardArcadeBolts(bolts)}
         onLaunchRobotRun={handlePlayGateDash}
+        onLaunchPlanetAdventure={handlePlayPlanetAdventure}
         onNextLevel={() => {
+          setPlanetSummary(null);
           setShowGameRoom(false);
           if (nextLevelDef) beginLevel(nextLevelDef);
         }}
-        onClose={() => setShowGameRoom(false)}
+        onClose={() => {
+          setPlanetSummary(null);
+          setShowGameRoom(false);
+        }}
       />
 
       <LevelMapModal

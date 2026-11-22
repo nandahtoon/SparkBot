@@ -5,6 +5,7 @@ import type { ProceduralTextures } from './materials';
 
 export interface WorkshopEnvironmentHandles {
   workshopGroup: THREE.Group;
+  skyportGroup: THREE.Group;
   turntableRing: THREE.Mesh;
   turntableOuterRing: THREE.Mesh;
   windmills: THREE.Group[];
@@ -121,6 +122,9 @@ export function buildWorkshopEnvironment(
   skyDome.renderOrder = -10;
   scene.add(skyDome);
 
+  const skyportGroup = new THREE.Group();
+  scene.add(skyportGroup);
+
   // Distant atmospheric floor below the skyport cliffs (natural open perimeter)
   const skyFloorGeo = trackDisposable(new THREE.CircleGeometry(185, 36));
   const skyFloorMat = trackDisposable(
@@ -133,7 +137,7 @@ export function buildWorkshopEnvironment(
   const skyFloor = new THREE.Mesh(skyFloorGeo, skyFloorMat);
   skyFloor.rotation.x = -Math.PI / 2;
   skyFloor.position.y = -9.5;
-  scene.add(skyFloor);
+  skyportGroup.add(skyFloor);
 
   // Distant Architectural Solar Ring arcing across the twilight horizon
   const solarRingGeo = trackDisposable(new THREE.TorusGeometry(42, 0.34, 10, 64, Math.PI * 1.15));
@@ -149,7 +153,7 @@ export function buildWorkshopEnvironment(
   const solarRing = new THREE.Mesh(solarRingGeo, solarRingMat);
   solarRing.position.set(0, -4.5, -72);
   solarRing.rotation.z = -0.1;
-  scene.add(solarRing);
+  skyportGroup.add(solarRing);
 
   // Multi-tone Canyon Mesa Silhouettes + Subtle Architectural Beacons via InstancedMesh
   const mesaGeo = trackDisposable(new THREE.CylinderGeometry(3.1, 6.6, 18, 8));
@@ -200,7 +204,7 @@ export function buildWorkshopEnvironment(
   if (mesas.instanceColor) mesas.instanceColor.needsUpdate = true;
   beacons.instanceMatrix.needsUpdate = true;
   if (beacons.instanceColor) beacons.instanceColor.needsUpdate = true;
-  scene.add(mesas, beacons);
+  skyportGroup.add(mesas, beacons);
 
   // Rotating Skyport Windmills in background
   const windmills: THREE.Group[] = [];
@@ -246,7 +250,7 @@ export function buildWorkshopEnvironment(
       rotor.add(piv);
     }
     wm.add(rotor);
-    scene.add(wm);
+    skyportGroup.add(wm);
     windmills.push(rotor);
   });
 
@@ -558,6 +562,7 @@ export function buildWorkshopEnvironment(
 
   return {
     workshopGroup,
+    skyportGroup,
     turntableRing,
     turntableOuterRing,
     windmills,

@@ -7,7 +7,8 @@ export type ArcadeGameId =
   | 'break_wall'
   | 'connect_nodes'
   | 'robot_run'
-  | 'space_shooter';
+  | 'space_shooter'
+  | 'planet_adventure';
 
 export interface ArcadeGameCardDef {
   id: ArcadeGameId;
@@ -50,6 +51,14 @@ export const ARCADE_GAMES: ArcadeGameCardDef[] = [
     controlsHint: 'Move mouse/touch or A/D · Space turbo burst',
     accentHex: '#34d399',
     baseBolts: 40
+  },
+  {
+    id: 'planet_adventure',
+    title: 'Planet Expedition',
+    subtitle: 'Explore an alien crater with your bot gear, collect 5 Energy Cores, and power the Exit Gate',
+    controlsHint: 'WASD/Arrows move · Space jump · Shift boost · E laser',
+    accentHex: '#10b981',
+    baseBolts: 65
   }
 ];
 

@@ -82,6 +82,7 @@ export function computeResponsiveCameraFraming(
           baseFov: 56
         };
       case 'ACTION_RUN_3D':
+      case 'PLANET_ADVENTURE_3D':
         return {
           formFactor,
           distanceScale: 1.18 + narrowBoost * 0.28,
@@ -107,7 +108,7 @@ export function computeResponsiveCameraFraming(
       distanceScale: mode === 'CIRCUIT_3D' ? 1.16 : 1.12,
       lookYOffset: mode === 'BUILD_3D' || mode === 'PAINT_BOOTH' ? -0.24 : -0.15,
       lookXOffset: 0,
-      baseFov: mode === 'ACTION_RUN_3D' ? 56 : 54
+      baseFov: mode === 'ACTION_RUN_3D' || mode === 'PLANET_ADVENTURE_3D' ? 56 : 54
     };
   }
 
@@ -130,7 +131,12 @@ export function computeResponsiveCameraFraming(
             : -0.1
           : 0,
       lookXOffset: mode === 'TITLE' && isPortraitTablet ? 0.35 : 0,
-      baseFov: mode === 'ACTION_RUN_3D' ? 57 : isPortraitTablet ? 54 : 52
+      baseFov:
+        mode === 'ACTION_RUN_3D' || mode === 'PLANET_ADVENTURE_3D'
+          ? 57
+          : isPortraitTablet
+            ? 54
+            : 52
     };
   }
 
@@ -139,6 +145,6 @@ export function computeResponsiveCameraFraming(
     distanceScale: 1,
     lookYOffset: 0,
     lookXOffset: 0,
-    baseFov: mode === 'ACTION_RUN_3D' ? 55.5 : 52
+    baseFov: mode === 'ACTION_RUN_3D' || mode === 'PLANET_ADVENTURE_3D' ? 55.5 : 52
   };
 }

@@ -104,7 +104,7 @@ export const TopHud: React.FC<TopHudProps> = ({
           ? 2
           : 3;
 
-  const showTimerControl = mode !== 'ACTION_RUN_3D';
+  const showTimerControl = mode !== 'ACTION_RUN_3D' && mode !== 'PLANET_ADVENTURE_3D';
   const liveTier = computeLiveTimerTier(elapsedMs, timeTargets);
   const timerTierClass =
     liveTier === 'gold'
@@ -218,7 +218,7 @@ export const TopHud: React.FC<TopHudProps> = ({
               id="toBuildBtn"
               type="button"
               onClick={() => onSwitchPhase('BUILD_3D')}
-              disabled={mode === 'SIMULATING' || mode === 'ACTION_RUN_3D'}
+              disabled={mode === 'SIMULATING' || mode === 'ACTION_RUN_3D' || mode === 'PLANET_ADVENTURE_3D'}
               aria-label="3D Build Workshop"
               className={`flex h-7 w-7 items-center justify-center rounded-lg transition-transform sm:h-8 sm:w-8 sm:rounded-xl lg:h-9 lg:w-9 ${
                 activeStage === 0
@@ -233,7 +233,7 @@ export const TopHud: React.FC<TopHudProps> = ({
             <button
               type="button"
               onClick={() => canCode && onSwitchPhase('CODE_3D')}
-              disabled={!canCode || mode === 'SIMULATING' || mode === 'ACTION_RUN_3D'}
+              disabled={!canCode || mode === 'SIMULATING' || mode === 'ACTION_RUN_3D' || mode === 'PLANET_ADVENTURE_3D'}
               aria-label="3D Code Track"
               className={`flex h-7 w-7 items-center justify-center rounded-lg transition-transform sm:h-8 sm:w-8 sm:rounded-xl lg:h-9 lg:w-9 ${
                 activeStage === 1

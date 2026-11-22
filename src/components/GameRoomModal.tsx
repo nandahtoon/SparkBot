@@ -4,6 +4,7 @@ import {
   Blocks,
   Cable,
   Check,
+  Compass,
   Gamepad2,
   Heart,
   Play,
@@ -14,7 +15,7 @@ import {
   X,
   Zap
 } from 'lucide-react';
-import { BOT_CHARACTERS, type BotCharacterId } from '../game/engine';
+import { BOT_CHARACTERS, type BotCharacterId, type ChassisInfo } from '../game/engine';
 import {
   ARCADE_GAMES,
   computeConnectReward,
@@ -35,20 +36,26 @@ import {
   type SpaceEnemy,
   type WallBrick
 } from '../game/arcadeGames';
+import { derivePlanetCapabilities, PLANET_EQUIPMENT_META } from '../game/planetAdventure';
 import { SFX } from '../game/audio';
+import { PartIcon } from './Icons';
 
 interface GameRoomModalProps {
   visible: boolean;
   activeCharacter: BotCharacterId;
   totalBolts: number;
   hasNextLevel: boolean;
+  chassisInfo?: ChassisInfo;
+  externalSummary?: GameRoomRoundSummary | null;
+  onClearExternalSummary?: () => void;
   onAwardBolts: (bolts: number, gameId: ArcadeGameId, score: number) => void;
   onLaunchRobotRun: () => void;
+  onLaunchPlanetAdventure?: () => void;
   onNextLevel: () => void;
   onClose: () => void;
 }
 
-interface RoundSummary {
+export interface GameRoomRoundSummary {
   gameId: ArcadeGameId;
   title: string;
   score: number;
@@ -975,7 +982,8 @@ const GAME_ICON: Record<ArcadeGameId, React.ReactNode> = {
   break_wall: <Blocks className="h-7 w-7 text-amber-300" />,
   connect_nodes: <Cable className="h-7 w-7 text-cyan-300" />,
   robot_run: <Zap className="h-7 w-7 text-fuchsia-300" />,
-  space_shooter: <Rocket className="h-7 w-7 text-emerald-300" />
+  space_shooter: <Rocket className="h-7 w-7 text-emerald-300" />,
+  planet_adventure: <Compass className="h-7 w-7 text-teal-300" />
 };
 
 export const GameRoomModal: React.FC<GameRoomModalProps> = ({
@@ -983,31 +991,48 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
   activeCharacter,
   totalBolts,
   hasNextLevel,
+  chassisInfo,
+  externalSummary = null,
+  onClearExternalSummary,
   onAwardBolts,
   onLaunchRobotRun,
+  onLaunchPlanetAdventure,
   onNextLevel,
   onClose
 }) => {
   const [view, setView] = useState<'HUB' | 'PLAYING' | 'ROUND_SUMMARY'>('HUB');
   const [activeGame, setActiveGame] = useState<ArcadeGameId | null>(null);
   const [runKey, setRunKey] = useState(0);
-  const [summary, setSummary] = useState<RoundSummary | null>(null);
+  const [summary, setSummary] = useState<GameRoomRoundSummary | null>(null);
 
   const charDef = useMemo(() => BOT_CHARACTERS[activeCharacter], [activeCharacter]);
+  const planetCaps = useMemo(
+    () => (chassisInfo ? derivePlanetCapabilities(chassisInfo) : null),
+    [chassisInfo]
+  );
 
   useEffect(() => {
     if (!visible) {
       setView('HUB');
       setActiveGame(null);
       setSummary(null);
+    } else if (externalSummary) {
+      setActiveGame(externalSummary.gameId);
+      setSummary(externalSummary);
+      setView('ROUND_SUMMARY');
     }
-  }, [visible]);
+  }, [externalSummary, visible]);
 
   const handleSelectGame = useCallback(
     (gameId: ArcadeGameId) => {
       SFX.click();
+      onClearExternalSummary?.();
       if (gameId === 'robot_run') {
         onLaunchRobotRun();
+        return;
+      }
+      if (gameId === 'planet_adventure' && onLaunchPlanetAdventure) {
+        onLaunchPlanetAdventure();
         return;
       }
       setActiveGame(gameId);
@@ -1015,7 +1040,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
       setRunKey((k) => k + 1);
       setView('PLAYING');
     },
-    [onLaunchRobotRun]
+    [onClearExternalSummary, onLaunchPlanetAdventure, onLaunchRobotRun]
   );
 
   const handleRoundFinish = useCallback(
@@ -1043,31 +1068,33 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
     >
       <div className="anim-pop flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl">
         {/* Clean 3-Zone Arcade Header */}
-        <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-3.5 py-3 sm:gap-4 sm:px-5 sm:py-3.5">
-          <div className="flex items-center gap-2.5">
+        <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
             {view !== 'HUB' && (
               <button
                 type="button"
                 onClick={() => {
                   SFX.click();
+                  onClearExternalSummary?.();
                   setView('HUB');
                   setActiveGame(null);
                   setSummary(null);
                 }}
                 aria-label="Back to Game Room"
-                className="flex h-10 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 text-xs font-bold text-slate-200 hover:border-sky-400 active:scale-95"
+                className="flex h-9 shrink-0 items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-2.5 text-xs font-bold text-slate-200 hover:border-sky-400 active:scale-95 sm:h-10 sm:gap-1.5 sm:px-3"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span>All Games</span>
+                <span className="sm:hidden">Games</span>
+                <span className="hidden sm:inline">All Games</span>
               </button>
             )}
-            <Gamepad2 className="h-6 w-6 text-amber-300" aria-hidden="true" />
-            <h2 className="whitespace-nowrap text-lg font-black tracking-tight text-white">
+            <Gamepad2 className="h-5 w-5 shrink-0 text-amber-300 sm:h-6 sm:w-6" aria-hidden="true" />
+            <h2 className="truncate text-sm font-black tracking-tight text-white sm:text-lg">
               {view === 'PLAYING' && activeCard ? activeCard.title : 'Mission Game Room'}
             </h2>
           </div>
 
-          <div className="hidden items-center gap-3 text-xs font-bold text-slate-300 sm:flex tabular-nums">
+          <div className="hidden shrink-0 items-center gap-3 text-xs font-bold text-slate-300 sm:flex tabular-nums">
             <span>{charDef.name}</span>
             <span className="text-slate-600" aria-hidden="true">·</span>
             <span className="flex items-center gap-1 text-amber-300">
@@ -1076,7 +1103,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {hasNextLevel && (
               <button
                 type="button"
@@ -1084,10 +1111,11 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                   SFX.click();
                   onNextLevel();
                 }}
-                className="flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-300/80 bg-emerald-500 px-3.5 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95"
+                className="flex h-9 items-center gap-1 whitespace-nowrap rounded-xl border border-emerald-300/80 bg-emerald-500 px-2.5 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95 sm:h-10 sm:gap-1.5 sm:px-3.5"
               >
                 <Play className="h-3.5 w-3.5 fill-slate-950" />
-                <span>Next Mission</span>
+                <span className="sm:hidden">Next</span>
+                <span className="hidden sm:inline">Next Mission</span>
               </button>
             )}
             <button
@@ -1097,7 +1125,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                 onClose();
               }}
               aria-label="Close Game Room"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95 sm:h-10 sm:w-10"
             >
               <X className="h-5 w-5" />
             </button>
@@ -1113,51 +1141,97 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                   Mission unlocked the Arcade Room — pick an action game to play with {charDef.name} and win bonus bolts.
                 </p>
                 <span className="text-xs font-bold text-slate-400 tabular-nums">
-                  4 Action Games Ready
+                  {ARCADE_GAMES.length} Action Games Ready
                 </span>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {ARCADE_GAMES.map((game) => (
-                  <button
-                    key={game.id}
-                    type="button"
-                    data-arcade-game={game.id}
-                    onClick={() => handleSelectGame(game.id)}
-                    aria-label={`Play ${game.title}`}
-                    className="group flex flex-col justify-between gap-4 rounded-2xl border border-slate-700/90 bg-slate-800/75 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99]"
-                  >
-                    <div className="flex items-start gap-3.5">
-                      <div
-                        className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950"
-                        style={{ boxShadow: `0 0 22px ${game.accentHex}22` }}
-                      >
-                        {GAME_ICON[game.id]}
+                {ARCADE_GAMES.map((game) => {
+                  const isPlanetCard = game.id === 'planet_adventure';
+                  return (
+                    <button
+                      key={game.id}
+                      type="button"
+                      data-arcade-game={game.id}
+                      onClick={() => handleSelectGame(game.id)}
+                      aria-label={`Play ${game.title}`}
+                      className={`group flex flex-col justify-between gap-3.5 rounded-2xl border border-slate-700/90 bg-slate-800/75 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99] ${
+                        isPlanetCard ? 'sm:col-span-2' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <div
+                          className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950"
+                          style={{ boxShadow: `0 0 22px ${game.accentHex}22` }}
+                        >
+                          {GAME_ICON[game.id]}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-base font-black text-white group-hover:text-sky-200">
+                              {game.title}
+                            </h3>
+                            {isPlanetCard && (
+                              <span className="rounded-md border border-teal-400/60 bg-teal-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-teal-300">
+                                3D Equipment Adventure
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                            {game.subtitle}
+                          </p>
+                          {isPlanetCard && planetCaps && (
+                            <div
+                              data-testid="planet-card-loadout"
+                              className="mt-2.5 flex flex-wrap items-center gap-1.5"
+                            >
+                              {PLANET_EQUIPMENT_META.map((item) => {
+                                const unlocked =
+                                  item.part === 'treads'
+                                    ? planetCaps.hasTreads
+                                    : item.part === 'thrusters'
+                                      ? planetCaps.hasThrusters
+                                      : item.part === 'booster'
+                                        ? planetCaps.hasBooster
+                                        : item.part === 'laser'
+                                          ? planetCaps.hasLaser
+                                          : planetCaps.hasMagnet;
+                                return (
+                                  <span
+                                    key={item.part}
+                                    data-loadout-part={item.part}
+                                    data-loadout-unlocked={unlocked ? 'true' : 'false'}
+                                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-bold ${
+                                      unlocked
+                                        ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-200'
+                                        : 'border-slate-700 bg-slate-900/70 text-slate-500'
+                                    }`}
+                                  >
+                                    <PartIcon id={item.part} className="h-3.5 w-3.5" />
+                                    <span>{item.label}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-black text-white group-hover:text-sky-200">
-                          {game.title}
-                        </h3>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-300">
-                          {game.subtitle}
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center justify-between gap-3 border-t border-slate-700/70 pt-3">
-                      <span className="truncate text-[11px] font-medium text-slate-400">
-                        {game.controlsHint}
-                      </span>
-                      <span
-                        className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
-                        style={{ backgroundColor: game.accentHex }}
-                      >
-                        <Play className="h-3.5 w-3.5 fill-slate-950" />
-                        <span>Play</span>
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                      <div className="flex items-center justify-between gap-3 border-t border-slate-700/70 pt-3">
+                        <span className="truncate text-[11px] font-medium text-slate-400">
+                          {game.controlsHint}
+                        </span>
+                        <span
+                          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
+                          style={{ backgroundColor: game.accentHex }}
+                        >
+                          <Play className="h-3.5 w-3.5 fill-slate-950" />
+                          <span>Play</span>
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1233,6 +1307,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                   type="button"
                   onClick={() => {
                     SFX.click();
+                    onClearExternalSummary?.();
                     setView('HUB');
                     setActiveGame(null);
                     setSummary(null);

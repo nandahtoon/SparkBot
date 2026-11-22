@@ -68,6 +68,22 @@ import {
   type WorkshopEnvironmentHandles
 } from './workshopEnvironment';
 import { computeResponsiveCameraFraming } from './responsiveCamera';
+import {
+  clampPlanetPosition,
+  computePlanetObjectiveGuide,
+  createInitialPlanetMetrics,
+  derivePlanetCapabilities,
+  findLaserTargetBarrier,
+  getBotForwardXZ,
+  getPlanetBogSpeedMultiplier,
+  getPlanetGroundY,
+  getPlanetPullRadius,
+  isPointInPlanetBog,
+  PLANET_EXIT_GATE,
+  PLANET_SPAWN,
+  type PlanetAdventureMetrics
+} from '../game/planetAdventure';
+import { buildAlienPlanetWorld, type AlienPlanetWorldHandles } from './planetWorld';
 
 export type WorldMode =
   | 'TITLE'
@@ -77,6 +93,7 @@ export type WorldMode =
   | 'SIMULATING'
   | 'CIRCUIT_3D'
   | 'ACTION_RUN_3D'
+  | 'PLANET_ADVENTURE_3D'
   | 'VICTORY';
 
 export interface WorldCallbacks {
@@ -90,6 +107,8 @@ export interface WorldCallbacks {
   onSimComplete: (result: SimResult) => void;
   onActionMetrics: (metrics: ActionDashMetrics) => void;
   onActionFinish: (metrics: ActionDashMetrics) => void;
+  onPlanetMetrics?: (metrics: PlanetAdventureMetrics) => void;
+  onPlanetFinish?: (metrics: PlanetAdventureMetrics) => void;
   onSlotScreenUpdate: (pts: SlotScreenPoint[]) => void;
   onHeadScreenUpdate?: (pt: HeadScreenPoint) => void;
   onWebglLost: (lost: boolean) => void;
@@ -309,6 +328,20 @@ export class UnifiedWorldController {
   private runnerSpeed = 14;
   private runnerEndless = false;
   private runnerMetricTimer = 0;
+
+  // Alien Planet Adventure State
+  private planetWorld: AlienPlanetWorldHandles | null = null;
+  private planetMetrics: PlanetAdventureMetrics | null = null;
+  private planetBotX: number = PLANET_SPAWN.x;
+  private planetBotY = 0;
+  private planetBotZ: number = PLANET_SPAWN.z;
+  private planetBotYaw: number = PLANET_SPAWN.yaw;
+  private planetBotVy = 0;
+  private planetJumpsUsed = 0;
+  private planetMoveForward = 0;
+  private planetMoveStrafe = 0;
+  private planetLaserFlashTimer = 0;
+  private planetMetricTimer = 0;
 
   // Playable 3D Holographic Ghost Preview
   private ghostGroup = new THREE.Group();
@@ -1370,6 +1403,150 @@ export class UnifiedWorldController {
     }
   }
 
+  public startPlanetAdventure(gentle: boolean) {
+    this.gentleSpeed = gentle;
+    this.mode = 'PLANET_ADVENTURE_3D';
+
+    if (!this.planetWorld) {
+      this.planetWorld = buildAlienPlanetWorld(this.isSoftwareGl);
+      this.scene.add(this.planetWorld.planetGroup);
+    }
+    this.planetWorld.resetCollectibles();
+    this.planetWorld.planetGroup.visible = true;
+
+    this.env.workshopGroup.visible = false;
+    this.env.skyportGroup.visible = false;
+    this.trackGroup.visible = false;
+    this.circuitGroup.visible = false;
+    this.runnerGroup.visible = false;
+    this.clearActionTrails();
+
+    this.scene.background = new THREE.Color(0x0c1b2e);
+    this.scene.fog = new THREE.FogExp2(0x0c1b2e, 0.0135);
+
+    const info = computeChassisInfo(this.chassis);
+    const caps = derivePlanetCapabilities(info);
+    this.planetMetrics = createInitialPlanetMetrics(caps);
+    this.planetBotX = PLANET_SPAWN.x;
+    this.planetBotZ = PLANET_SPAWN.z;
+    this.planetBotY = getPlanetGroundY(PLANET_SPAWN.x, PLANET_SPAWN.z);
+    this.planetBotYaw = PLANET_SPAWN.yaw;
+    this.planetBotVy = 0;
+    this.planetJumpsUsed = 0;
+    this.planetMoveForward = 0;
+    this.planetMoveStrafe = 0;
+    this.planetLaserFlashTimer = 0;
+    this.planetMetricTimer = 0;
+
+    this.planetWorld.magnetAuraMesh.visible = caps.hasMagnet;
+    this.planetWorld.magnetAuraMesh.position.set(this.planetBotX, this.planetBotY + 0.14, this.planetBotZ);
+
+    this.rig.applyChassis(this.chassis, null);
+    this.rig.root.position.set(this.planetBotX, this.planetBotY, this.planetBotZ);
+    this.rig.root.rotation.set(0, this.planetBotYaw, 0);
+
+    this.camera.position.set(this.planetBotX, this.planetBotY + 5.2, this.planetBotZ + 8.6);
+    _curLook.set(this.planetBotX, this.planetBotY + 1.1, this.planetBotZ - 2.6);
+
+    this.setMood('happy', 1.2);
+    this.cb.onPlanetMetrics?.({ ...this.planetMetrics });
+  }
+
+  public setPlanetMoveInput(forward: number, strafe: number) {
+    this.planetMoveForward = THREE.MathUtils.clamp(forward, -1, 1);
+    this.planetMoveStrafe = THREE.MathUtils.clamp(strafe, -1, 1);
+  }
+
+  public jumpPlanetAdventure() {
+    if (this.mode !== 'PLANET_ADVENTURE_3D' || !this.planetMetrics || this.planetMetrics.status !== 'playing') {
+      return;
+    }
+    const groundY = getPlanetGroundY(this.planetBotX, this.planetBotZ);
+    const grounded = this.planetBotY <= groundY + 0.08;
+    const caps = this.planetMetrics.capabilities;
+
+    if (grounded) {
+      this.planetBotVy = caps.hasThrusters ? 12.2 : 8.6;
+      this.planetJumpsUsed = 1;
+      SFX.jump();
+      this.spawnSparks(
+        this.planetBotX,
+        this.planetBotY + 0.25,
+        this.planetBotZ,
+        caps.hasThrusters ? 0x38bdf8 : 0xfbbf24,
+        12
+      );
+    } else if (caps.hasThrusters && this.planetJumpsUsed < 2) {
+      this.planetBotVy = 11.4;
+      this.planetJumpsUsed = 2;
+      this.planetMetrics.doubleJumpReady = false;
+      SFX.boost();
+      this.spawnSparks(this.planetBotX, this.planetBotY + 0.35, this.planetBotZ, 0x22d3ee, 16);
+      this.cb.onPlanetMetrics?.({ ...this.planetMetrics });
+    }
+  }
+
+  public triggerPlanetBoost() {
+    if (this.mode !== 'PLANET_ADVENTURE_3D' || !this.planetMetrics || this.planetMetrics.status !== 'playing') {
+      return;
+    }
+    if (!this.planetMetrics.capabilities.hasBooster || this.planetMetrics.boostCooldown > 0) return;
+
+    this.planetMetrics.boostActiveTimer = 2.0;
+    this.planetMetrics.boostCooldown = 4.2;
+    this.setMood('boost', 1.6);
+    SFX.boost();
+    this.spawnSparks(this.planetBotX, this.planetBotY + 0.65, this.planetBotZ, 0xf472b6, 18);
+    this.cb.onPlanetMetrics?.({ ...this.planetMetrics });
+  }
+
+  public firePlanetLaser() {
+    if (
+      this.mode !== 'PLANET_ADVENTURE_3D' ||
+      !this.planetMetrics ||
+      !this.planetWorld ||
+      this.planetMetrics.status !== 'playing'
+    ) {
+      return;
+    }
+    if (!this.planetMetrics.capabilities.hasLaser || this.planetMetrics.laserCooldown > 0) return;
+
+    this.planetMetrics.laserCooldown = 0.65;
+    this.planetLaserFlashTimer = 0.22;
+    SFX.laserSolved();
+
+    const { fx, fz } = getBotForwardXZ(this.planetBotYaw);
+    const beam = this.planetWorld.laserBeamMesh;
+    beam.position.set(
+      this.planetBotX + fx * 4.5,
+      this.planetBotY + 0.85,
+      this.planetBotZ + fz * 4.5
+    );
+    beam.rotation.set(Math.PI / 2, 0, -this.planetBotYaw);
+    beam.visible = true;
+
+    const hit = findLaserTargetBarrier(
+      this.planetBotX,
+      this.planetBotZ,
+      this.planetBotYaw,
+      this.planetWorld.barriers
+    );
+    if (hit) {
+      const handle = this.planetWorld.barriers.find((b) => b.id === hit.id);
+      if (handle && handle.active) {
+        handle.active = false;
+        handle.group.visible = false;
+        this.planetMetrics.crystalsShattered += 1;
+        this.planetMetrics.boltsCollected += 2;
+        this.spawnSparks(handle.x, handle.y + 0.85, handle.z, 0xe879f9, 22);
+        this.spawnSparks(handle.x, handle.y + 0.85, handle.z, 0x22d3ee, 14);
+        SFX.compactCrunch();
+        this.setMood('happy', 1.1);
+      }
+    }
+    this.cb.onPlanetMetrics?.({ ...this.planetMetrics });
+  }
+
   public setMode(mode: WorldMode) {
     this.mode = mode;
     this.clearGhostPreview();
@@ -1377,7 +1554,16 @@ export class UnifiedWorldController {
       this.codeFeedbackTimer = 0;
       this.codeFeedbackTier = null;
     }
-    if (mode !== 'ACTION_RUN_3D') {
+    if (mode !== 'PLANET_ADVENTURE_3D') {
+      if (this.planetWorld) {
+        this.planetWorld.planetGroup.visible = false;
+      }
+      this.env.workshopGroup.visible = true;
+      this.env.skyportGroup.visible = true;
+      this.scene.background = new THREE.Color(0x13203d);
+      this.scene.fog = new THREE.FogExp2(0x13203d, 0.0115);
+    }
+    if (mode !== 'ACTION_RUN_3D' && mode !== 'PLANET_ADVENTURE_3D') {
       this.runnerGroup.visible = false;
       this.trackGroup.visible = true;
       this.circuitGroup.visible = true;
@@ -2483,14 +2669,242 @@ export class UnifiedWorldController {
           this.cb.onActionMetrics({ ...m });
         }
       }
+    } else if (this.mode === 'PLANET_ADVENTURE_3D' && this.planetMetrics && this.planetWorld) {
+      const m = this.planetMetrics;
+      const pw = this.planetWorld;
+      const caps = m.capabilities;
+
+      if (m.status === 'playing') {
+        m.elapsedSeconds += rawDt;
+        if (m.boostCooldown > 0) m.boostCooldown = Math.max(0, m.boostCooldown - rawDt);
+        if (m.boostActiveTimer > 0) m.boostActiveTimer = Math.max(0, m.boostActiveTimer - rawDt);
+        if (m.laserCooldown > 0) m.laserCooldown = Math.max(0, m.laserCooldown - rawDt);
+
+        if (this.planetLaserFlashTimer > 0) {
+          this.planetLaserFlashTimer = Math.max(0, this.planetLaserFlashTimer - dt);
+          if (this.planetLaserFlashTimer <= 0) {
+            pw.laserBeamMesh.visible = false;
+          }
+        }
+
+        // Ground & Bog Detection
+        const groundHere = getPlanetGroundY(this.planetBotX, this.planetBotZ);
+        const airborne = this.planetBotY > groundHere + 0.14;
+        const bogCheck = isPointInPlanetBog(this.planetBotX, this.planetBotZ);
+        m.inBog = bogCheck.inBog;
+
+        // Horizontal Movement Vector (camera looks north along -Z)
+        let moveX = this.planetMoveStrafe;
+        let moveZ = -this.planetMoveForward;
+        const moveMag = Math.hypot(moveX, moveZ);
+        if (moveMag > 0.01) {
+          moveX /= moveMag;
+          moveZ /= moveMag;
+          isMoving = true;
+
+          const baseSpeed =
+            (this.gentleSpeed ? 7.2 : 9.2) *
+            (caps.hasWheels ? 1.08 : 1.0) +
+            (m.boostActiveTimer > 0 ? 6.2 : 0);
+          const bogMult = getPlanetBogSpeedMultiplier(caps, bogCheck.inBog, airborne);
+          speed = baseSpeed * bogMult;
+
+          const stepX = moveX * speed * dt;
+          const stepZ = moveZ * speed * dt;
+
+          const canStepTo = (tx: number, tz: number): boolean => {
+            const targetGround = getPlanetGroundY(tx, tz);
+            if (targetGround > this.planetBotY + 0.48) return false;
+            for (const bar of pw.barriers) {
+              if (!bar.active) continue;
+              const d = Math.hypot(tx - bar.x, tz - bar.z);
+              if (d < bar.radius + 0.52 && this.planetBotY < bar.y + 1.75) {
+                return false;
+              }
+            }
+            return true;
+          };
+
+          const candFull = clampPlanetPosition(this.planetBotX + stepX, this.planetBotZ + stepZ);
+          if (canStepTo(candFull.x, candFull.z)) {
+            this.planetBotX = candFull.x;
+            this.planetBotZ = candFull.z;
+          } else {
+            const candX = clampPlanetPosition(this.planetBotX + stepX, this.planetBotZ);
+            if (canStepTo(candX.x, candX.z)) {
+              this.planetBotX = candX.x;
+            } else {
+              const candZ = clampPlanetPosition(this.planetBotX, this.planetBotZ + stepZ);
+              if (canStepTo(candZ.x, candZ.z)) {
+                this.planetBotZ = candZ.z;
+              }
+            }
+          }
+
+          // Smooth yaw alignment toward movement direction
+          const targetYaw = Math.atan2(-moveX, -moveZ);
+          let yawDiff = targetYaw - this.planetBotYaw;
+          while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+          while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+          this.planetBotYaw += yawDiff * (1 - Math.exp(-12 * dt));
+        }
+
+        // Vertical gravity + ground landing
+        const groundNow = getPlanetGroundY(this.planetBotX, this.planetBotZ);
+        if (this.planetBotY > groundNow || this.planetBotVy !== 0) {
+          this.planetBotY += this.planetBotVy * dt;
+          this.planetBotVy -= 26 * dt;
+          if (this.planetBotY <= groundNow) {
+            this.planetBotY = groundNow;
+            this.planetBotVy = 0;
+            this.planetJumpsUsed = 0;
+            m.doubleJumpReady = caps.hasThrusters;
+          }
+        } else {
+          this.planetBotY = groundNow;
+          this.planetJumpsUsed = 0;
+          m.doubleJumpReady = caps.hasThrusters;
+        }
+        isAirborne = this.planetBotY > groundNow + 0.14;
+        tiltPitch = m.boostActiveTimer > 0 ? -0.14 : isMoving ? -0.06 : 0;
+
+        // Booster spark wake
+        if (m.boostActiveTimer > 0 && Math.random() < 0.65) {
+          const { fx, fz } = getBotForwardXZ(this.planetBotYaw);
+          this.spawnSparks(
+            this.planetBotX - fx * 0.65,
+            this.planetBotY + 0.55,
+            this.planetBotZ - fz * 0.65,
+            0xf472b6,
+            2
+          );
+        }
+
+        // Magnet aura pulse
+        if (caps.hasMagnet) {
+          pw.magnetAuraMesh.visible = true;
+          pw.magnetAuraMesh.position.set(this.planetBotX, this.planetBotY + 0.16, this.planetBotZ);
+          const pulse = 0.92 + Math.sin(this.totalTime * 5.2) * 0.12;
+          pw.magnetAuraMesh.scale.setScalar(pulse);
+        } else {
+          pw.magnetAuraMesh.visible = false;
+        }
+
+        // Animate bog ripples & flora glow
+        for (let i = 0; i < pw.bogRipples.length; i++) {
+          const rip = pw.bogRipples[i];
+          const s = 0.65 + ((this.totalTime * 0.55 + i * 0.33) % 1) * 0.95;
+          rip.scale.setScalar(s);
+        }
+
+        // Core spin + Magnet Pull + Collection
+        const pullRadius = getPlanetPullRadius(caps);
+        const remainingCores: Array<{ x: number; z: number; name: string }> = [];
+        for (const core of pw.cores) {
+          if (!core.active) continue;
+          core.group.rotation.y += dt * 1.9;
+          core.ring.rotation.z += dt * 2.4;
+          core.group.position.y = core.baseY + Math.sin(this.totalTime * 2.8 + core.x) * 0.16;
+
+          const dx = this.planetBotX - core.group.position.x;
+          const dy = this.planetBotY + 0.75 - core.group.position.y;
+          const dz = this.planetBotZ - core.group.position.z;
+          const dist = Math.hypot(dx, dy, dz);
+
+          if (caps.hasMagnet && dist < pullRadius) {
+            core.group.position.x = THREE.MathUtils.damp(core.group.position.x, this.planetBotX, 8, dt);
+            core.group.position.z = THREE.MathUtils.damp(core.group.position.z, this.planetBotZ, 8, dt);
+          }
+
+          if (Math.hypot(this.planetBotX - core.group.position.x, this.planetBotZ - core.group.position.z) < 1.38 &&
+            Math.abs(this.planetBotY + 0.6 - core.group.position.y) < 1.85) {
+            core.active = false;
+            core.group.visible = false;
+            m.coresCollected += 1;
+            this.spawnConfetti(core.group.position.x, core.group.position.y + 0.4, core.group.position.z, 22);
+            SFX.crystal();
+            this.setMood('happy', 1.2);
+            if (m.coresCollected >= m.totalCores && !m.gateUnlocked) {
+              m.gateUnlocked = true;
+              pw.setGateUnlocked(true);
+              SFX.laserSolved();
+              this.spawnSparks(PLANET_EXIT_GATE.x, 3.0, PLANET_EXIT_GATE.z, 0x34d399, 28);
+            }
+          } else {
+            remainingCores.push({ x: core.x, z: core.z, name: core.name });
+          }
+        }
+
+        // Scrap Bolt spin + Magnet Pull + Collection
+        for (const bolt of pw.bolts) {
+          if (!bolt.active) continue;
+          bolt.mesh.rotation.z += dt * 3.0;
+          const dx = this.planetBotX - bolt.mesh.position.x;
+          const dz = this.planetBotZ - bolt.mesh.position.z;
+          const horizDist = Math.hypot(dx, dz);
+          if (horizDist < pullRadius) {
+            bolt.mesh.position.x = THREE.MathUtils.damp(bolt.mesh.position.x, this.planetBotX, 12, dt);
+            bolt.mesh.position.z = THREE.MathUtils.damp(bolt.mesh.position.z, this.planetBotZ, 12, dt);
+          }
+          const collectDist = Math.hypot(
+            this.planetBotX - bolt.mesh.position.x,
+            this.planetBotZ - bolt.mesh.position.z
+          );
+          if (collectDist < 1.2 && Math.abs(this.planetBotY + 0.6 - bolt.mesh.position.y) < 1.8) {
+            bolt.active = false;
+            bolt.mesh.visible = false;
+            m.boltsCollected += 1;
+            this.spawnSparks(bolt.mesh.position.x, bolt.mesh.position.y, bolt.mesh.position.z, 0xfbbf24, 8);
+            SFX.crystal();
+          }
+        }
+
+        // Waypoint compass update
+        const guide = computePlanetObjectiveGuide(
+          this.planetBotX,
+          this.planetBotZ,
+          remainingCores,
+          m.gateUnlocked
+        );
+        m.objectiveLabel = guide.targetLabel;
+        m.objectiveDistance = guide.distanceMeters;
+        m.objectiveAngleRad = guide.compassAngleRad;
+
+        // Exit Gate Portal check
+        if (m.gateUnlocked) {
+          pw.exitPortalMesh.rotation.z += dt * 1.4;
+          const gateDist = Math.hypot(
+            this.planetBotX - PLANET_EXIT_GATE.x,
+            this.planetBotZ - PLANET_EXIT_GATE.z
+          );
+          const gateY = getPlanetGroundY(PLANET_EXIT_GATE.x, PLANET_EXIT_GATE.z);
+          if (gateDist < PLANET_EXIT_GATE.radius && Math.abs(this.planetBotY - gateY) < 2.2) {
+            m.status = 'won';
+            this.setMood('happy', 2.8);
+            this.spawnConfetti(PLANET_EXIT_GATE.x, gateY + 1.8, PLANET_EXIT_GATE.z, 36);
+            SFX.laserSolved();
+            this.cb.onPlanetFinish?.({ ...m });
+          }
+        }
+
+        this.planetMetricTimer += dt;
+        if (this.planetMetricTimer >= 0.09) {
+          this.planetMetricTimer = 0;
+          this.cb.onPlanetMetrics?.({ ...m });
+        }
+      }
     }
 
     // Apply Robot World Transform (step slightly left in CIRCUIT_3D so 5x5 board is unobstructed)
     const circuitOffsetX = this.mode === 'CIRCUIT_3D' ? -1.45 : 0;
     this.rig.root.position.set(
-      this.mode === 'ACTION_RUN_3D' ? this.runnerBotX : circuitOffsetX,
-      this.botTrackY,
-      this.botTrackZ
+      this.mode === 'ACTION_RUN_3D'
+        ? this.runnerBotX
+        : this.mode === 'PLANET_ADVENTURE_3D'
+          ? this.planetBotX
+          : circuitOffsetX,
+      this.mode === 'PLANET_ADVENTURE_3D' ? this.planetBotY : this.botTrackY,
+      this.mode === 'PLANET_ADVENTURE_3D' ? this.planetBotZ : this.botTrackZ
     );
     this.rig.root.rotation.x = 0;
     this.rig.root.rotation.z = this.mode === 'ACTION_RUN_3D' ? this.runnerBotRoll : 0;
@@ -2498,6 +2912,8 @@ export class UnifiedWorldController {
     // Workshop, Paint Booth, Expressive Mood, & Victory Facing: face -Z robot front toward camera
     if (this.mode === 'TITLE') {
       this.rig.root.rotation.y = -2.55 + Math.sin(this.totalTime * 0.55) * 0.28;
+    } else if (this.mode === 'PLANET_ADVENTURE_3D') {
+      this.rig.root.rotation.y = this.planetBotYaw;
     } else if (this.mode === 'BUILD_3D') {
       this.rig.root.rotation.y = THREE.MathUtils.damp(this.rig.root.rotation.y, -2.42, 6, dt);
     } else if (this.mode === 'PAINT_BOOTH') {
@@ -2518,8 +2934,12 @@ export class UnifiedWorldController {
     }
 
     // Contact shadow height adjustment
-    this.rig.contactShadow.position.y = Math.max(0.02, 0.02 - Math.max(0, this.botTrackY) * 0.8);
-    const shScale = THREE.MathUtils.clamp(1 - Math.max(0, this.botTrackY) * 0.18, 0.4, 1);
+    const shadowHeightOffset =
+      this.mode === 'PLANET_ADVENTURE_3D'
+        ? Math.max(0, this.planetBotY - getPlanetGroundY(this.planetBotX, this.planetBotZ))
+        : Math.max(0, this.botTrackY);
+    this.rig.contactShadow.position.y = Math.max(0.02, 0.02 - shadowHeightOffset * 0.8);
+    const shScale = THREE.MathUtils.clamp(1 - shadowHeightOffset * 0.18, 0.4, 1);
     this.rig.contactShadow.scale.setScalar(shScale);
 
     // Update Robot Articulated Animation Rig
@@ -2543,7 +2963,10 @@ export class UnifiedWorldController {
       codeFeedbackDuration: this.codeFeedbackDuration,
       scanMatch: this.simScanMatch,
       shieldActive: Boolean(this.runnerMetrics?.shieldActive),
-      turboActive: Boolean(this.runnerMetrics && this.runnerMetrics.turboTimer > 0)
+      turboActive: Boolean(
+        (this.runnerMetrics && this.runnerMetrics.turboTimer > 0) ||
+          (this.planetMetrics && this.planetMetrics.boostActiveTimer > 0)
+      )
     });
 
     // Update Particle Sparks
@@ -2703,13 +3126,29 @@ export class UnifiedWorldController {
         1.2 + this.runnerBotY * 0.35 + framing.lookYOffset,
         this.botTrackZ - 7.5
       );
+    } else if (this.mode === 'PLANET_ADVENTURE_3D') {
+      _camGoal.set(
+        this.planetBotX * 0.88,
+        5.1 + this.planetBotY * 0.72,
+        this.planetBotZ + 8.6 * framing.distanceScale
+      );
+      _lookGoal.set(
+        this.planetBotX,
+        1.05 + this.planetBotY * 0.65 + framing.lookYOffset,
+        this.planetBotZ - 2.6
+      );
     } else {
       // VICTORY
       _camGoal.set(1.8 * framing.distanceScale, 2.4, this.botTrackZ + 4.4 * framing.distanceScale);
       _lookGoal.set(0, 1.1 + framing.lookYOffset, this.botTrackZ);
     }
 
-    const camLambda = this.mode === 'BUILD_3D' || this.mode === 'PAINT_BOOTH' ? 9.5 : 5.5;
+    const camLambda =
+      this.mode === 'BUILD_3D' || this.mode === 'PAINT_BOOTH'
+        ? 9.5
+        : this.mode === 'PLANET_ADVENTURE_3D'
+          ? 7.2
+          : 5.5;
     this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, _camGoal.x, camLambda, dt);
     this.camera.position.y = THREE.MathUtils.damp(this.camera.position.y, _camGoal.y, camLambda, dt);
     this.camera.position.z = THREE.MathUtils.damp(this.camera.position.z, _camGoal.z, camLambda, dt);
@@ -2718,9 +3157,12 @@ export class UnifiedWorldController {
     _curLook.z = THREE.MathUtils.damp(_curLook.z, _lookGoal.z, 7.5, dt);
     this.camera.lookAt(_curLook);
 
-    // Responsive base FOV + subtle speed-reactive FOV kick during Action Dash
+    // Responsive base FOV + subtle speed-reactive FOV kick during Action Dash or Planet Boost
     const targetFov =
-      this.mode === 'ACTION_RUN_3D' && this.runnerMetrics && this.runnerMetrics.turboTimer > 0
+      (this.mode === 'ACTION_RUN_3D' && this.runnerMetrics && this.runnerMetrics.turboTimer > 0) ||
+      (this.mode === 'PLANET_ADVENTURE_3D' &&
+        this.planetMetrics &&
+        this.planetMetrics.boostActiveTimer > 0)
         ? framing.baseFov + 4.5
         : framing.baseFov;
     const prevFov = this.camera.fov;
@@ -2763,6 +3205,7 @@ export class UnifiedWorldController {
     this.renderer?.domElement.removeEventListener('webglcontextlost', this.handleContextLost);
     this.renderer?.domElement.removeEventListener('webglcontextrestored', this.handleContextRestored);
     this.env.dispose();
+    this.planetWorld?.dispose();
     this.sparkInst.geometry.dispose();
     (this.sparkInst.material as THREE.Material).dispose();
     this.puffInst.geometry.dispose();

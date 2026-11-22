@@ -16,6 +16,8 @@ import * as ProfileStorage from './profileStorage';
 import * as PartTooltips from './partTooltips';
 import * as GraphicsConfig from './graphicsConfig';
 import * as ChallengeTimer from './challengeTimer';
+import * as LevelHistory from './levelHistory';
+import * as PlanetAdv from './planetAdventure';
 import * as ResponsiveCamera from '../three/responsiveCamera';
 
 test('magnet part attaches cleanly to chassis and lowers Action Dash bolt-per-cube threshold', () => {
@@ -488,9 +490,9 @@ test('Build equipment hints guide early levels step-by-step from empty chassis t
   assert.ok(lvl5Guide.steps.some((s) => s.part === 'booster'));
 });
 
-test('Arcade Game Room includes all 4 action games and verifies solvable Power Connect, Wall Breaker, and Space Shooter logic', () => {
+test('Arcade Game Room includes all 5 action games and verifies solvable Power Connect, Wall Breaker, and Space Shooter logic', () => {
   const ids = Arcade.ARCADE_GAMES.map((g) => g.id);
-  assert.deepEqual(ids, ['break_wall', 'connect_nodes', 'robot_run', 'space_shooter']);
+  assert.deepEqual(ids, ['break_wall', 'connect_nodes', 'robot_run', 'space_shooter', 'planet_adventure']);
 
   // Wall Breaker layout + reward calculation
   const bricks1 = Arcade.createWallBreakerLayout(720, 420, 1);
@@ -1010,6 +1012,152 @@ test('Optional Challenge Timer computes level targets, evaluates speed-run bonus
   assert.equal(reloaded.challengeTimerEnabled, true);
   assert.equal(reloaded.bestTimes?.[key], 19400);
 });
+
+test('buildBeatenLevelHistory lists beaten main, bonus, and daily levels with star ratings and best completion times', () => {
+  const emptySave = E.defaultSaveProfile();
+  assert.deepEqual(LevelHistory.buildBeatenLevelHistory(emptySave), []);
+
+  const populated: E.SaveProfile = {
+    ...emptySave,
+    unlockedLevel: 4,
+    stars: {
+      1: 3,
+      2: 2,
+      3: 0
+    },
+    bonusStars: {
+      9: { stars: 3, bonusStar: true },
+      10: 1
+    },
+    daily: {
+      dateKey: '2026-11-22',
+      stars: 3,
+      streak: 2,
+      lastCompletedDate: '2026-11-22',
+      lastLoginDate: '2026-11-22'
+    },
+    bestTimes: {
+      'level:1': 18400,
+      'bonus:9': 34500,
+      'daily:2026-11-22': 27200
+    }
+  };
+
+  const history = LevelHistory.buildBeatenLevelHistory(populated);
+  assert.equal(history.length, 5);
+
+  assert.deepEqual(
+    history.map((h) => h.key),
+    ['level:1', 'level:2', 'bonus:9', 'bonus:10', 'daily:2026-11-22']
+  );
+
+  // Level 1: 3 stars + Gold speed-run best time
+  assert.equal(history[0].kind, 'main');
+  assert.equal(history[0].stars, 3);
+  assert.equal(history[0].bestMs, 18400);
+  assert.equal(history[0].speedTier, 'gold');
+
+  // Level 2: 2 stars + untimed
+  assert.equal(history[1].stars, 2);
+  assert.equal(history[1].bestMs, null);
+  assert.equal(history[1].speedTier, null);
+
+  // Bonus Level 9: 3 stars + bonusStar + timed
+  assert.equal(history[2].kind, 'bonus');
+  assert.equal(history[2].stars, 3);
+  assert.equal(history[2].bonusStar, true);
+  assert.equal(history[2].bestMs, 34500);
+
+  // Bonus Level 10: legacy numeric format 1 star + untimed
+  assert.equal(history[3].kind, 'bonus');
+  assert.equal(history[3].stars, 1);
+  assert.equal(history[3].bonusStar, false);
+  assert.equal(history[3].bestMs, null);
+
+  // Daily Challenge: 3 stars + timed
+  assert.equal(history[4].kind, 'daily');
+  assert.equal(history[4].stars, 3);
+  assert.equal(history[4].bestMs, 27200);
+});
+
+test('Planet Expedition derives abilities directly from equipped mission chassis parts and enforces terrain, bog, laser, magnet, and Exit Gate logic', () => {
+  // Minimal Level 1 chassis (wheels + laser only)
+  const basicChassis = E.createEmptyChassis();
+  basicChassis[2][0] = 'wheels';
+  basicChassis[1][2] = 'laser';
+  const basicCaps = PlanetAdv.derivePlanetCapabilities(E.computeChassisInfo(basicChassis));
+  assert.equal(basicCaps.hasWheels, true);
+  assert.equal(basicCaps.hasLaser, true);
+  assert.equal(basicCaps.hasTreads, false);
+  assert.equal(basicCaps.hasThrusters, false);
+  assert.equal(basicCaps.hasBooster, false);
+  assert.equal(basicCaps.hasMagnet, false);
+
+  // Full heavy explorer chassis
+  const fullChassis = E.createEmptyChassis();
+  fullChassis[2][0] = 'treads';
+  fullChassis[2][1] = 'thrusters';
+  fullChassis[2][2] = 'booster';
+  fullChassis[1][2] = 'laser';
+  fullChassis[0][1] = 'magnet';
+  const fullCaps = PlanetAdv.derivePlanetCapabilities(E.computeChassisInfo(fullChassis));
+  assert.equal(fullCaps.hasTreads, true);
+  assert.equal(fullCaps.hasThrusters, true);
+  assert.equal(fullCaps.hasBooster, true);
+  assert.equal(fullCaps.hasLaser, true);
+  assert.equal(fullCaps.hasMagnet, true);
+
+  // Terrain ground elevation: spawn flat floor, smoothly sloped ramp, plateau top
+  assert.equal(PlanetAdv.getPlanetGroundY(0, 3.5), 0);
+  const rampMidY = PlanetAdv.getPlanetGroundY(0, -21.7);
+  assert.ok(rampMidY > 0.2 && rampMidY < 1.35, `Ramp midpoint height should slope smoothly (got ${rampMidY})`);
+  assert.equal(PlanetAdv.getPlanetGroundY(0, -28), 1.4);
+
+  // Alien Spore Bog slowdown vs Treads immunity & airborne jump bypass
+  const bogCheck = PlanetAdv.isPointInPlanetBog(0, -11.5);
+  assert.equal(bogCheck.inBog, true);
+  assert.equal(PlanetAdv.getPlanetBogSpeedMultiplier(basicCaps, true, false), 0.48);
+  assert.equal(PlanetAdv.getPlanetBogSpeedMultiplier(basicCaps, true, true), 1);
+  assert.equal(PlanetAdv.getPlanetBogSpeedMultiplier(fullCaps, true, false), 1);
+
+  // Magnet Coil expands core/bolt attraction radius
+  assert.ok(PlanetAdv.getPlanetPullRadius(fullCaps) > PlanetAdv.getPlanetPullRadius(basicCaps) * 2.5);
+
+  // Laser cone targeting shatters crystal barriers in front of bot (yaw = 0 faces -Z)
+  const activeBarriers = PlanetAdv.PLANET_CRYSTAL_BARRIERS.map((b) => ({ ...b, active: true }));
+  const hitNorth = PlanetAdv.findLaserTargetBarrier(0, -12.0, 0, activeBarriers);
+  assert.equal(hitNorth?.id, 'crystal_center');
+  const missSouth = PlanetAdv.findLaserTargetBarrier(0, -12.0, Math.PI, activeBarriers);
+  assert.equal(missSouth, null);
+
+  // Waypoint compass switches from remaining Energy Cores to Exit Gate once all cores are collected
+  const guideToCore = PlanetAdv.computePlanetObjectiveGuide(0, 3.5, PlanetAdv.PLANET_CORES, false);
+  assert.equal(guideToCore.isGate, false);
+  const guideToGate = PlanetAdv.computePlanetObjectiveGuide(0, -10, [], true);
+  assert.equal(guideToGate.isGate, true);
+  assert.equal(guideToGate.targetLabel, 'Exit Gate');
+
+  // Reward math rewards winning with cores & speed higher than early exit
+  const winReward = PlanetAdv.computePlanetAdventureReward({
+    coresCollected: 5,
+    boltsCollected: 8,
+    crystalsShattered: 2,
+    elapsedSeconds: 42,
+    status: 'won'
+  });
+  const partialReward = PlanetAdv.computePlanetAdventureReward({
+    coresCollected: 2,
+    boltsCollected: 3,
+    crystalsShattered: 0,
+    elapsedSeconds: 30,
+    status: 'exited'
+  });
+  assert.ok(winReward.boltsEarned > partialReward.boltsEarned);
+  assert.ok(winReward.score > partialReward.score);
+  assert.ok(ResponsiveCamera.computeResponsiveCameraFraming('PLANET_ADVENTURE_3D', 390, 844).baseFov >= 56);
+});
+
+
 
 
 

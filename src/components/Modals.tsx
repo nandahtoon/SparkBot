@@ -5,6 +5,7 @@ import {
   Flame,
   Gamepad2,
   Gem,
+  History,
   Home,
   LayoutGrid,
   Lock,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { BONUS_LEVELS, LEVELS, type SaveProfile, type StemPillarId } from '../game/engine';
 import { formatChallengeTime, type SpeedRunEvaluation } from '../game/challengeTimer';
+import { buildBeatenLevelHistory } from '../game/levelHistory';
 
 export interface VictorySpeedRunSummary {
   evaluation: SpeedRunEvaluation;
@@ -200,12 +202,12 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
         )}
 
-        {/* Enter Mission Game Room CTA (Wall Breaker, Power Connect, Robot Run & Space Shooter) */}
+        {/* Enter Mission Game Room CTA (Wall Breaker, Power Connect, Robot Run, Space Shooter & Planet Expedition) */}
         <button
           id="victoryWallRunBtn"
           type="button"
           onClick={onPlayDash}
-          aria-label="Enter Game Room (Wall Breaker, Power Connect, Robot Run, Space Shooter)"
+          aria-label="Enter Game Room (Wall Breaker, Power Connect, Robot Run, Space Shooter, Planet Expedition)"
           className="flex h-16 w-full items-center justify-between gap-3 rounded-2xl border-2 border-fuchsia-300 bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-4 text-white shadow-lg transition-transform hover:brightness-105 active:scale-95"
         >
           <div className="flex items-center gap-3 text-left">
@@ -213,7 +215,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             <div>
               <div className="text-sm font-black leading-tight text-white">Enter Game Room</div>
               <div className="text-[11px] font-semibold text-fuchsia-100">
-                Wall Breaker · Connect · Run · Space
+                Wall Breaker · Connect · Run · Space · Planet
               </div>
             </div>
           </div>
@@ -299,6 +301,8 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
   onClose
 }) => {
   if (!visible) return null;
+
+  const history = buildBeatenLevelHistory(save);
 
   return (
     <div
@@ -406,6 +410,124 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
             );
           })}
         </div>
+
+        {/* Beaten Levels History: Best Times & Star Ratings */}
+        <section
+          aria-label="Mission History"
+          data-testid="level-map-history"
+          className="flex flex-col gap-2 rounded-2xl border border-slate-700/80 bg-slate-950/75 p-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <History className="h-4 w-4 text-sky-300" aria-hidden="true" />
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-200">
+                Mission History
+              </h3>
+            </div>
+            <span
+              data-testid="level-map-history-count"
+              className="tabular rounded-lg border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] font-black text-sky-300"
+            >
+              {history.length} Cleared
+            </span>
+          </div>
+
+          {history.length === 0 ? (
+            <p
+              data-testid="level-map-history-empty"
+              className="rounded-xl border border-dashed border-slate-800 bg-slate-900/60 px-3 py-2.5 text-center text-xs font-medium text-slate-400"
+            >
+              Beat any mission to record your star ratings and best completion times.
+            </p>
+          ) : (
+            <div
+              data-testid="level-map-history-list"
+              className="max-h-48 space-y-1.5 overflow-y-auto pr-0.5"
+            >
+              {history.map((entry) => {
+                const timeBadgeTone =
+                  entry.speedTier === 'gold'
+                    ? 'border-amber-300/65 bg-amber-400/15 text-amber-200'
+                    : entry.speedTier === 'silver'
+                      ? 'border-sky-300/65 bg-sky-400/15 text-sky-200'
+                      : entry.speedTier === 'bronze'
+                        ? 'border-orange-300/65 bg-orange-400/15 text-orange-200'
+                        : 'border-slate-700 bg-slate-900 text-slate-200';
+
+                const tagTone =
+                  entry.kind === 'bonus'
+                    ? 'border-violet-400/60 bg-violet-500/20 text-violet-200'
+                    : entry.kind === 'daily'
+                      ? 'border-orange-400/60 bg-orange-500/20 text-orange-200'
+                      : 'border-sky-400/60 bg-sky-500/20 text-sky-200';
+
+                const timeText =
+                  entry.bestMs !== null ? formatChallengeTime(entry.bestMs) : 'Untimed';
+                const rowAria = `${entry.label} ${entry.name}, ${entry.stars} of 3 stars${
+                  entry.bonusStar ? ', bonus star earned' : ''
+                }, ${entry.bestMs !== null ? `best time ${timeText}` : 'untimed'}`;
+
+                return (
+                  <button
+                    key={entry.key}
+                    type="button"
+                    aria-label={rowAria}
+                    onClick={() =>
+                      entry.kind === 'daily' ? onStartDaily() : onSelectLevel(entry.levelId)
+                    }
+                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/90 px-2.5 py-2 text-left transition-colors hover:border-sky-400/60 hover:bg-slate-800/90 active:scale-[0.99]"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`tabular inline-flex h-6 min-w-[2.1rem] shrink-0 items-center justify-center rounded-lg border px-1.5 text-[11px] font-black ${tagTone}`}
+                      >
+                        {entry.kind === 'daily' ? (
+                          <Flame className="h-3.5 w-3.5 fill-orange-400 text-orange-300" aria-hidden="true" />
+                        ) : (
+                          entry.shortTag
+                        )}
+                      </span>
+                      <span className="truncate text-xs font-bold text-slate-100">
+                        {entry.name}
+                      </span>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className="flex items-center gap-0.5" aria-hidden="true">
+                        {[1, 2, 3].map((s) => (
+                          <Star
+                            key={s}
+                            className={`h-3.5 w-3.5 ${
+                              s <= entry.stars
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-700'
+                            }`}
+                          />
+                        ))}
+                        {entry.bonusStar && (
+                          <Award className="ml-0.5 h-3.5 w-3.5 text-amber-300" />
+                        )}
+                      </div>
+
+                      {entry.bestMs !== null ? (
+                        <span
+                          className={`tabular inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-black ${timeBadgeTone}`}
+                        >
+                          <Timer className="h-3 w-3" aria-hidden="true" />
+                          <span>{timeText}</span>
+                        </span>
+                      ) : (
+                        <span className="rounded-lg border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-[11px] font-semibold text-slate-400">
+                          Untimed
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
