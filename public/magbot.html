@@ -1,0 +1,4167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MAG-BOT: WALL-RUN — Kid-Friendly 3D Reward Arcade</title>
+  <meta name="description" content="Magnetic wall-running 3D endless runner unlocked by leveling up in SparkBot. Compact scrap bolts into Trash Cubes, glide with your CO2 thruster, and blast through 3 zones!" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Outfit:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b1120;
+      --surface: rgba(15, 23, 42, 0.88);
+      --surface-solid: #111827;
+      --surface-2: rgba(30, 41, 59, 0.92);
+      --border: rgba(148, 163, 184, 0.22);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --amber: #fbbf24;
+      --amber-deep: #d97706;
+      --cyan: #38bdf8;
+      --emerald: #34d399;
+      --rose: #fb7185;
+      --font-display: 'Outfit', 'Trebuchet MS', system-ui, -apple-system, sans-serif;
+      --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      touch-action: none;
+    }
+
+    .tabular {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #viewport-root {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 35%, #282018 0%, #0b1120 75%);
+    }
+
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Screen Overlay System */
+    .overlay-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      pointer-events: none;
+    }
+
+    .overlay-layer.interactive {
+      pointer-events: auto;
+      background: rgba(7, 11, 22, 0.56);
+    }
+
+    .card {
+      width: min(560px, 100%);
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      color: var(--text);
+    }
+
+    .card.wide {
+      width: min(820px, 100%);
+    }
+
+    /* Title Screen Layout */
+    #titleScreen {
+      justify-content: flex-start;
+      align-items: stretch;
+      padding: 20px;
+      background: linear-gradient(90deg, rgba(8, 13, 24, 0.84) 0%, rgba(8, 13, 24, 0.52) 48%, rgba(8, 13, 24, 0.12) 100%);
+    }
+
+    .title-panel {
+      width: min(470px, 100%);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: rgba(15, 23, 42, 0.90);
+      border: 1.5px solid rgba(251, 191, 36, 0.34);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+      align-self: center;
+    }
+
+    .brand-kicker {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--amber);
+      letter-spacing: 0.04em;
+    }
+
+    .game-title {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4.2vw, 2.85rem);
+      font-weight: 900;
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      text-wrap: balance;
+    }
+
+    .game-title span {
+      color: var(--amber);
+    }
+
+    .game-subtitle {
+      margin: 0;
+      font-size: 0.94rem;
+      line-height: 1.48;
+      color: #cbd5e1;
+    }
+
+    .reward-claim-banner {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(52, 211, 153, 0.14);
+      border: 1.5px solid rgba(52, 211, 153, 0.45);
+      color: #d1fae5;
+      font-size: 0.88rem;
+      font-weight: 700;
+      line-height: 1.38;
+    }
+
+    .wallet-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid var(--border);
+    }
+
+    .wallet-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .wallet-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .wallet-value {
+      font-size: 1.08rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .wallet-value.amber { color: var(--amber); }
+    .wallet-value.cyan { color: var(--cyan); }
+    .wallet-value.emerald { color: var(--emerald); }
+
+    .perks-strip {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid var(--border);
+    }
+
+    .perks-strip-title {
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: #cbd5e1;
+      letter-spacing: 0.03em;
+    }
+
+    .perks-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .perk-chip {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 7px 8px;
+      border-radius: 10px;
+      background: rgba(30, 41, 59, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.25;
+    }
+
+    .perk-chip.active {
+      background: rgba(6, 78, 59, 0.48);
+      border-color: rgba(52, 211, 153, 0.65);
+      color: #ecfdf5;
+    }
+
+    .perk-chip-name {
+      font-weight: 800;
+      color: #e2e8f0;
+      font-size: 0.75rem;
+    }
+
+    .perk-chip.active .perk-chip-name {
+      color: #6ee7b7;
+    }
+
+    /* Buttons */
+    button {
+      font-family: var(--font-body);
+      cursor: pointer;
+      border: 0;
+      transition: transform 0.14s cubic-bezier(0.16, 1, 0.3, 1), filter 0.14s ease, background 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    button:focus-visible {
+      outline: 3px solid var(--cyan);
+      outline-offset: 2px;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    .btn-hero-pass {
+      width: 100%;
+      min-height: 58px;
+      padding: 14px 20px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #ea580c 100%);
+      color: #111827;
+      font-family: var(--font-display);
+      font-size: 1.12rem;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      box-shadow: 0 0 24px rgba(251, 191, 36, 0.45), 0 8px 20px rgba(234, 88, 12, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .btn-hero-pass:hover:not(:disabled) {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+    }
+
+    .btn-hero-pass:disabled {
+      background: #334155;
+      color: #94a3b8;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      min-height: 46px;
+      padding: 10px 18px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #082f49;
+      font-weight: 800;
+      font-size: 0.94rem;
+      white-space: nowrap;
+    }
+
+    .btn-emerald {
+      min-height: 46px;
+      padding: 10px 18px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, #34d399, #059669);
+      color: #022c22;
+      font-weight: 800;
+      font-size: 0.94rem;
+      white-space: nowrap;
+    }
+
+    .btn-secondary {
+      min-height: 44px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background: rgba(30, 41, 59, 0.96);
+      border: 1.5px solid var(--border);
+      color: #f1f5f9;
+      font-weight: 700;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(51, 65, 85, 0.96);
+    }
+
+    .btn-practice-link {
+      background: transparent;
+      color: #cbd5e1;
+      font-size: 0.84rem;
+      font-weight: 700;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px dashed rgba(148, 163, 184, 0.36);
+      text-align: center;
+      min-height: 40px;
+    }
+
+    .btn-practice-link:hover {
+      color: #ffffff;
+      border-color: var(--cyan);
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .controls-summary {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      line-height: 1.45;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .controls-summary strong {
+      color: #e2e8f0;
+    }
+
+    /* Top HUD Bar */
+    #hudLayer {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px 14px;
+    }
+
+    .hud-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+    }
+
+    .hud-cluster {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(11, 17, 32, 0.82);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 7px 12px;
+      min-height: 44px;
+    }
+
+    .shields-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .shield-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      background: rgba(56, 189, 248, 0.2);
+      border: 1.5px solid #38bdf8;
+      color: #7dd3fc;
+      transition: transform 0.18s ease, opacity 0.18s ease;
+    }
+
+    .shield-icon.broken {
+      opacity: 0.25;
+      background: rgba(51, 65, 85, 0.4);
+      border-color: #475569;
+      transform: scale(0.86);
+    }
+
+    .hud-stat {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .hud-stat .label {
+      color: var(--muted);
+      font-size: 0.74rem;
+    }
+
+    .hud-stat .val {
+      color: #ffffff;
+      font-size: 0.98rem;
+    }
+
+    .hud-stat .val.amber { color: var(--amber); }
+    .hud-stat .val.cyan { color: var(--cyan); }
+    .hud-stat .val.emerald { color: var(--emerald); }
+
+    .hud-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+    }
+
+    /* Center Meters (Solar, Compactor & Zone Progress) */
+    .hud-meters {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      max-width: 520px;
+      min-width: 240px;
+      background: rgba(11, 17, 32, 0.84);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 7px 12px;
+      min-height: 44px;
+    }
+
+    .hud-subbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 6px;
+      pointer-events: none;
+      flex-wrap: wrap;
+    }
+
+    .zone-progress-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(11, 17, 32, 0.82);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 5px 11px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+
+    .zone-track {
+      width: 110px;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.95);
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .zone-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #fbbf24, #38bdf8, #34d399);
+      transition: width 0.2s ease;
+    }
+
+    .combo-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 12px;
+      background: rgba(217, 119, 6, 0.9);
+      border: 1.5px solid #fde68a;
+      color: #fffbeb;
+      font-family: var(--font-display);
+      font-size: 0.84rem;
+      font-weight: 900;
+      opacity: 0;
+      transform: scale(0.92);
+      transition: opacity 0.16s ease, transform 0.16s ease;
+    }
+
+    .combo-pill.active {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .stem-live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border-radius: 12px;
+      background: rgba(11, 17, 32, 0.82);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #bae6fd;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }
+
+    .meter-block {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 90px;
+    }
+
+    .meter-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+
+    .meter-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.95);
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      transition: width 0.12s linear;
+    }
+
+    .meter-fill.solar {
+      background: linear-gradient(90deg, #f59e0b, #fde047);
+    }
+
+    .meter-fill.solar.turbo {
+      background: linear-gradient(90deg, #38bdf8, #34d399, #fde047, #f472b6);
+    }
+
+    .meter-fill.compactor {
+      background: linear-gradient(90deg, #38bdf8, #34d399);
+    }
+
+    .cube-slots {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .cube-slot {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1.5px solid #475569;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.68rem;
+    }
+
+    .cube-slot.ready {
+      background: linear-gradient(135deg, #f59e0b, #b45309);
+      border-color: #fde68a;
+      color: #fffbeb;
+    }
+
+    .hud-icon-btn {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(11, 17, 32, 0.85);
+      border: 1px solid var(--border);
+      color: #f8fafc;
+      font-size: 0.92rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .hud-icon-btn:hover {
+      background: rgba(30, 41, 59, 0.95);
+    }
+
+    /* Callout Toast during run */
+    .run-callout {
+      align-self: center;
+      margin-top: 8px;
+      padding: 8px 18px;
+      border-radius: 12px;
+      background: rgba(11, 17, 32, 0.88);
+      border: 1.5px solid rgba(251, 191, 36, 0.55);
+      color: #fef3c7;
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 800;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+    }
+
+    .run-callout.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Bottom Touch Controls (Tablet & Touch Friendly) */
+    .hud-bottom {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .touch-pad {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .touch-btn {
+      min-width: 66px;
+      min-height: 66px;
+      padding: 10px 14px;
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 2px solid rgba(148, 163, 184, 0.34);
+      color: #f8fafc;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.92rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .touch-btn.jump {
+      min-width: 96px;
+      min-height: 76px;
+      background: rgba(14, 116, 144, 0.88);
+      border-color: #38bdf8;
+      color: #f0f9ff;
+    }
+
+    .touch-btn.cube {
+      min-width: 108px;
+      min-height: 76px;
+      background: rgba(180, 83, 9, 0.9);
+      border-color: #fbbf24;
+      color: #fffbeb;
+    }
+
+    .touch-btn.cube:disabled {
+      background: rgba(30, 41, 59, 0.72);
+      border-color: rgba(148, 163, 184, 0.22);
+      color: #64748b;
+      cursor: not-allowed;
+    }
+
+    .touch-btn small {
+      font-family: var(--font-body);
+      font-size: 0.68rem;
+      font-weight: 700;
+      opacity: 0.85;
+    }
+
+    .surface-status {
+      pointer-events: none;
+      align-self: flex-end;
+      padding: 6px 12px;
+      border-radius: 10px;
+      background: rgba(11, 17, 32, 0.75);
+      border: 1px solid var(--border);
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+
+    /* Workshop Modal */
+    .workshop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .workshop-header h2 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      font-weight: 900;
+    }
+
+    .section-label {
+      margin: 14px 0 8px;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: var(--cyan);
+      letter-spacing: 0.03em;
+    }
+
+    .upgrade-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .upgrade-item {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .upgrade-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .upgrade-name {
+      font-weight: 800;
+      font-size: 0.94rem;
+      color: #ffffff;
+    }
+
+    .upgrade-lvl {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--amber);
+      white-space: nowrap;
+    }
+
+    .upgrade-desc {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .pip-bar {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+
+    .pip {
+      height: 6px;
+      border-radius: 4px;
+      background: #334155;
+    }
+
+    .pip.filled {
+      background: var(--emerald);
+    }
+
+    .skin-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+
+    .skin-item {
+      background: var(--surface-2);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .skin-item.equipped {
+      border-color: var(--emerald);
+      background: rgba(6, 78, 59, 0.35);
+    }
+
+    .skin-swatch {
+      height: 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .science-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .science-card {
+      background: rgba(15, 23, 42, 0.86);
+      border: 1.5px solid rgba(56, 189, 248, 0.35);
+      border-radius: 14px;
+      padding: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .science-card.locked {
+      border-color: rgba(148, 163, 184, 0.2);
+      opacity: 0.72;
+    }
+
+    .science-card-title {
+      font-weight: 800;
+      font-size: 0.84rem;
+      color: #7dd3fc;
+    }
+
+    .science-card.locked .science-card-title {
+      color: #94a3b8;
+    }
+
+    .science-card-body {
+      font-size: 0.75rem;
+      line-height: 1.38;
+      color: #cbd5e1;
+    }
+
+    /* Run Summary Modal */
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .summary-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .summary-box .k {
+      font-size: 0.74rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .summary-box .v {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-top: 2px;
+    }
+
+    .stem-fact-banner {
+      margin: 10px 0 4px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(14, 116, 144, 0.22);
+      border: 1.5px solid rgba(56, 189, 248, 0.45);
+      color: #e0f2fe;
+      font-size: 0.82rem;
+      line-height: 1.42;
+      text-align: left;
+    }
+
+    .stem-fact-banner strong {
+      color: #7dd3fc;
+      display: block;
+      margin-bottom: 2px;
+      font-size: 0.84rem;
+    }
+
+    .webgl-fallback {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #0b1120;
+      text-align: center;
+    }
+
+    @media (max-width: 820px) {
+      #titleScreen {
+        align-items: flex-end;
+        justify-content: center;
+        padding: 12px;
+        background: linear-gradient(180deg, rgba(8, 13, 24, 0.15) 0%, rgba(8, 13, 24, 0.85) 55%);
+      }
+      .title-panel {
+        max-height: 76vh;
+        padding: 16px;
+        gap: 10px;
+      }
+      .hud-meters {
+        order: 3;
+        max-width: 100%;
+        width: 100%;
+      }
+      .surface-status {
+        display: none;
+      }
+      .touch-btn {
+        min-width: 56px;
+        min-height: 58px;
+      }
+      .touch-btn.jump, .touch-btn.cube {
+        min-width: 88px;
+        min-height: 68px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="viewport-root">
+    <canvas id="game-canvas" aria-label="MAG-BOT: WALL-RUN 3D Game Viewport"></canvas>
+  </div>
+
+  <!-- Live Gameplay HUD -->
+  <div id="hudLayer" class="hidden" aria-label="Game Heads-Up Display">
+    <div class="hud-top">
+      <div class="hud-cluster">
+        <div class="shields-row" id="hudShields" aria-label="Energy Shields">
+          <span class="shield-icon" title="Energy Shield">🛡️</span>
+          <span class="shield-icon" title="Energy Shield">🛡️</span>
+          <span class="shield-icon" title="Energy Shield">🛡️</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-stat">
+          <span class="label">PASSES</span>
+          <span id="hudPasses" class="val cyan tabular">0</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-stat">
+          <span class="label">BOLTS</span>
+          <span id="hudBolts" class="val amber tabular">0</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-stat">
+          <span id="hudZoneLabel" class="label">SCRAPYARD</span>
+          <span id="hudDistance" class="val emerald tabular">0m</span>
+        </div>
+      </div>
+
+      <div class="hud-meters">
+        <div class="meter-block">
+          <div class="meter-head">
+            <span>☀️ Solar Turbo</span>
+            <span id="hudSolarPct" class="tabular">0%</span>
+          </div>
+          <div class="meter-track">
+            <div id="hudSolarFill" class="meter-fill solar"></div>
+          </div>
+        </div>
+        <div class="meter-block">
+          <div class="meter-head">
+            <span>📦 Compactor</span>
+            <span id="hudCubeCount" class="tabular">0/3</span>
+          </div>
+          <div class="meter-track">
+            <div id="hudCompactorFill" class="meter-fill compactor"></div>
+          </div>
+        </div>
+        <div class="cube-slots" id="hudCubeSlots" aria-label="Trash Cube Slots">
+          <div class="cube-slot">1</div>
+          <div class="cube-slot">2</div>
+          <div class="cube-slot">3</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <button id="hudMuteBtn" class="hud-icon-btn" type="button" aria-label="Toggle Sound">🔊</button>
+        <button id="hudPauseBtn" class="hud-icon-btn" type="button" aria-label="Pause Game">⏸</button>
+      </div>
+    </div>
+
+    <div class="hud-subbar">
+      <div class="zone-progress-pill" aria-label="Zone Progress">
+        <span id="hudNextZoneLabel">Next: Neon Metro (400m)</span>
+        <div class="zone-track">
+          <div id="hudZoneFill" class="zone-fill"></div>
+        </div>
+      </div>
+      <div id="hudComboPill" class="combo-pill tabular" aria-live="polite">⚡ ×1 COMBO</div>
+      <div id="hudStemLive" class="stem-live-pill">🧲 Mag-Treads: Ready</div>
+    </div>
+
+    <div id="runCallout" class="run-callout" role="status" aria-live="polite"></div>
+
+    <div class="hud-bottom">
+      <div class="touch-pad">
+        <button id="touchLeftBtn" class="touch-btn" type="button" aria-label="Move Left">
+          ◀
+          <small>LEFT</small>
+        </button>
+        <button id="touchRightBtn" class="touch-btn" type="button" aria-label="Move Right">
+          ▶
+          <small>RIGHT</small>
+        </button>
+      </div>
+
+      <div id="hudSurfaceLabel" class="surface-status">Floor Track · Swipe or Tap Arrows to Wall-Run</div>
+
+      <div class="touch-pad">
+        <button id="touchCubeBtn" class="touch-btn cube" type="button" disabled aria-label="Throw Trash Cube">
+          📦 THROW
+          <small id="touchCubeBadge">0 READY</small>
+        </button>
+        <button id="touchJumpBtn" class="touch-btn jump" type="button" aria-label="Jump and Hold to Glide">
+          ▲ JUMP
+          <small>HOLD: GLIDE</small>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Title Screen Overlay -->
+  <div id="titleScreen" class="overlay-layer interactive">
+    <div class="title-panel">
+      <div class="brand-kicker">SparkBot Reward Arcade · 3D Magnetic Runner</div>
+      <h1 class="game-title">MAG-BOT: <span>WALL-RUN</span></h1>
+      <p class="game-subtitle">
+        Magnetize onto canyon walls &amp; neon metro ceilings, compact Scrap Bolts into Trash Cubes, and glide with your CO₂ fire-extinguisher thruster!
+      </p>
+
+      <div id="rewardClaimBanner" class="reward-claim-banner hidden"></div>
+
+      <div class="wallet-strip">
+        <div class="wallet-cell">
+          <span class="wallet-label">Run Passes</span>
+          <span id="titlePassesVal" class="wallet-value cyan tabular">🎟️ 0</span>
+        </div>
+        <div class="wallet-cell">
+          <span class="wallet-label">Scrap Bolts</span>
+          <span id="titleBoltsVal" class="wallet-value amber tabular">🔩 0</span>
+        </div>
+        <div class="wallet-cell">
+          <span class="wallet-label">Best Run</span>
+          <span id="titleBestVal" class="wallet-value emerald tabular">0m</span>
+        </div>
+      </div>
+
+      <div id="titlePerksStrip" class="perks-strip" aria-label="SparkBot Mastery Perks">
+        <div class="perks-strip-title">SPARKBOT MASTERY PERKS</div>
+        <div id="titlePerksList" class="perks-list"></div>
+      </div>
+
+      <button id="startPassRunBtn" class="btn-hero-pass" type="button">
+        🎟️ RUN &amp; COLLECT (Passes: 0)
+      </button>
+
+      <div class="btn-row">
+        <button id="openWorkshopBtn" class="btn-primary" style="flex:1;" type="button">🔧 Workshop &amp; Skins</button>
+        <button id="backSparkbotBtn" class="btn-secondary" style="flex:1;" type="button">⬅️ Back to Learning Game (sparkbot.html)</button>
+      </div>
+
+      <button id="practiceRunBtn" class="btn-practice-link" type="button">
+        🎮 Free Practice Run (No Pass Spent · Test Controls &amp; Zones)
+      </button>
+
+      <div class="controls-summary">
+        <strong>Tablet &amp; Touch:</strong> Swipe Left/Right to switch lanes &amp; magnetic walls, Swipe Up or tap <strong>JUMP</strong> (hold in mid-air to <strong>CO₂ Glide</strong>), tap <strong>THROW</strong> to smash Cleaner Bots.<br />
+        <strong>Keyboard:</strong> A/D or Arrows to steer &amp; wall-run · W/Up/Space to jump &amp; glide · S/Down to drop · F or Enter to launch Trash Cube.
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Modal -->
+  <div id="pauseModal" class="overlay-layer interactive hidden">
+    <div class="card" style="max-width:420px; text-align:center;">
+      <h2 style="margin:0 0 8px; font-family:var(--font-display); font-size:1.65rem;">Run Paused</h2>
+      <p style="margin:0 0 18px; color:var(--muted); font-size:0.92rem;">Mag-Bot is holding steady on magnetic standby.</p>
+      <div class="btn-row" style="justify-content:center;">
+        <button id="resumeRunBtn" class="btn-emerald" type="button">▶ Resume Run</button>
+        <button id="finishEarlyBtn" class="btn-secondary" type="button">🏁 Finish &amp; Bank Bolts</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workshop Upgrade Shop & Skins Modal -->
+  <div id="workshopModal" class="overlay-layer interactive hidden">
+    <div class="card wide">
+      <div class="workshop-header">
+        <div>
+          <h2>🔧 Mag-Bot Workshop</h2>
+          <div style="font-size:0.84rem; color:var(--muted);">Spend Scrap Bolts to upgrade Mag-Bot's gear and unlock custom chassis skins.</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="hud-cluster" style="min-height:42px;">
+            <span style="font-size:0.8rem; color:var(--muted); font-weight:700;">BOLTS</span>
+            <span id="workshopBoltsVal" class="val amber tabular" style="font-weight:800; font-size:1.05rem;">🔩 0</span>
+          </div>
+          <button id="closeWorkshopBtn" class="btn-secondary" type="button">✕ Done</button>
+        </div>
+      </div>
+
+      <div class="section-label">Upgradable Parts (Levels 1–5)</div>
+      <div id="workshopUpgradeGrid" class="upgrade-grid"></div>
+
+      <div class="section-label">Chassis Skins</div>
+      <div id="workshopSkinGrid" class="skin-grid"></div>
+
+      <div class="section-label">🔬 Mag-Bot Robotics Science Cards</div>
+      <div id="workshopScienceGrid" class="science-grid"></div>
+    </div>
+  </div>
+
+  <!-- Celebratory Run Summary Modal -->
+  <div id="summaryModal" class="overlay-layer interactive hidden">
+    <div class="card" style="text-align:center;">
+      <div id="summaryModeKicker" style="font-size:0.82rem; font-weight:800; color:var(--emerald); margin-bottom:4px;">RUN COMPLETE!</div>
+      <h2 style="margin:0; font-family:var(--font-display); font-size:1.85rem; font-weight:900;">Awesome Wall-Run, Mag-Bot!</h2>
+      <p id="summarySubtitle" style="margin:6px 0 0; color:var(--muted); font-size:0.92rem;">All collected Scrap Bolts are banked in your Workshop!</p>
+
+      <div class="summary-stats">
+        <div class="summary-box">
+          <div class="k">Distance Reached</div>
+          <div id="sumDistance" class="v tabular" style="color:var(--emerald);">0m</div>
+        </div>
+        <div class="summary-box">
+          <div class="k">Bolts Collected</div>
+          <div id="sumBolts" class="v tabular" style="color:var(--amber);">+0 🔩</div>
+        </div>
+        <div class="summary-box">
+          <div class="k">Cubes Smashed · Best Combo</div>
+          <div id="sumCubes" class="v tabular" style="color:var(--cyan);">0 📦 · ×1</div>
+        </div>
+        <div class="summary-box">
+          <div class="k">Total Workshop Bolts</div>
+          <div id="sumTotalBolts" class="v tabular" style="color:#fde68a;">0 🔩</div>
+        </div>
+      </div>
+
+      <div id="sumStemFact" class="stem-fact-banner"></div>
+
+      <div class="btn-row" style="justify-content:center; margin-top:12px;">
+        <button id="sumPlayAgainBtn" class="btn-hero-pass" style="min-height:50px; font-size:1rem;" type="button">🎟️ Play Again (Passes: 0)</button>
+      </div>
+      <div class="btn-row" style="justify-content:center; margin-top:10px;">
+        <button id="sumWorkshopBtn" class="btn-primary" type="button">🔧 Open Workshop</button>
+        <button id="sumTitleBtn" class="btn-secondary" type="button">🏠 Title Screen</button>
+        <button id="sumBackSparkbotBtn" class="btn-secondary" type="button">⬅️ Back to SparkBot</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WebGL Lost / Fallback Screen -->
+  <div id="webglFallback" class="webgl-fallback hidden">
+    <div class="card">
+      <h2 style="margin-top:0; font-family:var(--font-display);">3D Graphics Context Resting</h2>
+      <p style="color:var(--muted);">WebGL was paused or unavailable on this device. Tap below to reload the 3D track or return to SparkBot.</p>
+      <div class="btn-row" style="justify-content:center;">
+        <button id="reloadWebglBtn" class="btn-primary" type="button">Reload 3D Viewport</button>
+        <button id="fallbackBackBtn" class="btn-secondary" type="button">⬅️ Back to SparkBot</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+    // =========================================================================
+    // 1. REWARD PASS BRIDGE & PERSISTENT SAVE SYSTEM (localStorage)
+    // =========================================================================
+    const KEYS = {
+      PASSES: 'magbot_run_passes',
+      BOLTS: 'magbot_bonus_bolts',
+      PERKS: 'magbot_perks_v1',
+      SAVE: 'magbot_save_v1',
+      CLAIM_SIG: 'magbot_last_claim_sig'
+    };
+
+    const UPGRADE_DEFS = [
+      { id: 'treads', name: '🧲 Magnetic Treads', desc: 'Longer magnetic hold on walls & ceilings.', baseCost: 35, mult: 1.55 },
+      { id: 'compactor', name: '🗜️ Hydraulic Compactor', desc: 'Fewer Scrap Bolts needed per Trash Cube.', baseCost: 40, mult: 1.6 },
+      { id: 'solar', name: '☀️ Solar Capacitor', desc: 'Extends invincible Solar Turbo duration.', baseCost: 45, mult: 1.6 },
+      { id: 'thruster', name: '🧯 Extinguisher Thruster', desc: 'Longer & floatier CO₂ mid-air glide.', baseCost: 35, mult: 1.55 },
+      { id: 'magnet', name: '⚡ Super Scrap Magnet', desc: 'Pulls nearby bolts & gears right to Mag-Bot!', baseCost: 40, mult: 1.6 }
+    ];
+
+    const STEM_CARDS = [
+      {
+        id: 'magnetism',
+        icon: '🧲',
+        title: 'Electromagnetism',
+        fact: 'Electricity flowing through Mag-Bot’s tread coils turns metal into a switchable magnet—strong enough to hold onto steel walls & ceilings!'
+      },
+      {
+        id: 'solar',
+        icon: '☀️',
+        title: 'Solar Photovoltaics',
+        fact: 'Photovoltaic cells on Mag-Bot’s chassis convert bright sunbeams into clean electric power for super-charged Turbo bursts!'
+      },
+      {
+        id: 'propulsion',
+        icon: '🧯',
+        title: 'Action & Reaction (Newton)',
+        fact: 'Releasing pressurized CO₂ gas downward pushes Mag-Bot upward—the exact same physics rockets use to soar in space!'
+      },
+      {
+        id: 'hydraulics',
+        icon: '🗜️',
+        title: 'Hydraulic Compaction',
+        fact: 'Hydraulic pistons squeeze loose scrap bolts tightly into neat Trash Cubes, showing how fluid pressure multiplies force!'
+      }
+    ];
+
+    const SKIN_DEFS = [
+      {
+        id: 'rust',
+        name: 'Rust Bucket',
+        desc: 'Classic weathered mustard compactor.',
+        cost: 0,
+        body: 0xeab308,
+        accent: 0x92400e,
+        eye: 0x38bdf8,
+        swatch: 'linear-gradient(90deg, #eab308, #b45309)'
+      },
+      {
+        id: 'builder',
+        name: 'Super Builder',
+        desc: 'Amber hazard armor & emerald optics.',
+        cost: 150,
+        body: 0xf59e0b,
+        accent: 0x1e293b,
+        eye: 0x34d399,
+        swatch: 'linear-gradient(90deg, #f59e0b, #1e293b, #34d399)'
+      },
+      {
+        id: 'astro',
+        name: 'Astro-White',
+        desc: 'Sleek Starliner white + cyan LED eyes.',
+        cost: 300,
+        body: 0xf1f5f9,
+        accent: 0x334155,
+        eye: 0x22d3ee,
+        swatch: 'linear-gradient(90deg, #f8fafc, #38bdf8)'
+      }
+    ];
+
+    function safeStorageGet(k) {
+      try { return window.localStorage.getItem(k); } catch { return null; }
+    }
+    function safeStorageSet(k, v) {
+      try { window.localStorage.setItem(k, String(v)); } catch {}
+    }
+    function parseNonNegInt(v) {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+
+    const defaultSave = () => ({
+      upgrades: { treads: 1, compactor: 1, solar: 1, thruster: 1, magnet: 1 },
+      unlockedSkins: ['rust'],
+      skin: 'rust',
+      bestDistance: 0,
+      totalRuns: 0,
+      discoveredStem: []
+    });
+
+    function loadSaveState() {
+      let save = defaultSave();
+      const raw = safeStorageGet(KEYS.SAVE);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            save.upgrades = { ...save.upgrades, ...(parsed.upgrades || {}) };
+            save.unlockedSkins = Array.isArray(parsed.unlockedSkins) ? Array.from(new Set(['rust', ...parsed.unlockedSkins])) : ['rust'];
+            save.skin = save.unlockedSkins.includes(parsed.skin) ? parsed.skin : 'rust';
+            save.bestDistance = parseNonNegInt(parsed.bestDistance);
+            save.totalRuns = parseNonNegInt(parsed.totalRuns);
+            save.discoveredStem = Array.isArray(parsed.discoveredStem) ? Array.from(new Set(parsed.discoveredStem)) : [];
+          }
+        } catch {}
+      }
+      return save;
+    }
+
+    function persistSave(save, passes, bolts) {
+      safeStorageSet(KEYS.PASSES, Math.max(0, Math.floor(passes)));
+      safeStorageSet(KEYS.BOLTS, Math.max(0, Math.floor(bolts)));
+      safeStorageSet(KEYS.SAVE, JSON.stringify(save));
+    }
+
+    function loadSparkbotPerks() {
+      const fallback = {
+        totalStars: 0,
+        bonusCleared: 0,
+        bonusStars: 0,
+        dailyStreak: 0,
+        starterCube: false,
+        goldenWave: false,
+        overchargedAura: false
+      };
+      const raw = safeStorageGet(KEYS.PERKS);
+      if (!raw) return fallback;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return fallback;
+        return {
+          totalStars: parseNonNegInt(parsed.totalStars),
+          bonusCleared: parseNonNegInt(parsed.bonusCleared),
+          bonusStars: parseNonNegInt(parsed.bonusStars),
+          dailyStreak: parseNonNegInt(parsed.dailyStreak),
+          starterCube: Boolean(parsed.starterCube),
+          goldenWave: Boolean(parsed.goldenWave),
+          overchargedAura: Boolean(parsed.overchargedAura)
+        };
+      } catch {
+        return fallback;
+      }
+    }
+
+    function processIncomingRewardParams() {
+      let passes = parseNonNegInt(safeStorageGet(KEYS.PASSES));
+      let bolts = parseNonNegInt(safeStorageGet(KEYS.BOLTS));
+      let bannerMsg = '';
+
+      const params = new URLSearchParams(window.location.search);
+      const urlRuns = parseNonNegInt(params.get('runs'));
+      const urlBolts = parseNonNegInt(params.get('bolts'));
+      const fromLevel = params.get('fromLevel');
+      const token = params.get('claim') || params.get('t') || params.get('ts') || '';
+
+      let isSparkbotHandoff = false;
+      try {
+        if (window.sessionStorage.getItem('magbot_sparkbot_handoff') === '1') {
+          isSparkbotHandoff = true;
+          window.sessionStorage.removeItem('magbot_sparkbot_handoff');
+        }
+      } catch {}
+
+      if (window.location.search) {
+        if (isSparkbotHandoff) {
+          // SparkBot already incremented localStorage before navigating here
+          if (fromLevel || urlRuns > 0) {
+            const lvlText = fromLevel === 'daily' ? 'Daily Challenge' : (fromLevel ? `SparkBot Level ${fromLevel}` : 'SparkBot');
+            bannerMsg = `🎉 Reward unlocked from ${lvlText}! You have ${passes} Pass${passes === 1 ? '' : 'es'} & ${bolts} Scrap Bolts ready!`;
+          }
+        } else if (urlRuns > 0 || urlBolts > 0) {
+          // Direct launch with URL rewards: deduplicate by token or signature so refresh never double-credits
+          const sig = token ? `tok:${token}` : `url:${urlRuns}:${urlBolts}:${fromLevel || ''}:${Math.floor(Date.now() / 4000)}`;
+          const prevSig = safeStorageGet(KEYS.CLAIM_SIG);
+          if (prevSig !== sig) {
+            passes += urlRuns;
+            bolts += urlBolts;
+            safeStorageSet(KEYS.PASSES, passes);
+            safeStorageSet(KEYS.BOLTS, bolts);
+            safeStorageSet(KEYS.CLAIM_SIG, sig);
+            const lvlText = fromLevel ? ` (Level ${fromLevel})` : '';
+            bannerMsg = `🎉 Claimed +${urlRuns} Run Pass${urlRuns === 1 ? '' : 'es'} & +${urlBolts} Scrap Bolts${lvlText}!`;
+          }
+        }
+        try {
+          window.history.replaceState({}, '', window.location.pathname);
+        } catch {}
+      }
+
+      return { passes, bolts, bannerMsg };
+    }
+
+    function returnToSparkBot() {
+      SFX.chirp('happy');
+      if (document.referrer && /sparkbot\.html/i.test(document.referrer)) {
+        window.location.href = 'sparkbot.html';
+      } else if (window.location.protocol === 'file:') {
+        window.location.href = 'sparkbot.html';
+      } else {
+        window.location.href = './';
+      }
+    }
+
+    // =========================================================================
+    // 2. PROCEDURAL WEB AUDIO SYNTHESIZER (WALL-E Chirps, Crunch, CO2, Spring)
+    // =========================================================================
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.noiseBuf = null;
+        this.glideNode = null;
+        this.glideGain = null;
+      }
+
+      ensure() {
+        if (this.muted) return null;
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          this.ctx = new AC();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+        if (!this.noiseBuf && this.ctx) {
+          const len = this.ctx.sampleRate * 1.0;
+          const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+          this.noiseBuf = buf;
+        }
+        return this.ctx;
+      }
+
+      tone(freq, endFreq, dur, type = 'sine', vol = 0.14, delay = 0) {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const t = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), t + dur);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(vol, t + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      }
+
+      chirp(mood = 'happy') {
+        if (mood === 'pickup') {
+          this.tone(720, 1080, 0.08, 'triangle', 0.1);
+          this.tone(1040, 1380, 0.07, 'sine', 0.07, 0.045);
+        } else if (mood === 'gear') {
+          this.tone(880, 1320, 0.11, 'triangle', 0.14);
+          this.tone(1320, 1760, 0.14, 'sine', 0.12, 0.07);
+        } else if (mood === 'jump') {
+          this.tone(360, 760, 0.13, 'triangle', 0.13);
+          this.tone(540, 920, 0.09, 'sine', 0.08, 0.03);
+        } else if (mood === 'happy') {
+          this.tone(520, 780, 0.11, 'triangle', 0.12);
+          this.tone(820, 1140, 0.12, 'triangle', 0.11, 0.1);
+        }
+      }
+
+      magAttach() {
+        this.tone(170, 95, 0.08, 'sawtooth', 0.12);
+        this.tone(340, 620, 0.11, 'sine', 0.09, 0.02);
+      }
+
+      compactCrunch() {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        this.tone(180, 75, 0.14, 'square', 0.12);
+        this.tone(140, 62, 0.14, 'sawtooth', 0.1, 0.08);
+        this.tone(880, 1320, 0.18, 'triangle', 0.13, 0.17);
+      }
+
+      cubeThrow() {
+        this.tone(420, 190, 0.16, 'sawtooth', 0.11);
+      }
+
+      cubeSmash() {
+        this.tone(240, 70, 0.18, 'square', 0.14);
+        this.tone(920, 1420, 0.16, 'triangle', 0.13, 0.05);
+      }
+
+      springBounce() {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(210, t);
+        osc.frequency.exponentialRampToValueAtTime(580, t + 0.35);
+        lfo.frequency.setValueAtTime(24, t);
+        lfoGain.gain.setValueAtTime(55, t);
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        lfo.start(t);
+        osc.stop(t + 0.44);
+        lfo.stop(t + 0.44);
+      }
+
+      oilSlip() {
+        this.tone(740, 290, 0.22, 'sine', 0.13);
+        this.tone(310, 640, 0.18, 'sine', 0.11, 0.2);
+      }
+
+      solarTurbo() {
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((f, idx) => this.tone(f, f * 1.03, 0.22, 'triangle', 0.14, idx * 0.06));
+      }
+
+      fanfare() {
+        const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+        notes.forEach((f, idx) => this.tone(f, f, idx === 4 ? 0.45 : 0.16, 'triangle', 0.15, idx * 0.095));
+      }
+
+      setGlide(active) {
+        if (this.muted || !active) {
+          if (this.glideGain && this.ctx) {
+            this.glideGain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.03);
+          }
+          return;
+        }
+        const ctx = this.ensure();
+        if (!ctx || !this.noiseBuf) return;
+        if (!this.glideNode) {
+          const src = ctx.createBufferSource();
+          src.buffer = this.noiseBuf;
+          src.loop = true;
+          const filter = ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.value = 1800;
+          filter.Q.value = 0.8;
+          const gain = ctx.createGain();
+          gain.gain.value = 0.0001;
+          src.connect(filter);
+          filter.connect(gain);
+          gain.connect(ctx.destination);
+          src.start();
+          this.glideNode = src;
+          this.glideGain = gain;
+        }
+        this.glideGain.gain.setTargetAtTime(0.075, ctx.currentTime, 0.04);
+      }
+    }
+
+    const SFX = new SoundEngine();
+
+    // =========================================================================
+    // 3. THREE.JS RENDERER, SOFTWARE-WEBGL GUARD & STUDIO ENVIRONMENT
+    // =========================================================================
+    const canvas = document.getElementById('game-canvas');
+    const isSoftwareGl = (() => {
+      try {
+        const probe = document.createElement('canvas').getContext('webgl2');
+        if (!probe) return true;
+        const ext = probe.getExtension('WEBGL_debug_renderer_info');
+        const param = ext ? ext.UNMASKED_RENDERER_WEBGL : probe.RENDERER;
+        const gpu = String(probe.getParameter(param) || '');
+        probe.getExtension('WEBGL_lose_context')?.loseContext();
+        return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+      } catch {
+        return true;
+      }
+    })();
+
+    let renderer = null;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: !isSoftwareGl,
+        powerPreference: 'high-performance'
+      });
+    } catch {
+      document.getElementById('webglFallback').classList.remove('hidden');
+    }
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x281c14);
+    scene.fog = new THREE.FogExp2(0x281c14, 0.0155);
+
+    const camera = new THREE.PerspectiveCamera(64, window.innerWidth / Math.max(1, window.innerHeight), 0.1, 180);
+    camera.position.set(0, 4.2, 8.8);
+
+    if (renderer) {
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.12;
+      renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = !isSoftwareGl;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem.dispose();
+    }
+
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      document.getElementById('webglFallback').classList.remove('hidden');
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      document.getElementById('webglFallback').classList.add('hidden');
+    });
+
+    const maxAniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 1;
+
+    // Warm Key + Cool Sky Fill + Rim Light
+    const hemiLight = new THREE.HemisphereLight(0xfde68a, 0x1e293b, 0.85);
+    scene.add(hemiLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfff1d6, 1.85);
+    keyLight.position.set(8, 18, 10);
+    keyLight.castShadow = !isSoftwareGl;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 48;
+    keyLight.shadow.camera.left = -10;
+    keyLight.shadow.camera.right = 10;
+    keyLight.shadow.camera.top = 12;
+    keyLight.shadow.camera.bottom = -12;
+    keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.normalBias = 0.02;
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.9);
+    rimLight.position.set(-7, 6, -12);
+    scene.add(rimLight);
+
+    // =========================================================================
+    // 4. PROCEDURAL TEXTURES (CanvasTexture, SRGBColorSpace, Anisotropy)
+    // =========================================================================
+    function makeCanvasTexture(size, drawFn, repeatX = 1, repeatY = 1, isColor = true) {
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const ctx = c.getContext('2d');
+      drawFn(ctx, size);
+      const tex = new THREE.CanvasTexture(c);
+      if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repeatX, repeatY);
+      tex.anisotropy = maxAniso;
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    const TEX = {
+      hazard: makeCanvasTexture(256, (ctx, s) => {
+        ctx.fillStyle = '#eab308';
+        ctx.fillRect(0, 0, s, s);
+        ctx.fillStyle = '#111827';
+        for (let i = -s; i < s * 2; i += 48) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i + 24, 0);
+          ctx.lineTo(i - s + 24, s);
+          ctx.lineTo(i - s, s);
+          ctx.closePath();
+          ctx.fill();
+        }
+        // Subtle weathered edge grit
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        for (let i = 0; i < 90; i++) {
+          ctx.fillRect((i * 73) % s, (i * 137) % s, 6, 3);
+        }
+      }),
+      floorDeck: makeCanvasTexture(512, (ctx, s) => {
+        ctx.fillStyle = '#1f2937';
+        ctx.fillRect(0, 0, s, s);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 4;
+        for (let x = 0; x <= s; x += 128) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, s); ctx.stroke();
+        }
+        for (let y = 0; y <= s; y += 128) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke();
+        }
+        // 3 subtle glowing lane guide strips
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+        [86, 256, 426].forEach((cx) => ctx.fillRect(cx - 5, 0, 10, s));
+        // Rivets
+        ctx.fillStyle = '#475569';
+        for (let x = 16; x < s; x += 64) {
+          for (let y = 16; y < s; y += 64) {
+            ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }, 1, 2),
+      magWall: makeCanvasTexture(512, (ctx, s) => {
+        ctx.fillStyle = '#293548';
+        ctx.fillRect(0, 0, s, s);
+        for (let y = 0; y < s; y += 32) {
+          ctx.fillStyle = y % 64 === 0 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.22)';
+          ctx.fillRect(0, y, s, 14);
+        }
+        // Vertical panel seams & warning chevrons
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.5)';
+        ctx.lineWidth = 4;
+        for (let x = 0; x <= s; x += 128) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, s); ctx.stroke();
+        }
+        // Twin magnetic glowing rails
+        ctx.fillStyle = '#0ea5e9';
+        ctx.fillRect(0, 140, s, 16);
+        ctx.fillRect(0, 340, s, 16);
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fillRect(0, 146, s, 4);
+        ctx.fillRect(0, 346, s, 4);
+      }, 2, 1),
+      metalBump: makeCanvasTexture(256, (ctx, s) => {
+        ctx.fillStyle = '#808080';
+        ctx.fillRect(0, 0, s, s);
+        ctx.strokeStyle = '#383838';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(8, 8, s - 16, s - 16);
+        ctx.beginPath();
+        ctx.moveTo(0, s / 2); ctx.lineTo(s, s / 2);
+        ctx.moveTo(s / 2, 0); ctx.lineTo(s / 2, s);
+        ctx.stroke();
+        // Rivet bumps
+        ctx.fillStyle = '#e5e5e5';
+        for (let x = 18; x < s; x += 36) {
+          for (let y = 18; y < s; y += 36) {
+            ctx.beginPath(); ctx.arc(x, y, 2.8, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        // Brushed grain
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        for (let i = 0; i < 140; i++) {
+          ctx.fillRect((i * 37) % s, (i * 89) % s, 18, 1);
+        }
+      }, 1, 1, false),
+      chassisPanel: makeCanvasTexture(256, (ctx, s) => {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, s, s);
+        // Subtle weathered edge shading & panel seams (multiplies cleanly with skin color)
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.28)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(6, 6, s - 12, s - 12);
+        ctx.beginPath();
+        ctx.moveTo(0, s * 0.55); ctx.lineTo(s, s * 0.55);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(120, 53, 15, 0.14)';
+        for (let i = 0; i < 45; i++) {
+          ctx.beginPath();
+          ctx.arc((i * 61) % s, (i * 113) % s, 3 + (i % 6), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.32)';
+        [18, s - 18].forEach((rx) => [18, s - 18].forEach((ry) => {
+          ctx.beginPath(); ctx.arc(rx, ry, 4, 0, Math.PI * 2); ctx.fill();
+        }));
+      }, 1, 1, true),
+      solarCells: makeCanvasTexture(256, (ctx, s) => {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, s, s);
+        ctx.fillStyle = '#1d4ed8';
+        for (let x = 10; x < s - 10; x += 38) {
+          for (let y = 10; y < s - 10; y += 38) {
+            ctx.fillRect(x, y, 32, 32);
+            ctx.fillStyle = '#38bdf8';
+            ctx.fillRect(x + 2, y + 15, 28, 2);
+            ctx.fillStyle = '#1d4ed8';
+          }
+        }
+      }, 1, 1, true),
+      floorBump: makeCanvasTexture(256, (ctx, s) => {
+        ctx.fillStyle = '#787878';
+        ctx.fillRect(0, 0, s, s);
+        ctx.strokeStyle = '#303030';
+        ctx.lineWidth = 4;
+        for (let x = 0; x <= s; x += 64) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, s); ctx.stroke();
+        }
+        for (let y = 0; y <= s; y += 64) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke();
+        }
+        ctx.fillStyle = '#dcdcdc';
+        for (let x = 10; x < s; x += 32) {
+          for (let y = 10; y < s; y += 32) {
+            ctx.fillRect(x, y, 3, 3);
+          }
+        }
+      }, 1, 2, false),
+      shadowBlob: (() => {
+        const c = document.createElement('canvas');
+        c.width = 128; c.height = 128;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(64, 64, 8, 64, 64, 60);
+        g.addColorStop(0, 'rgba(0,0,0,0.65)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+        const tex = new THREE.CanvasTexture(c);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+      })()
+    };
+
+    // =========================================================================
+    // 5. COMPOSITE 3D MAG-BOT CHARACTER (20+ Parts, Glass Optics, Magnetic Coils)
+    // =========================================================================
+    function createMagBot() {
+      const root = new THREE.Group();
+      const visual = new THREE.Group(); // rotated for floor/wall/ceiling orientation
+      root.add(visual);
+
+      const skin = SKIN_DEFS[0];
+      const mats = {
+        body: new THREE.MeshStandardMaterial({
+          color: skin.body,
+          map: TEX.chassisPanel,
+          bumpMap: TEX.metalBump,
+          bumpScale: 0.018,
+          roughness: 0.42,
+          metalness: 0.38
+        }),
+        accent: new THREE.MeshStandardMaterial({
+          color: skin.accent,
+          bumpMap: TEX.metalBump,
+          bumpScale: 0.015,
+          roughness: 0.48,
+          metalness: 0.55
+        }),
+        steel: new THREE.MeshStandardMaterial({
+          color: 0xcbd5e1,
+          bumpMap: TEX.metalBump,
+          bumpScale: 0.01,
+          roughness: 0.24,
+          metalness: 0.9
+        }),
+        darkFrame: new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.55, metalness: 0.65 }),
+        rubber: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.88, metalness: 0.08 }),
+        hazard: new THREE.MeshStandardMaterial({ map: TEX.hazard, bumpMap: TEX.metalBump, bumpScale: 0.012, roughness: 0.44, metalness: 0.25 }),
+        solarPanel: new THREE.MeshStandardMaterial({ map: TEX.solarCells, roughness: 0.16, metalness: 0.45, emissive: 0x0284c7, emissiveIntensity: 0.2 }),
+        tankRed: new THREE.MeshPhysicalMaterial({ color: 0xdc2626, roughness: 0.22, metalness: 0.4, clearcoat: 0.85, clearcoatRoughness: 0.12 }),
+        brass: new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.2, metalness: 0.94 }),
+        magCoil: new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0ea5e9, emissiveIntensity: 0.35, roughness: 0.25, metalness: 0.5 }),
+        co2Plume: new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.0, depthWrite: false }),
+        eyeGlow: new THREE.MeshStandardMaterial({
+          color: skin.eye,
+          emissive: skin.eye,
+          emissiveIntensity: 1.9,
+          roughness: 0.12,
+          metalness: 0.1
+        }),
+        glassLens: new THREE.MeshPhysicalMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.32,
+          roughness: 0.05,
+          metalness: 0.05,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.05,
+          ior: 1.5
+        }),
+        shield: new THREE.MeshPhysicalMaterial({
+          color: 0x38bdf8,
+          emissive: 0x0284c7,
+          emissiveIntensity: 0.45,
+          transparent: true,
+          opacity: 0.26,
+          roughness: 0.1,
+          metalness: 0.1,
+          depthWrite: false
+        })
+      };
+
+      // Primary Silhouette: Beveled Rounded Chassis Box
+      const chassis = new THREE.Mesh(new RoundedBoxGeometry(1.08, 0.92, 1.04, 3, 0.08), mats.body);
+      chassis.position.set(0, 0.78, 0);
+      chassis.castShadow = !isSoftwareGl;
+      chassis.receiveShadow = true;
+      visual.add(chassis);
+
+      // Side Vent Louvers & Corner Bumpers
+      [-1, 1].forEach((side) => {
+        for (let v = 0; v < 3; v++) {
+          const vent = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.46), mats.darkFrame);
+          vent.position.set(side * 0.54, 0.92 - v * 0.12, 0.08);
+          visual.add(vent);
+        }
+      });
+
+      // Top Solar Photovoltaic Array + Collar Frame
+      const collar = new THREE.Mesh(new RoundedBoxGeometry(0.72, 0.14, 0.68, 2, 0.04), mats.accent);
+      collar.position.set(0, 1.27, -0.02);
+      visual.add(collar);
+
+      const solarDeck = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.04, 0.38), mats.solarPanel);
+      solarDeck.position.set(0, 1.27, 0.32);
+      solarDeck.rotation.x = -0.22;
+      visual.add(solarDeck);
+
+      // Front Compactor Hatch with Hazard Stripes & Hydraulic Frame
+      const hatchPivot = new THREE.Group();
+      hatchPivot.position.set(0, 0.38, -0.53);
+      const hatchPlate = new THREE.Mesh(new RoundedBoxGeometry(0.92, 0.64, 0.1, 2, 0.03), mats.hazard);
+      hatchPlate.position.set(0, 0.31, 0);
+      hatchPlate.castShadow = !isSoftwareGl;
+      hatchPivot.add(hatchPlate);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.58, 12), mats.steel);
+      handle.rotation.z = Math.PI / 2;
+      handle.position.set(0, 0.52, -0.06);
+      hatchPivot.add(handle);
+      // Chest Power Charge LED bar
+      const chestGauge = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 0.04), mats.magCoil);
+      chestGauge.position.set(0, 0.65, -0.05);
+      hatchPivot.add(chestGauge);
+      visual.add(hatchPivot);
+
+      // Articulated Twin-Jointed Arms with Elbow Pistons & Magnetic Pincer Claws
+      const arms = [];
+      [-1, 1].forEach((side) => {
+        const armPivot = new THREE.Group();
+        armPivot.position.set(side * 0.58, 0.88, -0.02);
+        const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.12, 10), mats.brass);
+        shoulder.rotation.z = Math.PI / 2;
+        armPivot.add(shoulder);
+
+        const upperArm = new THREE.Mesh(new RoundedBoxGeometry(0.13, 0.16, 0.44, 2, 0.03), mats.steel);
+        upperArm.position.set(side * 0.05, -0.03, -0.22);
+        upperArm.castShadow = !isSoftwareGl;
+        armPivot.add(upperArm);
+
+        const foreArm = new THREE.Mesh(new RoundedBoxGeometry(0.11, 0.13, 0.32, 2, 0.02), mats.accent);
+        foreArm.position.set(side * 0.05, -0.07, -0.5);
+        armPivot.add(foreArm);
+
+        // Twin pincer fingers
+        [-0.045, 0.045].forEach((fy) => {
+          const finger = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.18), mats.steel);
+          finger.position.set(side * 0.05, -0.07 + fy, -0.71);
+          armPivot.add(finger);
+        });
+        visual.add(armPivot);
+        arms.push(armPivot);
+      });
+
+      // Triangular Tank Treads (ExtrudeGeometry) + Spinning Sprockets + Magnetic Glow Coils
+      const treadShape = new THREE.Shape();
+      treadShape.moveTo(-0.58, 0);
+      treadShape.lineTo(0.58, 0);
+      treadShape.lineTo(0.2, 0.54);
+      treadShape.lineTo(-0.28, 0.5);
+      treadShape.closePath();
+      const treadGeo = new THREE.ExtrudeGeometry(treadShape, {
+        depth: 0.24,
+        bevelEnabled: true,
+        bevelThickness: 0.045,
+        bevelSize: 0.045,
+        bevelSegments: 2
+      });
+      treadGeo.center();
+
+      const wheels = [];
+      const magCoils = [];
+      [-1, 1].forEach((side) => {
+        const treadMesh = new THREE.Mesh(treadGeo, mats.rubber);
+        treadMesh.rotation.y = Math.PI / 2;
+        treadMesh.position.set(side * 0.63, 0.29, 0.02);
+        treadMesh.castShadow = !isSoftwareGl;
+        visual.add(treadMesh);
+
+        // Glowing Magnetic Induction Coil along bottom edge of each tread
+        const coilBar = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.07, 0.96), mats.magCoil);
+        coilBar.position.set(side * 0.63, 0.06, 0.02);
+        visual.add(coilBar);
+        magCoils.push(coilBar);
+
+        const hubOffsets = [
+          [0.15, -0.4],
+          [0.15, 0.4],
+          [0.42, 0.02]
+        ];
+        hubOffsets.forEach(([hy, hz]) => {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.3, 12), mats.steel);
+          wheel.rotation.z = Math.PI / 2;
+          wheel.position.set(side * 0.63, hy, hz);
+          const hubBolt = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.33, 6), mats.brass);
+          hubBolt.rotation.z = Math.PI / 2;
+          wheel.add(hubBolt);
+          visual.add(wheel);
+          wheels.push(wheel);
+        });
+      });
+
+      // Back-Mounted Red Fire-Extinguisher Thruster + Pressure Gauge + CO2 Cone
+      const thrusterGroup = new THREE.Group();
+      thrusterGroup.position.set(0, 0.78, 0.65);
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.64, 16), mats.tankRed);
+      tank.castShadow = !isSoftwareGl;
+      thrusterGroup.add(tank);
+      const tankCap = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), mats.tankRed);
+      tankCap.position.y = 0.32;
+      thrusterGroup.add(tankCap);
+      const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 16), mats.steel);
+      strap.position.y = 0.1;
+      thrusterGroup.add(strap);
+      const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.13, 10), mats.brass);
+      valve.position.y = 0.49;
+      thrusterGroup.add(valve);
+      const gauge = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.04, 12), mats.steel);
+      gauge.rotation.x = Math.PI / 2;
+      gauge.position.set(0.09, 0.46, 0.05);
+      thrusterGroup.add(gauge);
+      const nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.25, 12, 1, true), mats.steel);
+      nozzle.rotation.x = Math.PI * 0.85;
+      nozzle.position.set(0, -0.36, 0.12);
+      thrusterGroup.add(nozzle);
+      const co2Cone = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 12), mats.co2Plume);
+      co2Cone.rotation.x = Math.PI * 0.85;
+      co2Cone.position.set(0, -0.78, 0.34);
+      thrusterGroup.add(co2Cone);
+      visual.add(thrusterGroup);
+
+      // Accordion-Ribbed Articulated Neck + Expressive Binocular Optical Head
+      const neckGroup = new THREE.Group();
+      neckGroup.position.set(0, 1.33, -0.04);
+      visual.add(neckGroup);
+
+      for (let r = 0; r < 4; r++) {
+        const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.095 - r * 0.008, 0.115 - r * 0.008, 0.07, 12), r % 2 === 0 ? mats.steel : mats.darkFrame);
+        rib.position.y = 0.045 + r * 0.085;
+        neckGroup.add(rib);
+      }
+
+      const headGroup = new THREE.Group();
+      headGroup.position.set(0, 0.42, -0.04);
+      neckGroup.add(headGroup);
+
+      // Center bridge between binocular eyes
+      const eyeBridge = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.09, 0.14), mats.darkFrame);
+      eyeBridge.position.set(0, 0.04, -0.07);
+      headGroup.add(eyeBridge);
+
+      const eyes = [];
+      const pupils = [];
+      const brows = [];
+      [-1, 1].forEach((side) => {
+        const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.165, 0.36, 16), mats.steel);
+        pod.rotation.x = Math.PI / 2;
+        pod.position.set(side * 0.23, 0.04, -0.06);
+        pod.castShadow = !isSoftwareGl;
+        headGroup.add(pod);
+
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.175, 0.03, 10, 20), mats.accent);
+        rim.position.set(side * 0.23, 0.04, -0.24);
+        headGroup.add(rim);
+
+        // Dark recessed optical barrel
+        const barrel = new THREE.Mesh(new THREE.CircleGeometry(0.155, 18), mats.darkFrame);
+        barrel.rotation.y = Math.PI;
+        barrel.position.set(side * 0.23, 0.04, -0.242);
+        headGroup.add(barrel);
+
+        // Glowing iris disc
+        const lens = new THREE.Mesh(new THREE.CircleGeometry(0.125, 18), mats.eyeGlow);
+        lens.rotation.y = Math.PI;
+        lens.position.set(side * 0.23, 0.04, -0.246);
+        headGroup.add(lens);
+        eyes.push(lens);
+
+        // Expressive dark pupil + specular catchlight
+        const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.058, 14), mats.darkFrame);
+        pupil.rotation.y = Math.PI;
+        pupil.position.set(side * 0.23, 0.04, -0.249);
+        headGroup.add(pupil);
+        pupils.push(pupil);
+
+        // Curved optical glass dome cap
+        const glassCap = new THREE.Mesh(new THREE.SphereGeometry(0.165, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.42), mats.glassLens);
+        glassCap.rotation.x = -Math.PI / 2;
+        glassCap.position.set(side * 0.23, 0.04, -0.18);
+        headGroup.add(glassCap);
+
+        const brow = new THREE.Mesh(new RoundedBoxGeometry(0.26, 0.055, 0.1, 2, 0.015), mats.body);
+        brow.position.set(side * 0.23, 0.22, -0.21);
+        headGroup.add(brow);
+        brows.push(brow);
+      });
+
+      // Translucent Energy Shield Bubble
+      const shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.22, 24, 18), mats.shield);
+      shieldMesh.position.set(0, 0.85, 0);
+      shieldMesh.renderOrder = 5;
+      visual.add(shieldMesh);
+
+      // Soft Grounded Contact Shadow
+      const shadowGeo = new THREE.PlaneGeometry(2.0, 2.0);
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: TEX.shadowBlob,
+        transparent: true,
+        opacity: 0.58,
+        depthWrite: false
+      });
+      const contactShadow = new THREE.Mesh(shadowGeo, shadowMat);
+      contactShadow.rotation.x = -Math.PI / 2;
+      contactShadow.position.y = 0.03;
+      root.add(contactShadow);
+
+      function applySkin(skinId) {
+        const s = SKIN_DEFS.find((x) => x.id === skinId) || SKIN_DEFS[0];
+        mats.body.color.setHex(s.body);
+        mats.accent.color.setHex(s.accent);
+        mats.eyeGlow.color.setHex(s.eye);
+        mats.eyeGlow.emissive.setHex(s.eye);
+      }
+
+      return {
+        root,
+        visual,
+        hatchPivot,
+        neckGroup,
+        headGroup,
+        arms,
+        wheels,
+        magCoils,
+        co2Cone,
+        eyes,
+        pupils,
+        brows,
+        thrusterGroup,
+        shieldMesh,
+        mats,
+        contactShadow,
+        applySkin
+      };
+    }
+
+    const magBot = createMagBot();
+    scene.add(magBot.root);
+
+    // =========================================================================
+    // 6. WORLD & OBJECT POOLS (Segments, Collectibles, Obstacles, Particles)
+    // =========================================================================
+    const TRACK_HALF_W = 4.6;   // Wall X = ±4.6 (robot rides at ±4.05)
+    const CEIL_Y = 7.1;         // Ceiling Y = 7.1 (robot rides at 6.5)
+    const LANE_X = [-2.6, 0, 2.6];
+    const WALL_Y = [2.1, 4.3];
+    const SEG_LEN = 18;
+    const SEG_COUNT = 13;
+
+    const ZONES = [
+      {
+        id: 'scrapyard',
+        name: 'SCRAPYARD CANYON',
+        startDist: 0,
+        bg: new THREE.Color(0x281c14),
+        fogDensity: 0.0155,
+        hemiSky: new THREE.Color(0xfde68a),
+        hemiGround: new THREE.Color(0x3b2618),
+        keyColor: new THREE.Color(0xffedd5),
+        floorColor: new THREE.Color(0x475569),
+        wallColor: new THREE.Color(0x9a5b32),
+        railColor: new THREE.Color(0x38bdf8)
+      },
+      {
+        id: 'metro',
+        name: 'NEON METRO TUNNEL',
+        startDist: 400,
+        bg: new THREE.Color(0x0b1228),
+        fogDensity: 0.017,
+        hemiSky: new THREE.Color(0x60a5fa),
+        hemiGround: new THREE.Color(0x1e1b4b),
+        keyColor: new THREE.Color(0xc7d2fe),
+        floorColor: new THREE.Color(0x1e293b),
+        wallColor: new THREE.Color(0x1e293b),
+        railColor: new THREE.Color(0xf43f5e)
+      },
+      {
+        id: 'space',
+        name: 'STARLINER HULL',
+        startDist: 900,
+        bg: new THREE.Color(0x040714),
+        fogDensity: 0.011,
+        hemiSky: new THREE.Color(0x7dd3fc),
+        hemiGround: new THREE.Color(0x0f172a),
+        keyColor: new THREE.Color(0xe0f2fe),
+        floorColor: new THREE.Color(0x334155),
+        wallColor: new THREE.Color(0x475569),
+        railColor: new THREE.Color(0x34d399)
+      }
+    ];
+
+    const sharedMats = {
+      floor: new THREE.MeshStandardMaterial({ map: TEX.floorDeck, bumpMap: TEX.floorBump, bumpScale: 0.025, color: 0x475569, roughness: 0.68, metalness: 0.38 }),
+      wall: new THREE.MeshStandardMaterial({ map: TEX.magWall, bumpMap: TEX.metalBump, bumpScale: 0.028, color: 0x9a5b32, roughness: 0.48, metalness: 0.52 }),
+      ceiling: new THREE.MeshStandardMaterial({ map: TEX.floorDeck, bumpMap: TEX.floorBump, bumpScale: 0.02, color: 0x1e293b, roughness: 0.44, metalness: 0.62 }),
+      railGlow: new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 1.65, roughness: 0.2 }),
+      tower: new THREE.MeshStandardMaterial({ map: TEX.chassisPanel, bumpMap: TEX.metalBump, bumpScale: 0.03, color: 0x6b4730, roughness: 0.78, metalness: 0.32 }),
+      towerAlt: new THREE.MeshStandardMaterial({ map: TEX.hazard, color: 0xd97706, roughness: 0.65, metalness: 0.3 }),
+      bolt: new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.18, metalness: 0.94, emissive: 0x0ea5e9, emissiveIntensity: 0.28 }),
+      boltCore: new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x38bdf8, emissiveIntensity: 0.9, roughness: 0.25 }),
+      gear: new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.16, metalness: 0.92, emissive: 0xd97706, emissiveIntensity: 0.4 }),
+      battery: new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.2, metalness: 0.35, emissive: 0x10b981, emissiveIntensity: 1.15 }),
+      copper: new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.22, metalness: 0.92 }),
+      sunbeam: new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }),
+      laser: new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xf43f5e, emissiveIntensity: 2.3, roughness: 0.15 }),
+      pylon: new THREE.MeshStandardMaterial({ map: TEX.hazard, bumpMap: TEX.metalBump, bumpScale: 0.015, roughness: 0.45, metalness: 0.45 }),
+      oil: new THREE.MeshPhysicalMaterial({ color: 0x1e1b4b, roughness: 0.06, metalness: 0.65, clearcoat: 1.0, iridescence: 1.0, iridescenceIOR: 1.45 }),
+      ventGlow: new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xf59e0b, emissiveIntensity: 1.35, roughness: 0.28 }),
+      ventMetal: new THREE.MeshStandardMaterial({ color: 0x475569, bumpMap: TEX.metalBump, bumpScale: 0.02, roughness: 0.4, metalness: 0.78 }),
+      steam: new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.62, depthWrite: false }),
+      moWhite: new THREE.MeshPhysicalMaterial({ color: 0xf8fafc, roughness: 0.2, metalness: 0.18, clearcoat: 0.75 }),
+      moDark: new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.45, metalness: 0.6 }),
+      moBrush: new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.35, metalness: 0.2, emissive: 0x0284c7, emissiveIntensity: 0.35 }),
+      moVisor: new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xf43f5e, emissiveIntensity: 1.75 }),
+      moBeacon: new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 1.6 }),
+      cubeProj: new THREE.MeshStandardMaterial({ map: TEX.hazard, bumpMap: TEX.metalBump, bumpScale: 0.02, color: 0xfbbf24, roughness: 0.48, metalness: 0.36 }),
+      electroFloor: new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0284c7, emissiveIntensity: 1.65, transparent: true, opacity: 0.82 })
+    };
+
+    // Space Backdrop (Earth + Atmosphere Halo + Ringed Planet + Instanced Stars for Zone 3)
+    const spaceBackdrop = new THREE.Group();
+    const earthCanvasTex = makeCanvasTexture(512, (ctx, s) => {
+      const grad = ctx.createLinearGradient(0, 0, s, s);
+      grad.addColorStop(0, '#0284c7');
+      grad.addColorStop(0.5, '#1d4ed8');
+      grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, s, s);
+      ctx.fillStyle = '#15803d';
+      for (let i = 0; i < 16; i++) {
+        ctx.beginPath();
+        ctx.ellipse((i * 89) % s, (i * 53) % s, 55, 32, i * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.68)';
+      for (let i = 0; i < 24; i++) {
+        ctx.beginPath();
+        ctx.ellipse((i * 107) % s, (i * 41) % s, 70, 14, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+    const earthMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(28, 36, 26),
+      new THREE.MeshStandardMaterial({ map: earthCanvasTex, roughness: 0.65, metalness: 0.1 })
+    );
+    earthMesh.position.set(20, 21, -112);
+    spaceBackdrop.add(earthMesh);
+
+    const earthHalo = new THREE.Mesh(
+      new THREE.SphereGeometry(29.8, 32, 24),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.16, side: THREE.BackSide, depthWrite: false })
+    );
+    earthHalo.position.copy(earthMesh.position);
+    spaceBackdrop.add(earthHalo);
+
+    // Distant Ringed Gas Planet on the left horizon
+    const ringedPlanet = new THREE.Group();
+    ringedPlanet.position.set(-34, 24, -124);
+    const gasBody = new THREE.Mesh(
+      new THREE.SphereGeometry(11, 24, 18),
+      new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.55, metalness: 0.15, emissive: 0x78350f, emissiveIntensity: 0.25 })
+    );
+    const gasRing = new THREE.Mesh(
+      new THREE.RingGeometry(14, 21, 40),
+      new THREE.MeshBasicMaterial({ color: 0xfde68a, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
+    );
+    gasRing.rotation.x = Math.PI * 0.38;
+    gasRing.rotation.y = 0.28;
+    ringedPlanet.add(gasBody, gasRing);
+    spaceBackdrop.add(ringedPlanet);
+
+    const starCount = 320;
+    const starInst = new THREE.InstancedMesh(
+      new THREE.OctahedronGeometry(0.24, 0),
+      new THREE.MeshBasicMaterial({ color: 0xf8fafc }),
+      starCount
+    );
+    const _dummy = new THREE.Object3D();
+    for (let i = 0; i < starCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const rad = 24 + Math.random() * 58;
+      _dummy.position.set(Math.cos(angle) * rad, 8 + Math.abs(Math.sin(angle)) * rad * 0.72, -18 - Math.random() * 124);
+      _dummy.scale.setScalar(0.45 + Math.random() * 1.45);
+      _dummy.updateMatrix();
+      starInst.setMatrixAt(i, _dummy.matrix);
+    }
+    starInst.instanceMatrix.needsUpdate = true;
+    starInst.frustumCulled = false;
+    spaceBackdrop.add(starInst);
+    spaceBackdrop.visible = false;
+    scene.add(spaceBackdrop);
+
+    // Track Segment Pool with Multi-Part Zone Landmarks
+    const segments = [];
+    const floorGeo = new THREE.BoxGeometry(TRACK_HALF_W * 2 + 0.8, 0.5, SEG_LEN);
+    const wallGeo = new THREE.BoxGeometry(0.6, CEIL_Y + 0.4, SEG_LEN);
+    const ceilGeo = new THREE.BoxGeometry(TRACK_HALF_W * 2 + 0.8, 0.5, SEG_LEN);
+    const pillarGeo = new THREE.BoxGeometry(0.42, CEIL_Y + 0.4, 0.55);
+    const archBeamGeo = new THREE.BoxGeometry(TRACK_HALF_W * 2 + 0.6, 0.36, 0.48);
+    const towerBaseGeo = new THREE.BoxGeometry(3.4, 7.5, 4.4);
+    const towerTopGeo = new THREE.BoxGeometry(2.4, 4.6, 3.2);
+
+    for (let i = 0; i < SEG_COUNT; i++) {
+      const grp = new THREE.Group();
+      const floor = new THREE.Mesh(floorGeo, sharedMats.floor);
+      floor.position.set(0, -0.25, 0);
+      floor.receiveShadow = true;
+      grp.add(floor);
+
+      // Curb guard rails along floor edges
+      [-1, 1].forEach((side) => {
+        const curb = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, SEG_LEN), sharedMats.ventMetal);
+        curb.position.set(side * (TRACK_HALF_W - 0.14), 0.12, 0);
+        grp.add(curb);
+      });
+
+      const leftWall = new THREE.Mesh(wallGeo, sharedMats.wall);
+      leftWall.position.set(-TRACK_HALF_W - 0.3, CEIL_Y / 2, 0);
+      leftWall.receiveShadow = true;
+      grp.add(leftWall);
+
+      const rightWall = new THREE.Mesh(wallGeo, sharedMats.wall);
+      rightWall.position.set(TRACK_HALF_W + 0.3, CEIL_Y / 2, 0);
+      rightWall.receiveShadow = true;
+      grp.add(rightWall);
+
+      // Structural wall buttress ribs + glowing magnetic rail beacons
+      [-1, 1].forEach((side) => {
+        const rib = new THREE.Mesh(pillarGeo, sharedMats.ventMetal);
+        rib.position.set(side * (TRACK_HALF_W + 0.06), CEIL_Y / 2, 0);
+        grp.add(rib);
+
+        const beacon = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.8, 0.26), sharedMats.railGlow);
+        beacon.position.set(side * (TRACK_HALF_W - 0.08), 3.3, 0);
+        grp.add(beacon);
+      });
+
+      const ceiling = new THREE.Mesh(ceilGeo, sharedMats.ceiling);
+      ceiling.position.set(0, CEIL_Y + 0.25, 0);
+      grp.add(ceiling);
+
+      const ceilBeam = new THREE.Mesh(archBeamGeo, sharedMats.ventMetal);
+      ceilBeam.position.set(0, CEIL_Y - 0.12, 0);
+      grp.add(ceilBeam);
+
+      // Glowing magnetic ceiling guide strip
+      const ceilStrip = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.09, SEG_LEN), sharedMats.railGlow);
+      ceilStrip.position.set(0, CEIL_Y - 0.03, 0);
+      grp.add(ceilStrip);
+
+      // Multi-part Exterior Canyon Scrapyard Towers (Zone 1)
+      const towerL = new THREE.Group();
+      const tBaseL = new THREE.Mesh(towerBaseGeo, sharedMats.tower);
+      const tTopL = new THREE.Mesh(towerTopGeo, i % 2 === 0 ? sharedMats.towerAlt : sharedMats.tower);
+      tTopL.position.set(0.3, 6.0, 0.2);
+      tTopL.rotation.y = 0.25;
+      towerL.add(tBaseL, tTopL);
+      towerL.position.set(-10.5 - (i % 3) * 2.2, 3.5, -2);
+      grp.add(towerL);
+
+      const towerR = new THREE.Group();
+      const tBaseR = new THREE.Mesh(towerBaseGeo, sharedMats.tower);
+      const tTopR = new THREE.Mesh(towerTopGeo, i % 2 === 1 ? sharedMats.towerAlt : sharedMats.tower);
+      tTopR.position.set(-0.3, 6.2, -0.2);
+      tTopR.rotation.y = -0.22;
+      towerR.add(tBaseR, tTopR);
+      towerR.position.set(10.5 + ((i + 1) % 3) * 2.2, 4.0, 3);
+      grp.add(towerR);
+
+      grp.position.z = -i * SEG_LEN;
+      scene.add(grp);
+      segments.push({ grp, ceiling, ceilBeam, ceilStrip, leftWall, rightWall, towerL, towerR, zCenter: -i * SEG_LEN });
+    }
+
+    // Collectible Pool (Composite Hex Bolts, Toothed ExtrudeGeometry Gears, Glass Solar Batteries)
+    const COLLECTIBLE_POOL_SIZE = 110;
+    const collectibles = [];
+
+    const gearShape = new THREE.Shape();
+    const teeth = 8;
+    for (let t = 0; t < teeth * 2; t++) {
+      const a0 = (t / (teeth * 2)) * Math.PI * 2;
+      const a1 = ((t + 0.5) / (teeth * 2)) * Math.PI * 2;
+      const r = t % 2 === 0 ? 0.42 : 0.31;
+      if (t === 0) gearShape.moveTo(Math.cos(a0) * r, Math.sin(a0) * r);
+      else gearShape.lineTo(Math.cos(a0) * r, Math.sin(a0) * r);
+      gearShape.lineTo(Math.cos(a1) * r, Math.sin(a1) * r);
+    }
+    gearShape.closePath();
+    const gearHole = new THREE.Path();
+    gearHole.absarc(0, 0, 0.14, 0, Math.PI * 2, true);
+    gearShape.holes.push(gearHole);
+    const gearGeo = new THREE.ExtrudeGeometry(gearShape, { depth: 0.14, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.02, bevelSegments: 1 });
+    gearGeo.center();
+
+    const boltGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.16, 6);
+    const boltRingGeo = new THREE.TorusGeometry(0.16, 0.04, 8, 12);
+    const battGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.54, 14);
+    const battCapGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.09, 14);
+
+    for (let i = 0; i < COLLECTIBLE_POOL_SIZE; i++) {
+      const g = new THREE.Group();
+
+      const boltMesh = new THREE.Group();
+      const boltHead = new THREE.Mesh(boltGeo, sharedMats.bolt);
+      boltHead.rotation.x = Math.PI / 2;
+      const boltCore = new THREE.Mesh(boltRingGeo, sharedMats.boltCore);
+      boltCore.position.z = 0.08;
+      boltMesh.add(boltHead, boltCore);
+
+      const gearMesh = new THREE.Mesh(gearGeo, sharedMats.gear);
+
+      const battMesh = new THREE.Group();
+      const battBody = new THREE.Mesh(battGeo, sharedMats.battery);
+      const battTop = new THREE.Mesh(battCapGeo, sharedMats.copper);
+      battTop.position.y = 0.3;
+      const battBot = new THREE.Mesh(battCapGeo, sharedMats.ventMetal);
+      battBot.position.y = -0.3;
+      battMesh.add(battBody, battTop, battBot);
+
+      g.add(boltMesh, gearMesh, battMesh);
+      g.visible = false;
+      scene.add(g);
+      collectibles.push({
+        active: false,
+        kind: 'bolt',
+        g,
+        boltMesh,
+        gearMesh,
+        battMesh,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    // Sunbeam Arch Pool (Angled Volumetric Sun-Shaft + Floor Light Pool)
+    const SUNBEAM_POOL_SIZE = 6;
+    const sunbeams = [];
+    const sunShaftGeo = new THREE.CylinderGeometry(1.9, 3.1, CEIL_Y * 1.15, 16, 1, true);
+    for (let i = 0; i < SUNBEAM_POOL_SIZE; i++) {
+      const m = new THREE.Group();
+      const shaft = new THREE.Mesh(sunShaftGeo, sharedMats.sunbeam);
+      shaft.rotation.z = -0.14;
+      const floorGlow = new THREE.Mesh(new THREE.CircleGeometry(2.9, 20), sharedMats.sunbeam);
+      floorGlow.rotation.x = -Math.PI / 2;
+      floorGlow.position.y = -CEIL_Y * 0.48 + 0.04;
+      m.add(shaft, floorGlow);
+      m.visible = false;
+      scene.add(m);
+      sunbeams.push({ active: false, mesh: m, claimed: false });
+    }
+
+    // Composite Obstacle Pool (Laser Pylons, Oil Puddle + Bubbles, Steam Vent + Valve, Articulated M-O Bot, Electro Grid)
+    const OBSTACLE_POOL_SIZE = 32;
+    const obstacles = [];
+
+    function buildCleanerBotGroup() {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new RoundedBoxGeometry(0.98, 0.64, 0.88, 3, 0.1), sharedMats.moWhite);
+      body.position.y = 0.46;
+      body.castShadow = !isSoftwareGl;
+      g.add(body);
+
+      const trim = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.1, 0.9), sharedMats.moDark);
+      trim.position.y = 0.28;
+      g.add(trim);
+
+      const visorFrame = new THREE.Mesh(new RoundedBoxGeometry(0.76, 0.24, 0.1, 2, 0.03), sharedMats.moDark);
+      visorFrame.position.set(0, 0.56, 0.42);
+      g.add(visorFrame);
+
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.13, 0.04), sharedMats.moVisor);
+      visor.position.set(0, 0.56, 0.47);
+      g.add(visor);
+
+      // Spinning amber warning beacon on top
+      const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.14, 10), sharedMats.moBeacon);
+      beacon.position.set(0, 0.84, 0);
+      g.add(beacon);
+
+      // Side scrubber arms + front spinning microfiber brush
+      [-1, 1].forEach((side) => {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.42), sharedMats.moDark);
+        arm.position.set(side * 0.52, 0.36, 0.26);
+        g.add(arm);
+      });
+
+      const brush = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.94, 12), sharedMats.moBrush);
+      brush.rotation.z = Math.PI / 2;
+      brush.position.set(0, 0.17, 0.38);
+      g.add(brush);
+      g.userData.brush = brush;
+      g.userData.beacon = beacon;
+      return g;
+    }
+
+    const pylonGeo = new THREE.CylinderGeometry(0.15, 0.22, 1.45, 10);
+    const laserBarGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.2, 10);
+    const oilGeo = new THREE.CylinderGeometry(1.08, 1.12, 0.05, 22);
+    const oilBubbleGeo = new THREE.SphereGeometry(0.13, 10, 8);
+    const ventBaseGeo = new THREE.CylinderGeometry(0.74, 0.92, 0.24, 14);
+    const ventRingGeo = new THREE.TorusGeometry(0.68, 0.08, 8, 18);
+    const ventValveGeo = new THREE.TorusGeometry(0.24, 0.045, 8, 14);
+    const electroGeo = new THREE.BoxGeometry(TRACK_HALF_W * 1.9, 0.1, 6.2);
+
+    for (let i = 0; i < OBSTACLE_POOL_SIZE; i++) {
+      const g = new THREE.Group();
+
+      // Composite Laser Gate (Twin Hazard Pylons + Dual Pulsing Laser Rods)
+      const laserMesh = new THREE.Group();
+      [-1.1, 1.1].forEach((px) => {
+        const pylon = new THREE.Mesh(pylonGeo, sharedMats.pylon);
+        pylon.position.set(px, 0.72, 0);
+        pylon.castShadow = !isSoftwareGl;
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), sharedMats.laser);
+        cap.position.set(px, 1.46, 0);
+        laserMesh.add(pylon, cap);
+      });
+      [0.52, 1.05].forEach((ly) => {
+        const rod = new THREE.Mesh(laserBarGeo, sharedMats.laser);
+        rod.rotation.z = Math.PI / 2;
+        rod.position.y = ly;
+        laserMesh.add(rod);
+      });
+
+      // Composite Iridescent Oil Slick + Floating Oil Bubbles
+      const oilMesh = new THREE.Group();
+      const oilPool = new THREE.Mesh(oilGeo, sharedMats.oil);
+      oilPool.position.y = 0.03;
+      oilMesh.add(oilPool);
+      [[-0.36, 0.22], [0.42, -0.25], [0.08, 0.45]].forEach(([bx, bz]) => {
+        const bub = new THREE.Mesh(oilBubbleGeo, sharedMats.oil);
+        bub.position.set(bx, 0.07, bz);
+        oilMesh.add(bub);
+      });
+
+      // Composite Steam Vent (Metal Grate + Glowing Caution Ring + Valve Wheel + Multi-Puff Steam)
+      const ventGroup = new THREE.Group();
+      const ventBase = new THREE.Mesh(ventBaseGeo, sharedMats.ventMetal);
+      ventBase.position.y = 0.12;
+      const ventRing = new THREE.Mesh(ventRingGeo, sharedMats.ventGlow);
+      ventRing.rotation.x = Math.PI / 2;
+      ventRing.position.y = 0.24;
+      const ventValve = new THREE.Mesh(ventValveGeo, sharedMats.laser);
+      ventValve.position.set(0.84, 0.22, 0);
+      const steamJet = new THREE.Group();
+      steamJet.position.y = 0.35;
+      [[0.45, 0.48], [1.15, 0.62], [1.95, 0.78]].forEach(([sy, sr]) => {
+        const puff = new THREE.Mesh(new THREE.DodecahedronGeometry(sr, 1), sharedMats.steam);
+        puff.position.y = sy;
+        steamJet.add(puff);
+      });
+      ventGroup.add(ventBase, ventRing, ventValve, steamJet);
+
+      const cleanerMesh = buildCleanerBotGroup();
+
+      // Composite Electrified Hazard Strip + Side Caution Rails
+      const electroMesh = new THREE.Group();
+      const electroPad = new THREE.Mesh(electroGeo, sharedMats.electroFloor);
+      electroPad.position.y = 0.06;
+      electroMesh.add(electroPad);
+      [-1, 1].forEach((side) => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 6.2), sharedMats.pylon);
+        rail.position.set(side * (TRACK_HALF_W * 0.94), 0.09, 0);
+        electroMesh.add(rail);
+      });
+
+      g.add(laserMesh, oilMesh, ventGroup, cleanerMesh, electroMesh);
+      g.visible = false;
+      scene.add(g);
+
+      obstacles.push({
+        active: false,
+        kind: 'laser',
+        surface: 'floor',
+        g,
+        laserMesh,
+        oilMesh,
+        ventGroup,
+        ventValve,
+        steamJet,
+        cleanerMesh,
+        electroMesh,
+        baseX: 0,
+        patrolDir: 1,
+        timer: 0,
+        hitCooldown: 0
+      });
+    }
+
+    // Trash Cube Projectile Pool (Beveled Compacted Cube)
+    const CUBE_PROJ_POOL = 6;
+    const projectiles = [];
+    const projGeo = new RoundedBoxGeometry(0.94, 0.94, 0.94, 2, 0.08);
+    for (let i = 0; i < CUBE_PROJ_POOL; i++) {
+      const m = new THREE.Mesh(projGeo, sharedMats.cubeProj);
+      m.visible = false;
+      scene.add(m);
+      projectiles.push({ active: false, mesh: m, life: 0 });
+    }
+
+    // Particle Pool (CO2, Magnetic Sparks, Turbo Rainbow, Bolt Smash)
+    const PARTICLE_POOL = 150;
+    const particles = [];
+    const partGeo = new THREE.DodecahedronGeometry(0.16, 0);
+    for (let i = 0; i < PARTICLE_POOL; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
+      const mesh = new THREE.Mesh(partGeo, mat);
+      mesh.visible = false;
+      scene.add(mesh);
+      particles.push({
+        active: false,
+        mesh,
+        mat,
+        vx: 0, vy: 0, vz: 0,
+        life: 0, maxLife: 1,
+        gravity: 0
+      });
+    }
+
+    function spawnParticle(x, y, z, vx, vy, vz, colorHex, scale = 1, life = 0.5, gravity = 0) {
+      for (let i = 0; i < PARTICLE_POOL; i++) {
+        const p = particles[i];
+        if (!p.active) {
+          p.active = true;
+          p.mesh.visible = true;
+          p.mesh.position.set(x, y, z);
+          p.mesh.scale.setScalar(scale);
+          p.mat.color.setHex(colorHex);
+          p.mat.opacity = 1;
+          p.vx = vx; p.vy = vy; p.vz = vz;
+          p.life = life;
+          p.maxLife = life;
+          p.gravity = gravity;
+          return;
+        }
+      }
+    }
+
+    function spawnBurst(x, y, z, colorHex, count = 10, speed = 7) {
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2;
+        spawnParticle(
+          x, y, z,
+          Math.cos(a) * speed * (0.5 + Math.random() * 0.7),
+          Math.abs(Math.sin(a)) * speed * 0.8 + 1.5,
+          (Math.random() - 0.5) * speed,
+          colorHex,
+          0.7 + Math.random() * 0.7,
+          0.42 + Math.random() * 0.25,
+          -14
+        );
+      }
+    }
+
+    // =========================================================================
+    // 7. GAMEPLAY STATE, UPGRADE STATS & INPUT HANDLING
+    // =========================================================================
+    const saveState = loadSaveState();
+    const rewardInit = processIncomingRewardParams();
+
+    const app = {
+      mode: 'title', // 'title' | 'playing' | 'paused' | 'summary'
+      passes: rewardInit.passes,
+      bolts: rewardInit.bolts,
+      practiceRun: false,
+      runActive: false,
+      shields: 3,
+      runBolts: 0,
+      runCubesSmashed: 0,
+      distance: 0,
+      speed: 22,
+      zoneIdx: 0,
+      surface: 'floor', // 'floor' | 'leftWall' | 'rightWall' | 'ceiling'
+      laneIdx: 1,       // floor/ceiling: 0,1,2; walls: 0,1
+      pos: new THREE.Vector3(0, 0, 0),
+      velY: 0,
+      velX: 0,
+      grounded: true,
+      wallTimer: 0,
+      wallMaxTime: 4.5,
+      glideFuel: 1,
+      gliding: false,
+      holdJump: false,
+      compactorFill: 0,
+      cubes: 0,
+      solarMeter: 0,
+      turboTimer: 0,
+      invulnTimer: 0,
+      oilSpinTimer: 0,
+      hatchAnim: 0,
+      eyeWidenTimer: 0,
+      camRoll: 0,
+      camFov: 64,
+      nextSpawnZ: -32,
+      nextWaveDist: 120,
+      perks: loadSparkbotPerks(),
+      calloutTimer: 0,
+      combo: 0,
+      comboTimer: 0,
+      bestCombo: 1,
+      landingSquash: 0,
+      runStemId: 'magnetism'
+    };
+
+    magBot.applySkin(saveState.skin);
+
+    function unlockStemCard(cardId) {
+      app.runStemId = cardId;
+      if (!saveState.discoveredStem.includes(cardId)) {
+        saveState.discoveredStem.push(cardId);
+        persistSave(saveState, app.passes, app.bolts);
+        const card = STEM_CARDS.find((c) => c.id === cardId);
+        if (card) showCallout(`🔬 STEM Card Unlocked: ${card.icon} ${card.title}!`, 2.2);
+      }
+    }
+
+    function bumpCombo(points = 1) {
+      app.combo += points;
+      app.comboTimer = 2.6;
+      const mult = app.combo >= 14 ? 4 : (app.combo >= 8 ? 3 : (app.combo >= 4 ? 2 : 1));
+      if (mult > app.bestCombo) app.bestCombo = mult;
+      return mult;
+    }
+
+    function getStats() {
+      const u = saveState.upgrades;
+      return {
+        wallDuration: 4.0 + (u.treads - 1) * 1.4,       // 4.0s .. 9.6s
+        boltsPerCube: Math.max(4, 9 - (u.compactor - 1)), // 9 .. 5 bolts
+        solarDuration: 5.5 + (u.solar - 1) * 1.35,      // 5.5s .. 10.9s
+        glideDrain: Math.max(0.28, 0.72 - (u.thruster - 1) * 0.1), // slower drain = longer glide
+        magnetRadius: 2.1 + (u.magnet - 1) * 1.45       // 2.1 .. 7.9 units
+      };
+    }
+
+    // DOM Elements
+    const dom = {
+      hudLayer: document.getElementById('hudLayer'),
+      hudShields: document.getElementById('hudShields'),
+      hudPasses: document.getElementById('hudPasses'),
+      hudBolts: document.getElementById('hudBolts'),
+      hudZoneLabel: document.getElementById('hudZoneLabel'),
+      hudDistance: document.getElementById('hudDistance'),
+      hudSolarPct: document.getElementById('hudSolarPct'),
+      hudSolarFill: document.getElementById('hudSolarFill'),
+      hudCubeCount: document.getElementById('hudCubeCount'),
+      hudCompactorFill: document.getElementById('hudCompactorFill'),
+      hudCubeSlots: document.getElementById('hudCubeSlots'),
+      hudNextZoneLabel: document.getElementById('hudNextZoneLabel'),
+      hudZoneFill: document.getElementById('hudZoneFill'),
+      hudComboPill: document.getElementById('hudComboPill'),
+      hudStemLive: document.getElementById('hudStemLive'),
+      hudSurfaceLabel: document.getElementById('hudSurfaceLabel'),
+      runCallout: document.getElementById('runCallout'),
+      touchCubeBtn: document.getElementById('touchCubeBtn'),
+      touchCubeBadge: document.getElementById('touchCubeBadge'),
+      titleScreen: document.getElementById('titleScreen'),
+      rewardClaimBanner: document.getElementById('rewardClaimBanner'),
+      titlePassesVal: document.getElementById('titlePassesVal'),
+      titleBoltsVal: document.getElementById('titleBoltsVal'),
+      titleBestVal: document.getElementById('titleBestVal'),
+      titlePerksList: document.getElementById('titlePerksList'),
+      startPassRunBtn: document.getElementById('startPassRunBtn'),
+      practiceRunBtn: document.getElementById('practiceRunBtn'),
+      pauseModal: document.getElementById('pauseModal'),
+      workshopModal: document.getElementById('workshopModal'),
+      workshopBoltsVal: document.getElementById('workshopBoltsVal'),
+      workshopUpgradeGrid: document.getElementById('workshopUpgradeGrid'),
+      workshopSkinGrid: document.getElementById('workshopSkinGrid'),
+      workshopScienceGrid: document.getElementById('workshopScienceGrid'),
+      summaryModal: document.getElementById('summaryModal'),
+      summaryModeKicker: document.getElementById('summaryModeKicker'),
+      summarySubtitle: document.getElementById('summarySubtitle'),
+      sumDistance: document.getElementById('sumDistance'),
+      sumBolts: document.getElementById('sumBolts'),
+      sumCubes: document.getElementById('sumCubes'),
+      sumTotalBolts: document.getElementById('sumTotalBolts'),
+      sumStemFact: document.getElementById('sumStemFact'),
+      sumPlayAgainBtn: document.getElementById('sumPlayAgainBtn')
+    };
+
+    if (rewardInit.bannerMsg) {
+      dom.rewardClaimBanner.textContent = rewardInit.bannerMsg;
+      dom.rewardClaimBanner.classList.remove('hidden');
+    }
+
+    function showCallout(text, duration = 1.9) {
+      dom.runCallout.textContent = text;
+      dom.runCallout.classList.add('visible');
+      app.calloutTimer = duration;
+    }
+
+    function syncTitleUI() {
+      app.perks = loadSparkbotPerks();
+      dom.titlePassesVal.textContent = `🎟️ ${app.passes}`;
+      dom.titleBoltsVal.textContent = `🔩 ${app.bolts}`;
+      dom.titleBestVal.textContent = `${saveState.bestDistance}m`;
+      if (dom.titlePerksList) {
+        const perkItems = [
+          {
+            active: app.perks.starterCube,
+            name: '📦 Starter Pack',
+            desc: app.perks.starterCube ? 'Active: Start with 2 Cubes' : 'Unlock: 10★ or 1 Bonus'
+          },
+          {
+            active: app.perks.goldenWave,
+            name: '✨ Golden Wave',
+            desc: app.perks.goldenWave ? 'Active: Bonus Gear Waves' : 'Unlock: 18★ or 2 Bonus'
+          },
+          {
+            active: app.perks.overchargedAura,
+            name: '🧲 Solar Aura',
+            desc: app.perks.overchargedAura ? 'Active: 50% Solar + Magnet' : 'Unlock: 3d Streak or 3 Bonus'
+          }
+        ];
+        dom.titlePerksList.innerHTML = perkItems.map((pk) => `
+          <div class="perk-chip ${pk.active ? 'active' : ''}">
+            <div class="perk-chip-name">${pk.active ? '✓ ' : '🔒 '}${pk.name}</div>
+            <div>${pk.desc}</div>
+          </div>
+        `).join('');
+      }
+      dom.startPassRunBtn.textContent = app.passes > 0
+        ? `🎟️ RUN & COLLECT (Passes: ${app.passes})`
+        : '🎟️ NEED PASSES — Clear a SparkBot Level!';
+      dom.startPassRunBtn.disabled = app.passes <= 0;
+      dom.sumPlayAgainBtn.textContent = app.passes > 0
+        ? `🎟️ Play Again (Passes: ${app.passes})`
+        : '🎮 Free Practice Run Again';
+    }
+
+    function syncHudUI() {
+      const shieldEls = dom.hudShields.children;
+      for (let i = 0; i < 3; i++) {
+        shieldEls[i].classList.toggle('broken', i >= app.shields);
+      }
+      dom.hudPasses.textContent = app.practiceRun ? 'PRACTICE' : String(app.passes);
+      dom.hudBolts.textContent = String(app.bolts + app.runBolts);
+      dom.hudDistance.textContent = `${Math.floor(app.distance)}m`;
+      dom.hudZoneLabel.textContent = ZONES[app.zoneIdx].name.split(' ')[0];
+
+      const solarPct = app.turboTimer > 0
+        ? Math.round((app.turboTimer / getStats().solarDuration) * 100)
+        : Math.min(100, Math.round(app.solarMeter));
+      dom.hudSolarPct.textContent = app.turboTimer > 0 ? 'TURBO!' : `${solarPct}%`;
+      dom.hudSolarFill.style.width = `${solarPct}%`;
+      dom.hudSolarFill.classList.toggle('turbo', app.turboTimer > 0);
+
+      const need = getStats().boltsPerCube;
+      const compPct = Math.min(100, Math.round((app.compactorFill / need) * 100));
+      dom.hudCompactorFill.style.width = `${compPct}%`;
+      dom.hudCubeCount.textContent = `${app.cubes}/3`;
+
+      const slotEls = dom.hudCubeSlots.children;
+      for (let i = 0; i < 3; i++) {
+        slotEls[i].classList.toggle('ready', i < app.cubes);
+        slotEls[i].textContent = i < app.cubes ? '📦' : String(i + 1);
+      }
+
+      dom.touchCubeBtn.disabled = app.cubes <= 0;
+      dom.touchCubeBadge.textContent = `${app.cubes} READY`;
+
+      const surfMap = {
+        floor: 'Floor Track · Swipe/Tap Edge to Wall-Run',
+        leftWall: 'Left Magnetic Wall · Jump to Ceiling or Floor',
+        rightWall: 'Right Magnetic Wall · Jump to Ceiling or Floor',
+        ceiling: 'Magnetic Ceiling Run! · Swipe Down to Drop'
+      };
+      dom.hudSurfaceLabel.textContent = surfMap[app.surface] || '';
+
+      // Zone Progress Pill
+      if (app.distance < 400) {
+        dom.hudNextZoneLabel.textContent = `Next: Neon Metro (${Math.max(0, Math.ceil(400 - app.distance))}m)`;
+        dom.hudZoneFill.style.width = `${Math.min(100, (app.distance / 400) * 100)}%`;
+      } else if (app.distance < 900) {
+        dom.hudNextZoneLabel.textContent = `Next: Space Hull (${Math.max(0, Math.ceil(900 - app.distance))}m)`;
+        dom.hudZoneFill.style.width = `${Math.min(100, ((app.distance - 400) / 500) * 100)}%`;
+      } else {
+        dom.hudNextZoneLabel.textContent = '🌌 Space Hull · Low Gravity!';
+        dom.hudZoneFill.style.width = '100%';
+      }
+
+      // Combo Multiplier Pill
+      const mult = app.combo >= 14 ? 4 : (app.combo >= 8 ? 3 : (app.combo >= 4 ? 2 : 1));
+      dom.hudComboPill.textContent = `⚡ ×${mult} STREAK (${app.combo})`;
+      dom.hudComboPill.classList.toggle('active', app.combo >= 2 && app.comboTimer > 0);
+
+      // Live Robotics Physics Indicator
+      if (app.turboTimer > 0) {
+        dom.hudStemLive.textContent = '☀️ Solar Photovoltaics: 100% OVERDRIVE';
+      } else if (app.gliding) {
+        dom.hudStemLive.textContent = '🧯 Action-Reaction: CO₂ Lift ON';
+      } else if (app.surface !== 'floor') {
+        dom.hudStemLive.textContent = '🧲 Electromagnet Coils: LOCKED';
+      } else {
+        dom.hudStemLive.textContent = '🗜️ Hydraulic Compactor: Standby';
+      }
+    }
+
+    // =========================================================================
+    // 8. WORKSHOP UI & STEM DISCOVERY CARDS
+    // =========================================================================
+    let workshopReturnTo = 'title';
+
+    function renderWorkshop() {
+      dom.workshopBoltsVal.textContent = `🔩 ${app.bolts}`;
+      dom.workshopUpgradeGrid.innerHTML = '';
+
+      UPGRADE_DEFS.forEach((def) => {
+        const lvl = saveState.upgrades[def.id] || 1;
+        const maxed = lvl >= 5;
+        const cost = Math.round(def.baseCost * Math.pow(def.mult, lvl - 1));
+        const canAfford = app.bolts >= cost && !maxed;
+
+        const card = document.createElement('div');
+        card.className = 'upgrade-item';
+        card.innerHTML = `
+          <div class="upgrade-top">
+            <div class="upgrade-name">${def.name}</div>
+            <div class="upgrade-lvl tabular">Lvl ${lvl} / 5</div>
+          </div>
+          <div class="upgrade-desc">${def.desc}</div>
+          <div class="pip-bar">
+            ${[1, 2, 3, 4, 5].map((n) => `<div class="pip ${n <= lvl ? 'filled' : ''}"></div>`).join('')}
+          </div>
+        `;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = canAfford ? 'btn-emerald' : 'btn-secondary';
+        btn.style.minHeight = '40px';
+        btn.textContent = maxed ? '✓ MAX LEVEL' : `Upgrade · 🔩 ${cost}`;
+        btn.disabled = !canAfford;
+        btn.addEventListener('click', () => {
+          if (app.bolts < cost || lvl >= 5) return;
+          app.bolts -= cost;
+          saveState.upgrades[def.id] = lvl + 1;
+          persistSave(saveState, app.passes, app.bolts);
+          SFX.compactCrunch();
+          renderWorkshop();
+          syncTitleUI();
+        });
+        card.appendChild(btn);
+        dom.workshopUpgradeGrid.appendChild(card);
+      });
+
+      dom.workshopSkinGrid.innerHTML = '';
+      SKIN_DEFS.forEach((sk) => {
+        const unlocked = saveState.unlockedSkins.includes(sk.id);
+        const equipped = saveState.skin === sk.id;
+        const card = document.createElement('div');
+        card.className = `skin-item ${equipped ? 'equipped' : ''}`;
+        card.innerHTML = `
+          <div class="skin-swatch" style="background:${sk.swatch}"></div>
+          <div class="upgrade-name">${sk.name}</div>
+          <div class="upgrade-desc">${sk.desc}</div>
+        `;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if (equipped) {
+          btn.className = 'btn-emerald';
+          btn.textContent = '✓ Equipped';
+          btn.disabled = true;
+        } else if (unlocked) {
+          btn.className = 'btn-primary';
+          btn.textContent = 'Equip Skin';
+        } else {
+          btn.className = app.bolts >= sk.cost ? 'btn-hero-pass' : 'btn-secondary';
+          btn.style.minHeight = '40px';
+          btn.style.fontSize = '0.86rem';
+          btn.textContent = `Unlock · 🔩 ${sk.cost}`;
+          btn.disabled = app.bolts < sk.cost;
+        }
+        btn.addEventListener('click', () => {
+          if (!unlocked) {
+            if (app.bolts < sk.cost) return;
+            app.bolts -= sk.cost;
+            saveState.unlockedSkins.push(sk.id);
+            SFX.fanfare();
+          } else {
+            SFX.chirp('happy');
+          }
+          saveState.skin = sk.id;
+          magBot.applySkin(sk.id);
+          persistSave(saveState, app.passes, app.bolts);
+          renderWorkshop();
+          syncTitleUI();
+        });
+        card.appendChild(btn);
+        dom.workshopSkinGrid.appendChild(card);
+      });
+
+      if (dom.workshopScienceGrid) {
+        dom.workshopScienceGrid.innerHTML = STEM_CARDS.map((sc) => {
+          const unlocked = saveState.discoveredStem.includes(sc.id);
+          return `
+            <div class="science-card ${unlocked ? '' : 'locked'}">
+              <div class="science-card-title">${unlocked ? sc.icon : '🔒'} ${sc.title}</div>
+              <div class="science-card-body">${unlocked ? sc.fact : 'Use this robot power during a run to unlock its Robotics Science Card!'}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function openWorkshop(fromWhere) {
+      workshopReturnTo = fromWhere;
+      dom.titleScreen.classList.add('hidden');
+      dom.summaryModal.classList.add('hidden');
+      renderWorkshop();
+      dom.workshopModal.classList.remove('hidden');
+    }
+
+    // =========================================================================
+    // 9. RUN LIFECYCLE & PROCEDURAL PATTERN GENERATOR (Pooled!)
+    // =========================================================================
+    function clearAllPooledEntities() {
+      collectibles.forEach((c) => { c.active = false; c.g.visible = false; });
+      obstacles.forEach((o) => { o.active = false; o.g.visible = false; });
+      sunbeams.forEach((s) => { s.active = false; s.mesh.visible = false; s.claimed = false; });
+      projectiles.forEach((p) => { p.active = false; p.mesh.visible = false; });
+      particles.forEach((p) => { p.active = false; p.mesh.visible = false; });
+    }
+
+    function spawnCollectible(kind, x, y, z) {
+      for (let i = 0; i < COLLECTIBLE_POOL_SIZE; i++) {
+        const c = collectibles[i];
+        if (!c.active) {
+          c.active = true;
+          c.kind = kind;
+          c.g.visible = true;
+          c.g.position.set(x, y, z);
+          c.boltMesh.visible = kind === 'bolt';
+          c.gearMesh.visible = kind === 'gear';
+          c.battMesh.visible = kind === 'battery';
+          return;
+        }
+      }
+    }
+
+    function spawnSunbeam(z) {
+      for (let i = 0; i < SUNBEAM_POOL_SIZE; i++) {
+        const s = sunbeams[i];
+        if (!s.active) {
+          s.active = true;
+          s.claimed = false;
+          s.mesh.visible = true;
+          s.mesh.position.set(0, CEIL_Y * 0.48, z);
+          return;
+        }
+      }
+    }
+
+    function spawnObstacle(kind, surface, x, y, z) {
+      for (let i = 0; i < OBSTACLE_POOL_SIZE; i++) {
+        const o = obstacles[i];
+        if (!o.active) {
+          o.active = true;
+          o.kind = kind;
+          o.surface = surface;
+          o.baseX = x;
+          o.patrolDir = Math.random() > 0.5 ? 1 : -1;
+          o.timer = Math.random() * 2.5;
+          o.hitCooldown = 0;
+          o.g.visible = true;
+          o.g.position.set(x, y, z);
+          o.g.rotation.set(0, 0, 0);
+          if (surface === 'leftWall') o.g.rotation.z = -Math.PI / 2;
+          else if (surface === 'rightWall') o.g.rotation.z = Math.PI / 2;
+          else if (surface === 'ceiling') o.g.rotation.z = Math.PI;
+
+          o.laserMesh.visible = kind === 'laser';
+          o.oilMesh.visible = kind === 'oil';
+          o.ventGroup.visible = kind === 'vent';
+          o.cleanerMesh.visible = kind === 'cleaner';
+          o.electroMesh.visible = kind === 'electro';
+          return;
+        }
+      }
+    }
+
+    function generateChunkAt(zStart) {
+      const distAtZ = app.distance + Math.abs(zStart);
+      const zone = distAtZ >= 900 ? 2 : (distAtZ >= 400 ? 1 : 0);
+
+      // Pick a kid-friendly pattern
+      const roll = Math.random();
+      if (roll < 0.28) {
+        // Sweeping wall-run bolt arc on left or right wall!
+        const side = Math.random() > 0.5 ? 1 : -1;
+        const wallX = side * (TRACK_HALF_W - 0.55);
+        const railY = WALL_Y[Math.random() > 0.5 ? 1 : 0];
+        for (let k = 0; k < 5; k++) {
+          spawnCollectible(k === 4 ? 'gear' : 'bolt', wallX, railY, zStart - k * 2.6);
+        }
+        // Floor laser gate below to reward riding the wall
+        spawnObstacle('laser', 'floor', LANE_X[1], 0, zStart - 5);
+      } else if (roll < 0.52 && zone >= 1) {
+        // Electrified floor strip encouraging Ceiling Run or Wall Run!
+        spawnObstacle('electro', 'floor', 0, 0, zStart - 6);
+        const cLane = LANE_X[Math.floor(Math.random() * 3)];
+        for (let k = 0; k < 5; k++) {
+          spawnCollectible(k === 2 ? 'battery' : 'bolt', cLane, CEIL_Y - 0.7, zStart - k * 2.4);
+        }
+      } else if (roll < 0.74) {
+        // Cleaner Bot (M-O) patrolling with bolts overhead for jumping!
+        const lane = LANE_X[Math.floor(Math.random() * 3)];
+        spawnObstacle('cleaner', 'floor', lane, 0, zStart - 6);
+        for (let k = 0; k < 4; k++) {
+          const arcY = 1.1 + Math.sin((k / 3) * Math.PI) * 1.4;
+          spawnCollectible('bolt', lane, arcY, zStart - 2.5 - k * 2.2);
+        }
+      } else {
+        // Mixed Floor Fun: Oil Slick + Steam Vent + Sunbeam Arch!
+        const laneA = LANE_X[Math.floor(Math.random() * 3)];
+        const laneB = LANE_X[(LANE_X.indexOf(laneA) + 1) % 3];
+        spawnObstacle(Math.random() > 0.45 ? 'vent' : 'oil', 'floor', laneA, 0, zStart - 5);
+        for (let k = 0; k < 4; k++) {
+          spawnCollectible(k === 3 ? 'gear' : 'bolt', laneB, 0.55, zStart - k * 2.5);
+        }
+        if (Math.random() < 0.45) {
+          spawnSunbeam(zStart - 10);
+        }
+      }
+    }
+
+    function startRun(isPractice) {
+      SFX.ensure();
+      if (!isPractice) {
+        if (app.passes <= 0) {
+          SFX.chirp('happy');
+          return;
+        }
+        app.passes -= 1;
+        persistSave(saveState, app.passes, app.bolts);
+      }
+
+      app.practiceRun = isPractice;
+      app.mode = 'playing';
+      app.runActive = true;
+      app.shields = 3;
+      app.runBolts = 0;
+      app.runCubesSmashed = 0;
+      app.distance = 0;
+      app.speed = 22;
+      app.zoneIdx = 0;
+      app.surface = 'floor';
+      app.laneIdx = 1;
+      app.pos.set(0, 0, 0);
+      app.velY = 0;
+      app.velX = 0;
+      app.grounded = true;
+      app.wallTimer = 0;
+      app.glideFuel = 1;
+      app.gliding = false;
+      app.holdJump = false;
+      app.compactorFill = 0;
+      app.perks = loadSparkbotPerks();
+      app.cubes = app.perks.starterCube ? 2 : 1; // Perk grants 2 starter Trash Cubes!
+      app.solarMeter = app.perks.overchargedAura ? 50 : 25;
+      app.nextWaveDist = 120;
+      app.turboTimer = 0;
+      app.invulnTimer = 0;
+      app.oilSpinTimer = 0;
+      app.hatchAnim = 0;
+      app.eyeWidenTimer = 0.8;
+      app.nextSpawnZ = -28;
+      app.combo = 0;
+      app.comboTimer = 0;
+      app.bestCombo = 1;
+      app.landingSquash = 0;
+      app.runStemId = 'magnetism';
+
+      clearAllPooledEntities();
+      for (let i = 0; i < SEG_COUNT; i++) {
+        segments[i].zCenter = -i * SEG_LEN;
+        segments[i].grp.position.z = segments[i].zCenter;
+      }
+      while (app.nextSpawnZ > -160) {
+        generateChunkAt(app.nextSpawnZ);
+        app.nextSpawnZ -= 22;
+      }
+
+      dom.titleScreen.classList.add('hidden');
+      dom.summaryModal.classList.add('hidden');
+      dom.pauseModal.classList.add('hidden');
+      dom.workshopModal.classList.add('hidden');
+      dom.hudLayer.classList.remove('hidden');
+
+      syncHudUI();
+      showCallout(isPractice ? '🎮 Free Practice Run! Let’s Roll!' : '🚀 Magnetic Wall-Run Activated!', 2.0);
+      SFX.chirp('happy');
+    }
+
+    function endRun(early = false) {
+      if (!app.runActive) return;
+      app.runActive = false;
+      app.mode = 'summary';
+      SFX.setGlide(false);
+
+      const finalDist = Math.floor(app.distance);
+      app.bolts += app.runBolts;
+      if (finalDist > saveState.bestDistance) saveState.bestDistance = finalDist;
+      saveState.totalRuns += 1;
+      persistSave(saveState, app.passes, app.bolts);
+
+      dom.hudLayer.classList.add('hidden');
+      dom.pauseModal.classList.add('hidden');
+      dom.summaryModeKicker.textContent = app.practiceRun ? 'PRACTICE COMPLETE!' : (early ? 'RUN BANKED!' : 'SHIELDS DEPLETED — GREAT RUN!');
+      dom.summarySubtitle.textContent = app.practiceRun
+        ? 'You kept all practice Scrap Bolts in your Workshop!'
+        : 'All collected Scrap Bolts are safely banked in your Workshop!';
+      dom.sumDistance.textContent = `${finalDist}m`;
+      dom.sumBolts.textContent = `+${app.runBolts} 🔩`;
+      dom.sumCubes.textContent = `${app.runCubesSmashed} 📦 · ×${app.bestCombo}`;
+      dom.sumTotalBolts.textContent = `${app.bolts} 🔩`;
+
+      const factCard = STEM_CARDS.find((c) => c.id === app.runStemId) || STEM_CARDS[0];
+      if (dom.sumStemFact) {
+        dom.sumStemFact.innerHTML = `<strong>${factCard.icon} Robot Science Highlight: ${factCard.title}</strong>${factCard.fact}`;
+      }
+
+      syncTitleUI();
+      dom.summaryModal.classList.remove('hidden');
+      SFX.fanfare();
+    }
+
+    // =========================================================================
+    // 10. PLAYER ACTIONS (Wall-Run, Ceiling-Run, Jump, Glide, Trash Cube)
+    // =========================================================================
+    function attachSurface(newSurf, newLane) {
+      app.surface = newSurf;
+      app.laneIdx = newLane;
+      app.grounded = true;
+      app.velX = 0;
+      app.velY = 0;
+      app.gliding = false;
+      app.glideFuel = 1;
+      app.landingSquash = 0.25;
+      if (newSurf !== 'floor') {
+        app.wallMaxTime = getStats().wallDuration;
+        app.wallTimer = app.wallMaxTime;
+        unlockStemCard('magnetism');
+        SFX.magAttach();
+        spawnBurst(app.pos.x, app.pos.y + 0.5, 0, 0x38bdf8, 8, 5);
+      }
+      syncHudUI();
+    }
+
+    function steerHorizontal(dir) {
+      if (app.mode !== 'playing') return;
+      if (app.surface === 'floor' || app.surface === 'ceiling') {
+        const next = app.laneIdx + dir;
+        if (next >= 0 && next <= 2) {
+          app.laneIdx = next;
+          SFX.chirp('pickup');
+        } else if (next < 0) {
+          // Jump onto Left Magnetic Wall!
+          attachSurface('leftWall', app.surface === 'ceiling' ? 1 : 0);
+        } else if (next > 2) {
+          // Jump onto Right Magnetic Wall!
+          attachSurface('rightWall', app.surface === 'ceiling' ? 1 : 0);
+        }
+      } else if (app.surface === 'leftWall') {
+        if (dir > 0) {
+          if (app.zoneIdx >= 1 && app.laneIdx === 1 && app.pos.y > 4.0) attachSurface('ceiling', 0);
+          else {
+            app.surface = 'floor';
+            app.laneIdx = 0;
+            app.grounded = false;
+            app.velY = 3.5;
+            app.velX = 5;
+          }
+        }
+      } else if (app.surface === 'rightWall') {
+        if (dir < 0) {
+          if (app.zoneIdx >= 1 && app.laneIdx === 1 && app.pos.y > 4.0) attachSurface('ceiling', 2);
+          else {
+            app.surface = 'floor';
+            app.laneIdx = 2;
+            app.grounded = false;
+            app.velY = 3.5;
+            app.velX = -5;
+          }
+        }
+      }
+      syncHudUI();
+    }
+
+    function triggerJump() {
+      if (app.mode !== 'playing') return;
+      app.holdJump = true;
+      app.eyeWidenTimer = 0.55;
+      const lowGrav = app.zoneIdx === 2;
+      const jumpPower = lowGrav ? 14.5 : 12.2;
+
+      if (app.surface === 'floor') {
+        if (app.grounded) {
+          app.grounded = false;
+          app.velY = jumpPower;
+          SFX.chirp('jump');
+          spawnBurst(app.pos.x, 0.2, 0, 0xfbbf24, 6, 4);
+        }
+      } else if (app.surface === 'leftWall' || app.surface === 'rightWall') {
+        if (app.laneIdx === 0) {
+          app.laneIdx = 1;
+          app.wallTimer = getStats().wallDuration;
+          SFX.magAttach();
+        } else if (app.zoneIdx >= 1) {
+          // Leap up to Magnetic Ceiling in Zone 2 & 3!
+          attachSurface('ceiling', app.surface === 'leftWall' ? 0 : 2);
+        } else {
+          // Zone 1 canyon leap back toward track
+          const wasLeft = app.surface === 'leftWall';
+          app.surface = 'floor';
+          app.laneIdx = wasLeft ? 0 : 2;
+          app.grounded = false;
+          app.velY = jumpPower * 0.72;
+          SFX.chirp('jump');
+        }
+      } else if (app.surface === 'ceiling') {
+        app.surface = 'floor';
+        app.grounded = false;
+        app.velY = -4.0;
+        SFX.chirp('jump');
+      }
+      syncHudUI();
+    }
+
+    function triggerDropDown() {
+      if (app.mode !== 'playing') return;
+      if (app.surface === 'ceiling') {
+        app.surface = 'floor';
+        app.grounded = false;
+        app.velY = -10;
+      } else if (app.surface === 'leftWall' || app.surface === 'rightWall') {
+        if (app.laneIdx === 1) {
+          app.laneIdx = 0;
+          SFX.magAttach();
+        } else {
+          const wasLeft = app.surface === 'leftWall';
+          app.surface = 'floor';
+          app.laneIdx = wasLeft ? 0 : 2;
+          app.grounded = false;
+          app.velY = -4;
+        }
+      } else if (!app.grounded) {
+        app.velY = Math.min(app.velY, -16);
+      }
+      syncHudUI();
+    }
+
+    function throwTrashCube() {
+      if (app.mode !== 'playing' || app.cubes <= 0) return;
+      for (let i = 0; i < CUBE_PROJ_POOL; i++) {
+        const p = projectiles[i];
+        if (!p.active) {
+          app.cubes -= 1;
+          p.active = true;
+          p.life = 2.4;
+          p.mesh.visible = true;
+          p.mesh.position.set(app.pos.x, app.pos.y + 0.65, -1.2);
+          SFX.cubeThrow();
+          app.eyeWidenTimer = 0.45;
+          syncHudUI();
+          return;
+        }
+      }
+    }
+
+    // Keyboard & Touch Gesture Wiring
+    window.addEventListener('keydown', (e) => {
+      if (app.mode !== 'playing') {
+        if (e.key === 'Escape' && app.mode === 'paused') {
+          app.mode = 'playing';
+          dom.pauseModal.classList.add('hidden');
+        }
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { e.preventDefault(); steerHorizontal(-1); }
+      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { e.preventDefault(); steerHorizontal(1); }
+      else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
+        e.preventDefault();
+        if (!e.repeat) triggerJump();
+        else app.holdJump = true;
+      } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        triggerDropDown();
+      } else if (e.key === 'f' || e.key === 'F' || e.key === 'e' || e.key === 'E' || e.key === 'Enter') {
+        e.preventDefault();
+        throwTrashCube();
+      } else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+        e.preventDefault();
+        app.mode = 'paused';
+        SFX.setGlide(false);
+        dom.pauseModal.classList.remove('hidden');
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
+        app.holdJump = false;
+      }
+    });
+
+    // Swipe + Hold on Canvas
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchSwiped = false;
+    canvas.addEventListener('pointerdown', (e) => {
+      if (app.mode !== 'playing') return;
+      touchStartX = e.clientX;
+      touchStartY = e.clientY;
+      touchSwiped = false;
+      if (!app.grounded && app.surface === 'floor') {
+        app.holdJump = true;
+      }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (app.mode !== 'playing' || touchSwiped || !e.buttons) return;
+      const dx = e.clientX - touchStartX;
+      const dy = e.clientY - touchStartY;
+      if (Math.hypot(dx, dy) > 28) {
+        touchSwiped = true;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          steerHorizontal(dx > 0 ? 1 : -1);
+        } else if (dy < 0) {
+          triggerJump();
+        } else {
+          triggerDropDown();
+        }
+      }
+    });
+    window.addEventListener('pointerup', () => {
+      app.holdJump = false;
+    });
+
+    // Dedicated Tablet Touch Buttons
+    document.getElementById('touchLeftBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); steerHorizontal(-1); });
+    document.getElementById('touchRightBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); steerHorizontal(1); });
+    document.getElementById('touchCubeBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); throwTrashCube(); });
+    const jumpBtn = document.getElementById('touchJumpBtn');
+    jumpBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerJump(); });
+    jumpBtn.addEventListener('pointerup', () => { app.holdJump = false; });
+    jumpBtn.addEventListener('pointercancel', () => { app.holdJump = false; });
+
+    // UI Buttons
+    dom.startPassRunBtn.addEventListener('click', () => startRun(false));
+    dom.practiceRunBtn.addEventListener('click', () => startRun(true));
+    document.getElementById('openWorkshopBtn').addEventListener('click', () => openWorkshop('title'));
+    document.getElementById('backSparkbotBtn').addEventListener('click', returnToSparkBot);
+    document.getElementById('closeWorkshopBtn').addEventListener('click', () => {
+      dom.workshopModal.classList.add('hidden');
+      if (workshopReturnTo === 'summary') dom.summaryModal.classList.remove('hidden');
+      else dom.titleScreen.classList.remove('hidden');
+    });
+    document.getElementById('hudMuteBtn').addEventListener('click', (e) => {
+      SFX.muted = !SFX.muted;
+      if (SFX.muted) SFX.setGlide(false);
+      e.currentTarget.textContent = SFX.muted ? '🔇' : '🔊';
+    });
+    document.getElementById('hudPauseBtn').addEventListener('click', () => {
+      if (app.mode === 'playing') {
+        app.mode = 'paused';
+        SFX.setGlide(false);
+        dom.pauseModal.classList.remove('hidden');
+      }
+    });
+    document.getElementById('resumeRunBtn').addEventListener('click', () => {
+      dom.pauseModal.classList.add('hidden');
+      app.mode = 'playing';
+    });
+    document.getElementById('finishEarlyBtn').addEventListener('click', () => endRun(true));
+    dom.sumPlayAgainBtn.addEventListener('click', () => startRun(app.passes <= 0));
+    document.getElementById('sumWorkshopBtn').addEventListener('click', () => openWorkshop('summary'));
+    document.getElementById('sumTitleBtn').addEventListener('click', () => {
+      dom.summaryModal.classList.add('hidden');
+      app.mode = 'title';
+      syncTitleUI();
+      dom.titleScreen.classList.remove('hidden');
+    });
+    document.getElementById('sumBackSparkbotBtn').addEventListener('click', returnToSparkBot);
+    document.getElementById('reloadWebglBtn').addEventListener('click', () => window.location.reload());
+    document.getElementById('fallbackBackBtn').addEventListener('click', returnToSparkBot);
+
+    window.addEventListener('resize', () => {
+      if (!renderer) return;
+      camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // =========================================================================
+    // 11. MAIN SIMULATION & RENDER LOOP (Zero-GC, Smooth Damping, Soft-GL Safe)
+    // =========================================================================
+    const _v3 = new THREE.Vector3();
+    const clock = new THREE.Clock();
+    let frameId = 0;
+    let totalTime = 0;
+
+    function handleShieldBounce(obst) {
+      if (app.invulnTimer > 0) return;
+      if (app.turboTimer > 0) {
+        // Solar Turbo smashes obstacles!
+        obst.active = false;
+        obst.g.visible = false;
+        app.runBolts += 10;
+        SFX.cubeSmash();
+        spawnBurst(obst.g.position.x, obst.g.position.y + 0.7, obst.g.position.z, 0xfbbf24, 12, 8);
+        return;
+      }
+
+      app.shields -= 1;
+      app.invulnTimer = 2.0;
+      app.velY = 8.5;
+      app.grounded = false;
+      if (app.surface !== 'floor') app.surface = 'floor';
+      SFX.springBounce();
+      spawnBurst(app.pos.x, app.pos.y + 0.8, 0, 0x38bdf8, 14, 9);
+
+      // Clear nearby hazards ahead so child never gets double-hit
+      obstacles.forEach((other) => {
+        if (other.active && other.g.position.z > -16 && other.g.position.z < 4) {
+          other.active = false;
+          other.g.visible = false;
+        }
+      });
+
+      if (app.shields <= 0) {
+        syncHudUI();
+        endRun(false);
+      } else {
+        showCallout(`🛡️ Spring Bounce! ${app.shields} Shield${app.shields === 1 ? '' : 's'} Left!`, 1.7);
+        syncHudUI();
+      }
+    }
+
+    function updateGameplay(dt) {
+      const stats = getStats();
+      if (app.calloutTimer > 0) {
+        app.calloutTimer -= dt;
+        if (app.calloutTimer <= 0) dom.runCallout.classList.remove('visible');
+      }
+      if (app.invulnTimer > 0) app.invulnTimer = Math.max(0, app.invulnTimer - dt);
+      if (app.oilSpinTimer > 0) app.oilSpinTimer = Math.max(0, app.oilSpinTimer - dt);
+      if (app.hatchAnim > 0) app.hatchAnim = Math.max(0, app.hatchAnim - dt * 2.5);
+      if (app.eyeWidenTimer > 0) app.eyeWidenTimer = Math.max(0, app.eyeWidenTimer - dt);
+      if (app.landingSquash > 0) app.landingSquash = Math.max(0, app.landingSquash - dt * 3.2);
+      if (app.comboTimer > 0) {
+        app.comboTimer -= dt;
+        if (app.comboTimer <= 0 && app.combo > 0) {
+          app.combo = 0;
+          syncHudUI();
+        }
+      }
+
+      // Zone progression (0–400m Scrapyard, 400–900m Neon Metro, 900m+ Space Hull)
+      const prevZone = app.zoneIdx;
+      app.zoneIdx = app.distance >= 900 ? 2 : (app.distance >= 400 ? 1 : 0);
+      if (app.zoneIdx !== prevZone) {
+        const msg = app.zoneIdx === 1
+          ? '⚡ NEON METRO TUNNEL! Jump from top wall for Ceiling Runs!'
+          : '🌌 STARLINER SPACE HULL! Low-Gravity Super Jumps Active!';
+        showCallout(msg, 2.6);
+        SFX.solarTurbo();
+      }
+
+      // Turbo Timer & Base Speed
+      if (app.turboTimer > 0) {
+        app.turboTimer = Math.max(0, app.turboTimer - dt);
+        app.solarMeter = 0;
+        // Rainbow/gold turbo trail
+        const colors = [0xfde047, 0x38bdf8, 0x34d399, 0xf472b6];
+        const col = colors[Math.floor(totalTime * 18) % colors.length];
+        spawnParticle(
+          app.pos.x + (Math.random() - 0.5) * 0.6,
+          app.pos.y + 0.5 + (Math.random() - 0.5) * 0.4,
+          0.9,
+          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 2,
+          12,
+          col,
+          1.2,
+          0.35
+        );
+      }
+
+      const targetSpeed = 22 + Math.min(18, app.distance * 0.015) + (app.turboTimer > 0 ? 16 : 0);
+      app.speed = THREE.MathUtils.damp(app.speed, targetSpeed, 5, dt);
+      const dz = app.speed * dt;
+      app.distance += dz * 0.45;
+
+      // Player Surface Target Position & Physics
+      let targetX = 0;
+      let targetY = 0;
+      let targetRoll = 0;
+
+      if (app.surface === 'floor') {
+        targetX = LANE_X[app.laneIdx];
+        app.pos.x = THREE.MathUtils.damp(app.pos.x, targetX, 14, dt);
+        const grav = app.zoneIdx === 2 ? -17.5 : -28.0; // Low-gravity in Space!
+        const canGlide = app.holdJump && !app.grounded && app.velY < 1.5 && app.glideFuel > 0;
+        const prevGlide = app.gliding;
+        app.gliding = canGlide;
+        if (canGlide) {
+          if (!prevGlide) unlockStemCard('propulsion');
+          app.velY = THREE.MathUtils.damp(app.velY, -2.4, 9, dt);
+          app.glideFuel = Math.max(0, app.glideFuel - stats.glideDrain * dt);
+          spawnParticle(
+            app.pos.x + (Math.random() - 0.5) * 0.18,
+            app.pos.y + 0.35,
+            0.78,
+            (Math.random() - 0.5) * 1.4,
+            -2.5,
+            5,
+            0xf8fafc,
+            1.15,
+            0.32
+          );
+        } else {
+          app.velY += grav * dt;
+        }
+        SFX.setGlide(canGlide);
+        app.pos.y += app.velY * dt;
+        if (app.pos.y <= 0) {
+          if (!app.grounded) app.landingSquash = 0.28;
+          app.pos.y = 0;
+          app.velY = 0;
+          app.grounded = true;
+          app.glideFuel = 1;
+          app.gliding = false;
+        }
+        targetRoll = 0;
+      } else if (app.surface === 'leftWall' || app.surface === 'rightWall') {
+        SFX.setGlide(false);
+        const isLeft = app.surface === 'leftWall';
+        targetX = isLeft ? -(TRACK_HALF_W - 0.45) : (TRACK_HALF_W - 0.45);
+        targetY = WALL_Y[app.laneIdx];
+        app.pos.x = THREE.MathUtils.damp(app.pos.x, targetX, 16, dt);
+        app.pos.y = THREE.MathUtils.damp(app.pos.y, targetY, 14, dt);
+        targetRoll = isLeft ? -Math.PI / 2 : Math.PI / 2;
+
+        // Magnetic blue sparks
+        if (Math.random() < 0.45) {
+          spawnParticle(
+            targetX + (isLeft ? -0.2 : 0.2),
+            app.pos.y + (Math.random() - 0.5) * 0.5,
+            0.2,
+            isLeft ? 2.5 : -2.5,
+            (Math.random() - 0.5) * 2,
+            6,
+            0x38bdf8,
+            0.7,
+            0.26
+          );
+        }
+        app.wallTimer -= dt;
+        if (app.wallTimer <= 0) {
+          app.surface = 'floor';
+          app.laneIdx = isLeft ? 0 : 2;
+          app.grounded = false;
+          app.velY = 2;
+        }
+      } else if (app.surface === 'ceiling') {
+        SFX.setGlide(false);
+        targetX = LANE_X[app.laneIdx];
+        targetY = CEIL_Y - 0.35;
+        app.pos.x = THREE.MathUtils.damp(app.pos.x, targetX, 14, dt);
+        app.pos.y = THREE.MathUtils.damp(app.pos.y, targetY, 14, dt);
+        targetRoll = Math.PI;
+        if (Math.random() < 0.35) {
+          spawnParticle(app.pos.x, CEIL_Y - 0.1, 0.2, (Math.random() - 0.5) * 2, -2, 6, 0x38bdf8, 0.7, 0.24);
+        }
+        app.wallTimer -= dt;
+        if (app.wallTimer <= 0) {
+          app.surface = 'floor';
+          app.grounded = false;
+          app.velY = -3;
+        }
+      }
+
+      // Scroll Pooled Track Segments
+      for (let i = 0; i < SEG_COUNT; i++) {
+        const s = segments[i];
+        s.zCenter += dz;
+        if (s.zCenter > SEG_LEN * 1.1) {
+          s.zCenter -= SEG_LEN * SEG_COUNT;
+        }
+        s.grp.position.z = s.zCenter;
+      }
+
+      // Spawn New Patterns Ahead
+      app.nextSpawnZ += dz;
+      while (app.nextSpawnZ > -155) {
+        generateChunkAt(app.nextSpawnZ - 24);
+        app.nextSpawnZ -= 22;
+      }
+
+      // SparkBot Mastery Perk: Periodic Golden Gear & Bolt Waves
+      if (app.perks.goldenWave && app.distance >= app.nextWaveDist) {
+        app.nextWaveDist += 240;
+        for (let w = 0; w < 6; w++) {
+          const wx = LANE_X[w % 3];
+          spawnCollectible(w % 2 === 0 ? 'gear' : 'bolt', wx, 0.75 + (w % 2) * 0.45, -84 - w * 2.5);
+        }
+        showCallout('✨ SparkBot Perk: Golden Bolt Wave!', 1.8);
+      }
+
+      // Update Sunbeams
+      for (let i = 0; i < SUNBEAM_POOL_SIZE; i++) {
+        const sb = sunbeams[i];
+        if (!sb.active) continue;
+        sb.mesh.position.z += dz;
+        if (!sb.claimed && Math.abs(sb.mesh.position.z) < 1.3) {
+          sb.claimed = true;
+          app.solarMeter = Math.min(100, app.solarMeter + 42);
+          SFX.chirp('gear');
+          spawnBurst(app.pos.x, app.pos.y + 1.1, 0, 0xfde047, 10, 7);
+          if (app.solarMeter >= 100 && app.turboTimer <= 0) {
+            app.turboTimer = stats.solarDuration;
+            unlockStemCard('solar');
+            SFX.solarTurbo();
+            showCallout('☀️ SOLAR TURBO! INVINCIBLE BOOST!', 2.2);
+          }
+          syncHudUI();
+        }
+        if (sb.mesh.position.z > 14) {
+          sb.active = false;
+          sb.mesh.visible = false;
+        }
+      }
+
+      // Update Collectibles + Super Scrap Magnet + Combo Streak
+      const magR = stats.magnetRadius + (app.perks.overchargedAura ? 1.5 : 0) + (app.turboTimer > 0 ? 4 : 0);
+      for (let i = 0; i < COLLECTIBLE_POOL_SIZE; i++) {
+        const c = collectibles[i];
+        if (!c.active) continue;
+        c.g.position.z += dz;
+        c.g.rotation.y += dt * 3.4;
+        c.g.position.y += Math.sin(totalTime * 5 + c.phase) * 0.004;
+
+        _v3.set(app.pos.x - c.g.position.x, (app.pos.y + 0.6) - c.g.position.y, -c.g.position.z);
+        const dist = _v3.length();
+        if (dist < magR && c.g.position.z < 2.2) {
+          _v3.normalize();
+          const pull = (16 + app.speed * 0.45) * dt;
+          c.g.position.addScaledVector(_v3, pull);
+        }
+
+        if (dist < 1.25) {
+          c.active = false;
+          c.g.visible = false;
+          app.eyeWidenTimer = 0.25;
+          const mult = bumpCombo(1);
+          if (c.kind === 'bolt') {
+            app.runBolts += mult;
+            app.compactorFill += 1;
+            SFX.chirp('pickup');
+            spawnBurst(c.g.position.x, c.g.position.y, 0, 0x38bdf8, 5, 4);
+          } else if (c.kind === 'gear') {
+            app.runBolts += 5 * mult;
+            app.compactorFill += 2;
+            SFX.chirp('gear');
+            spawnBurst(c.g.position.x, c.g.position.y, 0, 0xfbbf24, 9, 6);
+          } else if (c.kind === 'battery') {
+            app.runBolts += 10 * mult;
+            app.solarMeter = Math.min(100, app.solarMeter + 26);
+            SFX.chirp('gear');
+            spawnBurst(c.g.position.x, c.g.position.y, 0, 0x34d399, 10, 6);
+            if (app.solarMeter >= 100 && app.turboTimer <= 0) {
+              app.turboTimer = stats.solarDuration;
+              unlockStemCard('solar');
+              SFX.solarTurbo();
+              showCallout('☀️ SOLAR TURBO! INVINCIBLE BOOST!', 2.2);
+            }
+          }
+
+          if (app.compactorFill >= stats.boltsPerCube) {
+            app.compactorFill -= stats.boltsPerCube;
+            if (app.cubes < 3) {
+              app.cubes += 1;
+              app.hatchAnim = 1;
+              unlockStemCard('hydraulics');
+              SFX.compactCrunch();
+              showCallout('📦 Trash Cube Compacted!', 1.2);
+            }
+          }
+          syncHudUI();
+          continue;
+        }
+
+        if (c.g.position.z > 12) {
+          c.active = false;
+          c.g.visible = false;
+        }
+      }
+
+      // Update Trash Cube Projectiles
+      for (let i = 0; i < CUBE_PROJ_POOL; i++) {
+        const p = projectiles[i];
+        if (!p.active) continue;
+        p.life -= dt;
+        p.mesh.position.z -= (app.speed + 38) * dt;
+        p.mesh.rotation.x -= dt * 9;
+        p.mesh.rotation.y += dt * 5;
+
+        for (let j = 0; j < OBSTACLE_POOL_SIZE; j++) {
+          const o = obstacles[j];
+          if (!o.active || o.kind === 'electro') continue;
+          const d = p.mesh.position.distanceTo(o.g.position);
+          if (d < 2.2) {
+            o.active = false;
+            o.g.visible = false;
+            p.active = false;
+            p.mesh.visible = false;
+            const mult = bumpCombo(2);
+            app.runCubesSmashed += 1;
+            app.runBolts += 15 * mult;
+            unlockStemCard('hydraulics');
+            SFX.cubeSmash();
+            spawnBurst(o.g.position.x, o.g.position.y + 0.7, o.g.position.z, 0xfbbf24, 16, 10);
+            showCallout(`💥 SMASH! +${15 * mult} Bonus Bolts!`, 1.4);
+            syncHudUI();
+            break;
+          }
+        }
+
+        if (p.life <= 0) {
+          p.active = false;
+          p.mesh.visible = false;
+        }
+      }
+
+      // Update Obstacles
+      for (let i = 0; i < OBSTACLE_POOL_SIZE; i++) {
+        const o = obstacles[i];
+        if (!o.active) continue;
+        o.g.position.z += dz;
+        o.timer += dt;
+
+        if (o.kind === 'cleaner') {
+          o.g.position.x += o.patrolDir * 2.1 * dt;
+          if (o.g.position.x > 2.9) o.patrolDir = -1;
+          if (o.g.position.x < -2.9) o.patrolDir = 1;
+          if (o.cleanerMesh.userData.brush) {
+            o.cleanerMesh.userData.brush.rotation.x += dt * 16;
+          }
+          if (o.cleanerMesh.userData.beacon) {
+            o.cleanerMesh.userData.beacon.rotation.y += dt * 8;
+          }
+        } else if (o.kind === 'vent') {
+          const cycle = o.timer % 2.2;
+          const puffing = cycle > 1.05;
+          o.steamJet.visible = puffing;
+          o.steamJet.scale.y = puffing ? 0.8 + Math.sin(totalTime * 22) * 0.2 : 0.1;
+          if (o.ventValve) o.ventValve.rotation.z += dt * (puffing ? 9 : 2.5);
+          sharedMats.ventGlow.emissiveIntensity = cycle > 0.4 ? (1.2 + Math.sin(totalTime * 20) * 0.8) : 0.3;
+        }
+
+        // Player Collision Check
+        if (Math.abs(o.g.position.z) < 0.95) {
+          if (o.kind === 'electro') {
+            if (app.surface === 'floor' && app.pos.y < 0.85) {
+              handleShieldBounce(o);
+            }
+          } else {
+            const dx = Math.abs(app.pos.x - o.g.position.x);
+            const dy = Math.abs(app.pos.y - o.g.position.y);
+            const hitH = o.kind === 'vent' ? (o.steamJet.visible ? 2.1 : 0.45) : (o.kind === 'oil' ? 0.45 : 1.15);
+            const hitW = o.kind === 'laser' ? 1.45 : 1.05;
+            if (dx < hitW && dy < hitH) {
+              if (o.kind === 'oil') {
+                if (app.oilSpinTimer <= 0) {
+                  app.oilSpinTimer = 0.75;
+                  app.velY = 4.5;
+                  app.grounded = false;
+                  SFX.oilSlip();
+                  showCallout('🫧 Whoops! Slippery Oil Spin!', 1.2);
+                }
+              } else {
+                handleShieldBounce(o);
+              }
+            }
+          }
+        }
+
+        if (o.g.position.z > 12) {
+          o.active = false;
+          o.g.visible = false;
+        }
+      }
+
+      // Smooth Mag-Bot Visual Orientation, Squash-Stretch, Coils & Thruster Animation
+      magBot.root.position.copy(app.pos);
+      magBot.visual.rotation.z = THREE.MathUtils.damp(magBot.visual.rotation.z, targetRoll, 14, dt);
+      if (app.oilSpinTimer > 0) {
+        magBot.visual.rotation.y += dt * 16;
+      } else {
+        magBot.visual.rotation.y = THREE.MathUtils.damp(magBot.visual.rotation.y, 0, 12, dt);
+      }
+
+      const sq = app.landingSquash;
+      magBot.visual.scale.set(1 + sq * 0.38, 1 - sq * 0.42, 1 + sq * 0.25);
+      magBot.arms.forEach((arm, idx) => {
+        const wave = app.gliding ? 0.45 : Math.sin(totalTime * 11 + idx * Math.PI) * 0.14;
+        arm.rotation.x = THREE.MathUtils.damp(arm.rotation.x, wave, 12, dt);
+      });
+      magBot.mats.magCoil.emissiveIntensity = app.surface !== 'floor' ? 2.2 : 0.3;
+      magBot.mats.co2Plume.opacity = app.gliding ? (0.55 + Math.sin(totalTime * 35) * 0.18) : 0;
+      magBot.co2Cone.scale.setScalar(app.gliding ? (0.95 + Math.sin(totalTime * 28) * 0.15) : 0.01);
+
+      magBot.wheels.forEach((w) => { w.rotation.x -= dt * app.speed * 0.65; });
+      magBot.hatchPivot.rotation.x = Math.sin(app.hatchAnim * Math.PI) * 0.65;
+      magBot.shieldMesh.visible = app.shields > 0;
+      magBot.mats.shield.opacity = app.invulnTimer > 0
+        ? (0.15 + Math.abs(Math.sin(totalTime * 18)) * 0.35)
+        : (0.14 + app.shields * 0.06);
+      magBot.contactShadow.visible = app.surface === 'floor';
+      magBot.contactShadow.position.y = 0.03 - app.pos.y;
+      const shScale = Math.max(0.35, 1 - app.pos.y * 0.14);
+      magBot.contactShadow.scale.setScalar(shScale);
+
+      // Expressive Eyes & Pupils (Turbo happy squint vs Jump/Collect widen)
+      const eyeScaleY = app.turboTimer > 0 ? 0.52 : (app.eyeWidenTimer > 0 || !app.grounded ? 1.25 : 1.0);
+      magBot.eyes.forEach((eye) => {
+        eye.scale.y = THREE.MathUtils.damp(eye.scale.y, eyeScaleY, 14, dt);
+      });
+      magBot.pupils.forEach((p, idx) => {
+        const baseX = (idx === 0 ? -1 : 1) * 0.23;
+        const lookX = THREE.MathUtils.clamp((app.pos.x - LANE_X[app.laneIdx]) * -0.025, -0.035, 0.035);
+        p.position.x = THREE.MathUtils.damp(p.position.x, baseX + lookX, 12, dt);
+        p.scale.setScalar(app.eyeWidenTimer > 0 ? 1.24 : 1.0);
+      });
+      magBot.brows.forEach((b, idx) => {
+        const tilt = app.turboTimer > 0 ? (idx === 0 ? -0.22 : 0.22) : 0;
+        b.rotation.z = THREE.MathUtils.damp(b.rotation.z, tilt, 12, dt);
+      });
+
+      // Dynamic Camera Follow + Wall-Run Tilt + Turbo FOV Boost
+      const camTargetRoll = app.surface === 'leftWall' ? -0.3 : (app.surface === 'rightWall' ? 0.3 : (app.surface === 'ceiling' ? 0.12 : 0));
+      app.camRoll = THREE.MathUtils.damp(app.camRoll, camTargetRoll, 8, dt);
+      const targetFov = app.turboTimer > 0 ? 78 : 64;
+      app.camFov = THREE.MathUtils.damp(app.camFov, targetFov, 6, dt);
+      if (Math.abs(camera.fov - app.camFov) > 0.05) {
+        camera.fov = app.camFov;
+        camera.updateProjectionMatrix();
+      }
+
+      const desiredCamX = app.pos.x * 0.52;
+      const desiredCamY = app.surface === 'ceiling' ? 4.4 : Math.max(3.6, app.pos.y + 3.7);
+      camera.position.x = THREE.MathUtils.damp(camera.position.x, desiredCamX, 8, dt);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, desiredCamY, 8, dt);
+      camera.position.z = 8.4;
+      camera.lookAt(app.pos.x * 0.4, app.pos.y + 1.35, -7);
+      camera.rotation.z += app.camRoll;
+
+      // Zone Atmosphere Blend
+      const zCfg = ZONES[app.zoneIdx];
+      scene.background.lerp(zCfg.bg, dt * 1.8);
+      scene.fog.color.lerp(zCfg.bg, dt * 1.8);
+      scene.fog.density = THREE.MathUtils.damp(scene.fog.density, zCfg.fogDensity, 2, dt);
+      hemiLight.color.lerp(zCfg.hemiSky, dt * 1.8);
+      hemiLight.groundColor.lerp(zCfg.hemiGround, dt * 1.8);
+      keyLight.color.lerp(zCfg.keyColor, dt * 1.8);
+      sharedMats.floor.color.lerp(zCfg.floorColor, dt * 1.8);
+      sharedMats.wall.color.lerp(zCfg.wallColor, dt * 1.8);
+      sharedMats.railGlow.color.lerp(zCfg.railColor, dt * 2.2);
+      sharedMats.railGlow.emissive.lerp(zCfg.railColor, dt * 2.2);
+
+      const showTowers = app.zoneIdx === 0;
+      const showCeiling = app.zoneIdx >= 1;
+      for (let i = 0; i < SEG_COUNT; i++) {
+        segments[i].towerL.visible = showTowers;
+        segments[i].towerR.visible = showTowers;
+        segments[i].ceiling.visible = showCeiling;
+        segments[i].ceilBeam.visible = showCeiling;
+        segments[i].ceilStrip.visible = showCeiling;
+      }
+      spaceBackdrop.visible = app.zoneIdx === 2;
+      if (spaceBackdrop.visible) {
+        earthMesh.rotation.y += dt * 0.05;
+        ringedPlanet.rotation.y += dt * 0.03;
+      }
+
+      if (Math.floor(totalTime * 10) !== Math.floor((totalTime - dt) * 10)) {
+        dom.hudDistance.textContent = `${Math.floor(app.distance)}m`;
+        if (app.distance < 400) {
+          dom.hudNextZoneLabel.textContent = `Next: Neon Metro (${Math.max(0, Math.ceil(400 - app.distance))}m)`;
+          dom.hudZoneFill.style.width = `${Math.min(100, (app.distance / 400) * 100)}%`;
+        } else if (app.distance < 900) {
+          dom.hudNextZoneLabel.textContent = `Next: Space Hull (${Math.max(0, Math.ceil(900 - app.distance))}m)`;
+          dom.hudZoneFill.style.width = `${Math.min(100, ((app.distance - 400) / 500) * 100)}%`;
+        }
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = 0; i < PARTICLE_POOL; i++) {
+        const p = particles[i];
+        if (!p.active) continue;
+        p.life -= dt;
+        if (p.life <= 0) {
+          p.active = false;
+          p.mesh.visible = false;
+          continue;
+        }
+        p.vy += p.gravity * dt;
+        p.mesh.position.x += p.vx * dt;
+        p.mesh.position.y += p.vy * dt;
+        p.mesh.position.z += p.vz * dt;
+        p.mat.opacity = Math.max(0, p.life / p.maxLife);
+      }
+    }
+
+    function updateIdleTitleScene(dt) {
+      const z0 = ZONES[0];
+      scene.background.lerp(z0.bg, dt * 3);
+      scene.fog.color.lerp(z0.bg, dt * 3);
+      scene.fog.density = THREE.MathUtils.damp(scene.fog.density, z0.fogDensity, 3, dt);
+      hemiLight.color.lerp(z0.hemiSky, dt * 3);
+      hemiLight.groundColor.lerp(z0.hemiGround, dt * 3);
+      keyLight.color.lerp(z0.keyColor, dt * 3);
+      sharedMats.floor.color.lerp(z0.floorColor, dt * 3);
+      sharedMats.wall.color.lerp(z0.wallColor, dt * 3);
+      sharedMats.railGlow.color.lerp(z0.railColor, dt * 3);
+      sharedMats.railGlow.emissive.lerp(z0.railColor, dt * 3);
+      spaceBackdrop.visible = false;
+
+      const dz = 10 * dt;
+      for (let i = 0; i < SEG_COUNT; i++) {
+        const s = segments[i];
+        s.zCenter += dz;
+        if (s.zCenter > SEG_LEN * 1.1) s.zCenter -= SEG_LEN * SEG_COUNT;
+        s.grp.position.z = s.zCenter;
+        s.towerL.visible = true;
+        s.towerR.visible = true;
+        s.ceiling.visible = false;
+        s.ceilBeam.visible = false;
+        s.ceilStrip.visible = false;
+      }
+      magBot.root.position.set(1.5, Math.abs(Math.sin(totalTime * 2.4)) * 0.14, 1.2);
+      magBot.visual.rotation.set(0, -0.38 + Math.sin(totalTime * 1.2) * 0.08, 0);
+      magBot.visual.scale.setScalar(1);
+      magBot.arms.forEach((arm, idx) => {
+        arm.rotation.x = Math.sin(totalTime * 3.6 + idx * Math.PI) * 0.16;
+      });
+      magBot.mats.magCoil.emissiveIntensity = 0.65 + Math.sin(totalTime * 4) * 0.35;
+      magBot.mats.co2Plume.opacity = 0;
+      magBot.co2Cone.scale.setScalar(0.01);
+      magBot.wheels.forEach((w) => { w.rotation.x -= dt * 7; });
+      magBot.headGroup.rotation.y = Math.sin(totalTime * 1.6) * 0.22;
+      magBot.headGroup.rotation.z = Math.sin(totalTime * 1.1) * 0.07;
+      magBot.shieldMesh.visible = true;
+      magBot.mats.shield.opacity = 0.2;
+      camera.position.set(-0.6, 2.5, 6.2);
+      camera.lookAt(0.4, 1.1, 0);
+    }
+
+    function afterDraw(cb) {
+      const gl = renderer.getContext();
+      if (!gl || typeof gl.fenceSync !== 'function') {
+        frameId = window.setTimeout(cb, 80);
+        return;
+      }
+      const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+      const poll = () => {
+        const st = sync && gl.getSyncParameter(sync, gl.SYNC_STATUS);
+        if (st === gl.UNSIGNALED) {
+          frameId = window.setTimeout(poll, 5);
+        } else {
+          if (sync) gl.deleteSync(sync);
+          frameId = window.setTimeout(cb, 80);
+        }
+      };
+      frameId = window.setTimeout(poll, 5);
+    }
+
+    function tick() {
+      const dt = Math.min(0.05, clock.getDelta());
+      totalTime += dt;
+
+      if (app.mode === 'playing') {
+        updateGameplay(dt);
+      } else if (app.mode === 'title' || app.mode === 'summary') {
+        updateIdleTitleScene(dt);
+      }
+      updateParticles(dt);
+
+      if (renderer) {
+        renderer.render(scene, camera);
+        if (isSoftwareGl) afterDraw(tick);
+        else frameId = requestAnimationFrame(tick);
+      }
+    }
+
+    syncTitleUI();
+    if (renderer) {
+      if (!isSoftwareGl) renderer.compile(scene, camera);
+      tick();
+    }
+  </script>
+</body>
+</html>

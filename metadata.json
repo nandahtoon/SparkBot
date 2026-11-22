@@ -1,4 +1,8 @@
 {
-  "name": "SparkBot",
-  "description": "Imported SparkBot workspace from GitHub repository nandahtoon/SparkBot."
+  "name": "Remix Remix SparkBot: Engineering Academy",
+  "description": "Build, code, and solve puzzles in this interactive adventure game designed to teach kids logic and programming basics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
