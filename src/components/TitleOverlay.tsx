@@ -29,6 +29,7 @@ import {
 } from '../game/engine';
 import { HazardIcon, SparkBotEmblem } from './Icons';
 import { MuteIndicator, useMuteFlash } from './MuteIndicator';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface TitleOverlayProps {
   nextLevelId: number;
@@ -123,19 +124,19 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
     streakInfo.tier >= 7 ? '#fde047' : streakInfo.tier >= 3 ? '#34d399' : '#38bdf8';
 
   return (
-    <div className="pointer-events-none safe-top safe-bottom fixed inset-0 z-20 flex flex-col justify-between px-2.5 sm:px-6 sm:py-5">
+    <div className="pointer-events-none safe-top safe-bottom fixed inset-0 z-20 flex flex-col justify-between px-2 sm:px-6 sm:py-5">
       {/* Top Bar */}
-      <div className="flex items-start justify-between gap-1.5 sm:gap-3">
-        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2.5">
+      <div className="flex items-start justify-between gap-1 sm:gap-3">
+        <div className="pointer-events-auto flex min-w-0 items-center gap-1 sm:gap-2.5">
           <button
             id="titleProfileBtn"
             type="button"
             onClick={onOpenProfile}
             aria-label={`Open Save Profile (${profileName} — ${charDef.name})`}
-            className="flex h-10 items-center gap-1.5 rounded-xl border border-slate-600/80 bg-slate-900/94 px-1.5 py-1 text-left shadow-xl transition-transform hover:border-sky-400 active:scale-95 sm:h-14 sm:gap-2.5 sm:rounded-2xl sm:px-3 sm:py-1.5"
+            className="flex h-9 min-w-0 items-center gap-1 rounded-xl border border-slate-600/80 bg-slate-900/94 px-1.5 py-1 text-left shadow-xl transition-transform hover:border-sky-400 active:scale-95 sm:h-14 sm:gap-2.5 sm:rounded-2xl sm:px-3 sm:py-1.5"
           >
             <div
-              className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-slate-800 sm:h-11 sm:w-11 sm:rounded-xl"
+              className="relative flex h-6.5 w-6.5 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-slate-800 sm:h-11 sm:w-11 sm:rounded-xl"
               style={{ borderColor: charDef.accentCss }}
             >
               {charDef.portraitUrl ? (
@@ -150,19 +151,19 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                   }}
                 />
               ) : (
-                <SparkBotEmblem className="h-6 w-6 sm:h-10 sm:w-10" />
+                <SparkBotEmblem className="h-5.5 w-5.5 sm:h-10 sm:w-10" />
               )}
             </div>
             <div className="flex min-w-0 flex-col gap-0.5">
               <span
                 data-testid="title-profile-name"
-                className="max-w-[96px] truncate text-[11px] font-black leading-tight text-white sm:max-w-[140px] sm:text-xs"
+                className="max-w-[54px] truncate text-[10px] font-black leading-tight text-white sm:max-w-[140px] sm:text-xs"
               >
                 {profileName}
               </span>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="flex items-center gap-0.5 text-[11px] font-extrabold text-amber-300 tabular sm:text-sm">
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-400 sm:h-3.5 sm:w-3.5" />
+              <div className="flex items-center gap-1 sm:gap-2">
+                <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-amber-300 tabular sm:text-sm">
+                  <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400 sm:h-3.5 sm:w-3.5" />
                   {totalStars}
                 </span>
                 <span className="hidden items-center gap-0.5 text-[10px] font-bold text-sky-300 tabular sm:flex sm:text-xs">
@@ -173,14 +174,14 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             </div>
           </button>
 
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={onToggleMute}
               aria-label={muted ? 'Unmute Sound' : 'Mute Sound'}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/94 text-slate-100 shadow-lg transition-transform active:scale-95 hover:border-sky-400 sm:h-14 sm:w-14 sm:rounded-2xl"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/94 text-slate-100 shadow-lg transition-transform active:scale-95 hover:border-sky-400 sm:h-14 sm:w-14 sm:rounded-2xl"
             >
-              {muted ? <VolumeX className="h-4.5 w-4.5 text-rose-400 sm:h-6 sm:w-6" /> : <Volume2 className="h-4.5 w-4.5 text-sky-300 sm:h-6 sm:w-6" />}
+              {muted ? <VolumeX className="h-4 w-4 text-rose-400 sm:h-6 sm:w-6" /> : <Volume2 className="h-4 w-4 text-sky-300 sm:h-6 sm:w-6" />}
             </button>
             <MuteIndicator muted={muted} visible={muteFlashVisible} flashKey={muteFlashKey} />
           </div>
@@ -203,24 +204,26 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             type="button"
             onClick={onOpenSettings}
             aria-label="Audio and Settings"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/94 text-slate-100 shadow-lg transition-transform active:scale-95 hover:border-sky-400 sm:h-14 sm:w-14 sm:rounded-2xl"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/94 text-slate-100 shadow-lg transition-transform active:scale-95 hover:border-sky-400 sm:h-14 sm:w-14 sm:rounded-2xl"
           >
-            <Settings className="h-4.5 w-4.5 text-sky-300 sm:h-6 sm:w-6" />
+            <Settings className="h-4 w-4 text-sky-300 sm:h-6 sm:w-6" />
           </button>
+
+          <PWAInstallButton variant="compact" />
         </div>
 
         {/* Right Controls */}
-        <div className="pointer-events-auto flex items-center gap-1 sm:gap-2">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-1 sm:gap-2">
           <button
             id="dailyChallengeBtn"
             type="button"
             onClick={onStartDaily}
             aria-label={`Daily Challenge Streak ${streak}`}
             data-tier={streakInfo.tier}
-            className={`relative flex h-10 items-center gap-1 rounded-xl border-2 px-1.5 shadow-xl transition-transform active:scale-95 hover:scale-[1.03] sm:h-14 sm:gap-2 sm:rounded-2xl sm:px-3 lg:h-16 ${tierStyle}`}
+            className={`relative flex h-9 items-center gap-0.5 rounded-xl border-2 px-1 shadow-xl transition-transform active:scale-95 hover:scale-[1.03] sm:h-14 sm:gap-2 sm:rounded-2xl sm:px-3 lg:h-16 ${tierStyle}`}
           >
-            <div className="relative flex h-7 w-7 items-center justify-center sm:h-11 sm:w-11 lg:h-12 lg:w-12">
-              <svg className="h-7 w-7 -rotate-90 sm:h-11 sm:w-11 lg:h-12 lg:w-12" viewBox="0 0 56 56" aria-hidden="true">
+            <div className="relative flex h-6 w-6 items-center justify-center sm:h-11 sm:w-11 lg:h-12 lg:w-12">
+              <svg className="h-6 w-6 -rotate-90 sm:h-11 sm:w-11 lg:h-12 lg:w-12" viewBox="0 0 56 56" aria-hidden="true">
                 <circle
                   cx="28"
                   cy="28"
@@ -250,7 +253,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               </svg>
               <span className="anim-flame-flicker absolute inline-flex items-center justify-center">
                 <Flame
-                  className={`h-3.5 w-3.5 sm:h-5 sm:w-5 ${
+                  className={`h-3 w-3 sm:h-5 sm:w-5 ${
                     streakInfo.tier >= 7
                       ? 'fill-amber-300 text-amber-300'
                       : streakInfo.tier >= 3
@@ -261,7 +264,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               </span>
             </div>
             <div className="flex flex-col items-center">
-              <span className="tabular text-sm font-black leading-none text-white sm:text-lg">{streak}</span>
+              <span className="tabular text-xs font-black leading-none text-white sm:text-lg">{streak}</span>
               {dailyStars > 0 && (
                 <div className="mt-0.5 flex gap-0.5 sm:mt-1">
                   {[1, 2, 3].map((s) => (
@@ -282,9 +285,9 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             type="button"
             onClick={onOpenTrophies}
             aria-label="STEM Trophy Shelf"
-            className="flex h-10 items-center gap-1 rounded-xl border border-amber-400/75 bg-slate-900/94 px-2 text-amber-300 shadow-xl transition-transform active:scale-95 hover:border-amber-300 sm:h-14 sm:gap-2 sm:rounded-2xl sm:px-3 lg:h-16"
+            className="flex h-9 items-center gap-0.5 rounded-xl border border-amber-400/75 bg-slate-900/94 px-1.5 text-amber-300 shadow-xl transition-transform active:scale-95 hover:border-amber-300 sm:h-14 sm:gap-2 sm:rounded-2xl sm:px-3 lg:h-16"
           >
-            <Trophy className="h-4 w-4 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+            <Trophy className="h-3.5 w-3.5 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
             <span className="tabular text-xs font-black text-amber-200 sm:text-base lg:text-lg">{trophyTiers}</span>
           </button>
 
@@ -312,18 +315,18 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             type="button"
             onClick={onOpenLevelMap}
             aria-label="Level Select Map"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/94 text-sky-300 shadow-xl transition-transform active:scale-95 hover:border-sky-400 sm:h-14 sm:w-14 sm:rounded-2xl lg:h-16 lg:w-16"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/94 text-sky-300 shadow-xl transition-transform active:scale-95 hover:border-sky-400 sm:h-14 sm:w-14 sm:rounded-2xl lg:h-16 lg:w-16"
           >
-            <LayoutGrid className="h-4.5 w-4.5 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+            <LayoutGrid className="h-4 w-4 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
           </button>
 
           <button
             type="button"
             onClick={onStartActionDash}
             aria-label="Endless 3D Wall-Run Dash"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-fuchsia-400/80 bg-slate-900/94 text-fuchsia-300 shadow-xl transition-transform active:scale-95 hover:scale-105 sm:h-14 sm:w-14 sm:rounded-2xl lg:h-16 lg:w-16"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-fuchsia-400/80 bg-slate-900/94 text-fuchsia-300 shadow-xl transition-transform active:scale-95 hover:scale-105 sm:h-14 sm:w-14 sm:rounded-2xl lg:h-16 lg:w-16"
           >
-            <Zap className="h-4.5 w-4.5 fill-fuchsia-400 text-fuchsia-300 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+            <Zap className="h-4 w-4 fill-fuchsia-400 text-fuchsia-300 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
           </button>
         </div>
       </div>

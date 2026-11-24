@@ -150,6 +150,9 @@ import {
 import type { WorkshopCameraControls } from './components/WorkshopOrbitStrip';
 import { useChallengeTimer } from './hooks/useChallengeTimer';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useAndroidBackButton } from './hooks/useAndroidBackButton';
+import { HAPTICS, type AndroidBackAction } from './game/androidApp';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 const TrophyShelfModal = React.lazy(() =>
   import('./components/TrophyShelfModal').then((m) => ({ default: m.TrophyShelfModal }))
@@ -353,6 +356,10 @@ export default function App() {
     SPEECH.setEnabled(Boolean(save.readAloudEnabled));
   }, [save.readAloudEnabled]);
 
+  useEffect(() => {
+    HAPTICS.setEnabled(save.hapticsEnabled !== false);
+  }, [save.hapticsEnabled]);
+
   // Sync low-graphics mode with 3D world & document attribute
   useEffect(() => {
     worldRef.current?.setLowGraphics(lowGraphics);
@@ -541,10 +548,12 @@ export default function App() {
     setCircuitGrid(nextGrid);
     worldRef.current?.setCircuitGrid(nextGrid);
     SFX.mirror();
+    HAPTICS.trigger('tap');
 
     const trace = traceCircuit(nextGrid);
     if (trace.solved) {
       SFX.laserSolved();
+      HAPTICS.trigger('victory');
       worldRef.current?.setMood('happy', 2.4);
       setCircuitSolvedFreeze(true);
 
@@ -868,7 +877,11 @@ export default function App() {
         ctrl.updateChassis(latest.chassis, null);
 
         const params = new URLSearchParams(window.location.search);
-        if (latest.mode === 'TITLE' && params.get('autostart') === '1') {
+        if (latest.mode === 'TITLE' && params.get('launch') === 'planet') {
+          ctrl.updateChassis(latest.chassis, null);
+          ctrl.startPlanetAdventure(latest.save.gentleSpeed);
+          setMode('PLANET_ADVENTURE_3D');
+        } else if (latest.mode === 'TITLE' && params.get('autostart') === '1') {
           setMode('BUILD_3D');
           setGhostHelp(latest.currentLevel.id === 1 && !latest.save.tutorialDone);
           ctrl.setMode('BUILD_3D');
@@ -917,10 +930,89 @@ export default function App() {
     setPaused
   });
 
+  const handleAndroidBackAction = useCallback(
+    (action: AndroidBackAction) => {
+      HAPTICS.trigger('tap');
+      SFX.click();
+      switch (action) {
+        case 'close_class_code':
+          setShowClassCode(false);
+          break;
+        case 'close_sandbox':
+          setShowSandbox(false);
+          break;
+        case 'close_parent_dashboard':
+          setShowParentDashboard(false);
+          break;
+        case 'close_game_room':
+          setPlanetSummary(null);
+          setShowGameRoom(false);
+          break;
+        case 'close_trophies':
+          setShowTrophies(false);
+          break;
+        case 'close_profile':
+          setShowProfile(false);
+          break;
+        case 'close_settings':
+          setShowSettings(false);
+          break;
+        case 'close_map':
+          setShowMap(false);
+          break;
+        case 'close_demo':
+          setActiveDemo(null);
+          break;
+        case 'resume_pause':
+          setPaused(false);
+          break;
+        case 'exit_paint_booth':
+          setWorkshopAutoSpin(false);
+          worldRef.current?.setWorkshopAutoSpin(false);
+          setMode('BUILD_3D');
+          worldRef.current?.setMode('BUILD_3D');
+          break;
+        case 'exit_planet_adventure':
+          planetKeysRef.current.clear();
+          setMode('TITLE');
+          worldRef.current?.setMode('TITLE');
+          break;
+        case 'return_title_from_victory':
+          setMode('TITLE');
+          worldRef.current?.setMode('TITLE');
+          break;
+        case 'open_pause':
+          setPaused(true);
+          break;
+        default:
+          break;
+      }
+    },
+    []
+  );
+
+  useAndroidBackButton(
+    {
+      mode,
+      paused,
+      hasActiveDemo: Boolean(activeDemo),
+      showClassCode,
+      showSandbox,
+      showParentDashboard,
+      showGameRoom,
+      showTrophies,
+      showProfile,
+      showSettings,
+      showMap
+    },
+    handleAndroidBackAction
+  );
+
   const handlePlacePart = (part: PartId, r: number, c: number) => {
     const check = canPlacePartInSlot(chassis, currentLevel.budget, part, r, c);
     if (!check.ok) {
       SFX.chirpConfused();
+      HAPTICS.trigger('error');
       worldRef.current?.setMood('confused', 1.4);
       setMoodCue({ mood: 'confused', part });
       return;
@@ -942,6 +1034,7 @@ export default function App() {
     setMoodCue(null);
     const soundProfile = getPartPlacementSoundProfile(part);
     SFX.placePart(part);
+    HAPTICS.trigger('snapPart');
     window.setTimeout(() => SFX.placePartFollowUp(part), soundProfile.followUpDelayMs);
     worldRef.current?.updateChassis(next, null, [r, c], part);
   };
@@ -1121,6 +1214,18 @@ export default function App() {
       const nextEnabled = !Boolean(prev.readAloudEnabled);
       SPEECH.setEnabled(nextEnabled);
       const next: SaveProfile = { ...prev, readAloudEnabled: nextEnabled };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  };
+
+  const handleToggleHaptics = () => {
+    SFX.uiTick();
+    setSave((prev) => {
+      const nextEnabled = prev.hapticsEnabled === false;
+      HAPTICS.setEnabled(nextEnabled);
+      if (nextEnabled) HAPTICS.trigger('tap');
+      const next: SaveProfile = { ...prev, hapticsEnabled: nextEnabled };
       saveActiveRosterProfile(next);
       return next;
     });
@@ -2016,7 +2121,10 @@ export default function App() {
         <ActionRunHud
           metrics={actionMetrics}
           onSteer={(dir) => worldRef.current?.steerActionDash(dir)}
-          onJump={() => worldRef.current?.jumpActionDash()}
+          onJump={() => {
+            HAPTICS.trigger('jump');
+            worldRef.current?.jumpActionDash();
+          }}
         />
       )}
 
@@ -2025,9 +2133,18 @@ export default function App() {
         <PlanetAdventureHud
           metrics={planetMetrics}
           onMoveInput={(forward, strafe) => worldRef.current?.setPlanetMoveInput(forward, strafe)}
-          onJump={() => worldRef.current?.jumpPlanetAdventure()}
-          onBoost={() => worldRef.current?.triggerPlanetBoost()}
-          onLaser={() => worldRef.current?.firePlanetLaser()}
+          onJump={() => {
+            HAPTICS.trigger('jump');
+            worldRef.current?.jumpPlanetAdventure();
+          }}
+          onBoost={() => {
+            HAPTICS.trigger('boost');
+            worldRef.current?.triggerPlanetBoost();
+          }}
+          onLaser={() => {
+            HAPTICS.trigger('laser');
+            worldRef.current?.firePlanetLaser();
+          }}
           onExit={() => {
             SFX.click();
             handlePlanetFinish({ ...planetMetrics, status: 'exited' });
@@ -2114,6 +2231,7 @@ export default function App() {
         challengeTimerEnabled={challengeTimerEnabled}
         adaptiveHintsEnabled={save.adaptiveHintsEnabled !== false}
         readAloudEnabled={Boolean(save.readAloudEnabled)}
+        hapticsEnabled={save.hapticsEnabled !== false}
         onToggleMute={handleToggleMute}
         onChangeAudio={handleChangeAudio}
         onTestSfx={() => SFX.weldSparks()}
@@ -2130,6 +2248,7 @@ export default function App() {
         onToggleChallengeTimer={handleToggleChallengeTimer}
         onToggleAdaptiveHints={handleToggleAdaptiveHints}
         onToggleReadAloud={handleToggleReadAloud}
+        onToggleHaptics={handleToggleHaptics}
         onOpenParentView={() => {
           SFX.click();
           setShowSettings(false);
@@ -2346,6 +2465,8 @@ export default function App() {
           </button>
         </div>
       )}
+      {/* Offline PWA Status Indicator */}
+      <OfflineIndicator />
     </div>
   );
 }

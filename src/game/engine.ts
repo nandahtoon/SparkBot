@@ -909,6 +909,7 @@ export function defaultSaveProfile(): SaveProfile {
     lowGraphics: false,
     challengeTimerEnabled: false,
     readAloudEnabled: false,
+    hapticsEnabled: true,
     bestTimes: {},
     tutorialDone: false,
     botTheme: 'amber',

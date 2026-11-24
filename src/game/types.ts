@@ -337,6 +337,7 @@ export interface SaveProfile {
   lowGraphics?: boolean;
   challengeTimerEnabled?: boolean;
   readAloudEnabled?: boolean;
+  hapticsEnabled?: boolean;
   bestTimes?: Record<string, number>;
   tutorialDone: boolean;
   botTheme?: BotThemeId;

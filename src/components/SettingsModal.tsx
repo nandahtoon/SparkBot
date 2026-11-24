@@ -10,12 +10,14 @@ import {
   Sparkles,
   Timer,
   Turtle,
+  Vibrate,
   Volume2,
   VolumeX,
   Wrench,
   X
 } from 'lucide-react';
 import type { AudioSettings } from '../game/audioConfig';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -26,6 +28,7 @@ interface SettingsModalProps {
   challengeTimerEnabled: boolean;
   adaptiveHintsEnabled?: boolean;
   readAloudEnabled?: boolean;
+  hapticsEnabled?: boolean;
   onToggleMute: () => void;
   onChangeAudio: (next: Partial<AudioSettings>) => void;
   onTestSfx: () => void;
@@ -36,6 +39,7 @@ interface SettingsModalProps {
   onToggleChallengeTimer: () => void;
   onToggleAdaptiveHints?: () => void;
   onToggleReadAloud?: () => void;
+  onToggleHaptics?: () => void;
   onOpenParentView?: () => void;
   onClose: () => void;
 }
@@ -49,6 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   challengeTimerEnabled,
   adaptiveHintsEnabled = true,
   readAloudEnabled = false,
+  hapticsEnabled = true,
   onToggleMute,
   onChangeAudio,
   onTestSfx,
@@ -59,6 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleChallengeTimer,
   onToggleAdaptiveHints,
   onToggleReadAloud,
+  onToggleHaptics,
   onOpenParentView,
   onClose
 }) => {
@@ -458,6 +464,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
         )}
+
+        {/* Android Tactile Haptic Vibration Row */}
+        {onToggleHaptics && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/65 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                  hapticsEnabled
+                    ? 'border-fuchsia-400/70 bg-fuchsia-500/20 text-fuchsia-200'
+                    : 'border-slate-700 bg-slate-900 text-slate-300'
+                }`}
+              >
+                <Vibrate className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold uppercase tracking-wider text-slate-100">
+                  Haptic Vibration
+                </div>
+                <div className="text-[11px] font-medium leading-tight text-slate-400">
+                  {hapticsEnabled
+                    ? 'Tactile buzz on snaps, lasers & victories'
+                    : 'Touch vibration feedback off'}
+                </div>
+              </div>
+            </div>
+
+            <button
+              id="hapticsToggle"
+              type="button"
+              role="switch"
+              aria-checked={hapticsEnabled}
+              aria-label="Haptic Vibration"
+              onClick={onToggleHaptics}
+              className={`flex h-9 min-w-[74px] shrink-0 items-center justify-center rounded-xl border-2 px-3 text-xs font-black uppercase tracking-wide transition-transform active:scale-95 ${
+                hapticsEnabled
+                  ? 'border-fuchsia-300 bg-fuchsia-500/25 text-fuchsia-100'
+                  : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-fuchsia-300'
+              }`}
+            >
+              {hapticsEnabled ? 'On' : 'Off'}
+            </button>
+          </div>
+        )}
+
+        {/* Install Android / Mobile App Row */}
+        <PWAInstallButton variant="settings" />
 
         {/* Grown-Ups Progress View Entry */}
         {onOpenParentView && (

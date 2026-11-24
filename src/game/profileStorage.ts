@@ -94,6 +94,7 @@ export function normalizeSaveProfileData(parsed: Partial<SaveProfile> | null | u
     lowGraphics: Boolean(parsed.lowGraphics),
     challengeTimerEnabled: Boolean(parsed.challengeTimerEnabled),
     readAloudEnabled: Boolean(parsed.readAloudEnabled),
+    hapticsEnabled: parsed.hapticsEnabled === undefined ? true : Boolean(parsed.hapticsEnabled),
     bestTimes: normalizeBestTimes(parsed.bestTimes),
     botTheme,
     botCharacter,

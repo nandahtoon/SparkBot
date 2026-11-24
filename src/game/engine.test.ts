@@ -21,6 +21,7 @@ import * as ChallengeTimer from './challengeTimer';
 import * as LevelHistory from './levelHistory';
 import * as PlanetAdv from './planetAdventure';
 import * as ResponsiveCamera from '../three/responsiveCamera';
+import * as AndroidApp from './androidApp';
 
 test('magnet part attaches cleanly to chassis and lowers Action Dash bolt-per-cube threshold', () => {
   const chassis = E.createEmptyChassis();
@@ -1194,11 +1195,96 @@ test('Planet Expedition derives abilities directly from equipped mission chassis
   assert.ok(ResponsiveCamera.computeResponsiveCameraFraming('PLANET_ADVENTURE_3D', 390, 844).baseFov >= 56);
 });
 
+test('Android app platform detection, tactile haptics, Back navigation priority, and PWA/Capacitor assets', () => {
+  // Platform detection
+  assert.equal(
+    AndroidApp.detectMobilePlatform('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36'),
+    'android'
+  );
+  assert.equal(
+    AndroidApp.detectMobilePlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'),
+    'ios'
+  );
+  assert.equal(
+    AndroidApp.detectMobilePlatform('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'),
+    'desktop'
+  );
 
+  // Haptics controller respects enabled flag and dispatches expected vibration patterns
+  const calls: Array<number | number[]> = [];
+  const fakeVibrate = (p: number | number[]) => {
+    calls.push(p);
+    return true;
+  };
+  AndroidApp.HAPTICS.setEnabled(true);
+  assert.equal(AndroidApp.HAPTICS.trigger('snapPart', fakeVibrate), true);
+  assert.deepEqual(calls[0], AndroidApp.HAPTIC_PATTERNS.snapPart);
+  AndroidApp.HAPTICS.setEnabled(false);
+  assert.equal(AndroidApp.HAPTICS.trigger('victory', fakeVibrate), false);
+  assert.equal(calls.length, 1);
+  AndroidApp.HAPTICS.setEnabled(true);
 
+  // Back button priority resolver
+  const baseBack: AndroidApp.AndroidBackState = {
+    mode: 'BUILD_3D',
+    paused: false,
+    hasActiveDemo: false,
+    showClassCode: false,
+    showSandbox: false,
+    showParentDashboard: false,
+    showGameRoom: false,
+    showTrophies: false,
+    showProfile: false,
+    showSettings: false,
+    showMap: false
+  };
+  assert.equal(
+    AndroidApp.resolveAndroidBackAction({ ...baseBack, showSettings: true, showMap: true }),
+    'close_settings'
+  );
+  assert.equal(
+    AndroidApp.resolveAndroidBackAction({ ...baseBack, paused: true }),
+    'resume_pause'
+  );
+  assert.equal(
+    AndroidApp.resolveAndroidBackAction({ ...baseBack, mode: 'PAINT_BOOTH' }),
+    'exit_paint_booth'
+  );
+  assert.equal(
+    AndroidApp.resolveAndroidBackAction({ ...baseBack, mode: 'PLANET_ADVENTURE_3D' }),
+    'exit_planet_adventure'
+  );
+  assert.equal(
+    AndroidApp.resolveAndroidBackAction({ ...baseBack, mode: 'BUILD_3D' }),
+    'open_pause'
+  );
+  assert.equal(
+    AndroidApp.resolveAndroidBackAction({ ...baseBack, mode: 'VICTORY' }),
+    'return_title_from_victory'
+  );
+  assert.equal(
+    AndroidApp.resolveAndroidBackAction({ ...baseBack, mode: 'TITLE' }),
+    'none'
+  );
 
+  // hapticsEnabled default + save persistence
+  const def = E.defaultSaveProfile();
+  assert.equal(def.hapticsEnabled, true);
+  assert.equal(ProfileStorage.normalizeSaveProfileData({}).hapticsEnabled, true);
+  assert.equal(ProfileStorage.normalizeSaveProfileData({ hapticsEnabled: false }).hapticsEnabled, false);
 
-
-
-
-
+  // Required Android PWA icons & Capacitor packaging files exist
+  for (const rel of [
+    'public/icon.svg',
+    'public/icon-maskable.svg',
+    'public/apple-touch-icon.png',
+    'public/pwa-192x192.png',
+    'public/pwa-512x512.png',
+    'public/pwa-maskable-512x512.png',
+    'capacitor.config.ts',
+    'ANDROID_BUILD.md'
+  ]) {
+    assert.ok(fs.existsSync(rel), `Expected Android asset to exist: ${rel}`);
+    assert.ok(fs.statSync(rel).size > 200, `Expected non-empty Android asset: ${rel}`);
+  }
+});

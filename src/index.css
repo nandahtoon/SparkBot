@@ -23,6 +23,7 @@ html, body, #root {
   overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .webgl-canvas-mount {
@@ -44,6 +45,14 @@ html, body, #root {
 
 .safe-bottom {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.safe-left {
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+}
+
+.safe-right {
+  padding-right: max(0.5rem, env(safe-area-inset-right));
 }
 
 button:focus-visible,
