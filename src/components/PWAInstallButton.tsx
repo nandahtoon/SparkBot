@@ -193,9 +193,9 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'c
         onClick={handleClick}
         aria-label={buttonLabel}
         title={buttonLabel}
-        className="flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-emerald-400/65 bg-slate-900/94 text-xs font-extrabold text-emerald-200 shadow-lg transition-transform hover:border-emerald-300 hover:text-white active:scale-95 sm:h-14 sm:w-auto sm:rounded-2xl sm:px-3.5 cursor-pointer"
+        className="flex h-8 w-8 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-emerald-400/60 bg-slate-900/90 text-xs font-extrabold text-emerald-200 shadow-md backdrop-blur-sm transition-transform hover:border-emerald-300 hover:text-white active:scale-95 sm:h-10 sm:w-auto sm:px-3 cursor-pointer"
       >
-        <Download className="h-4 w-4 shrink-0 text-emerald-300 sm:h-5 sm:w-5" />
+        <Download className="h-3.5 w-3.5 shrink-0 text-emerald-300 sm:h-4 sm:w-4" />
         <span className="hidden lg:inline whitespace-nowrap">{buttonLabel}</span>
       </button>
       {modal}

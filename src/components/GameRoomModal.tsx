@@ -11,10 +11,13 @@ import {
   Gamepad2,
   Heart,
   Lightbulb,
+  Maximize2,
+  Minimize2,
   Play,
   Plus,
   Rocket,
   RotateCcw,
+  Sparkles,
   Star,
   StepForward,
   ToggleRight,
@@ -101,38 +104,56 @@ export interface GameRoomRoundSummary {
   detail: string;
 }
 
-const ARENA_W = 720;
-const ARENA_H = 420;
-
 /* ============================================================================
- * Mini-Game 1: WALL BREAKER (HTML5 Canvas)
+ * Mini-Game 1: WALL BREAKER (Full-Screen Dynamic Retina HTML5 Canvas)
  * ========================================================================== */
 const WallBreakerGame: React.FC<{
   accentColor: string;
   onFinish: (score: number, bolts: number, won: boolean, detail: string) => void;
 }> = ({ accentColor, onFinish }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [hud, setHud] = useState({ score: 0, lives: 3, timeLeft: 45, remaining: 21 });
+  const [hud, setHud] = useState({ score: 0, lives: 3, timeLeft: 45, remaining: 21, stage: 1 });
   const finishRef = useRef(onFinish);
   finishRef.current = onFinish;
 
   useEffect(() => {
+    const container = containerRef.current;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!container || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let bricks: WallBrick[] = createWallBreakerLayout(ARENA_W, ARENA_H, 1);
-    let paddleX = ARENA_W / 2;
-    const paddleW = 122;
-    const paddleH = 14;
-    const paddleY = ARENA_H - 34;
+    let arenaW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
+    let arenaH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
+    let dpr = Math.min(2, window.devicePixelRatio || 1);
 
-    let ballX = ARENA_W / 2;
-    let ballY = paddleY - 14;
-    let ballVx = 215;
-    let ballVy = -265;
+    const configureCanvas = (w: number, h: number) => {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    configureCanvas(arenaW, arenaH);
+
+    const getPaddleW = (w: number) => Math.max(92, Math.min(168, w * 0.24));
+    const getPaddleY = (h: number) => h - Math.max(44, Math.min(72, h * 0.085));
+    const getSpeedScale = (w: number, h: number) => Math.max(0.88, Math.min(1.45, Math.hypot(w, h) / 840));
+
+    let paddleW = getPaddleW(arenaW);
+    const paddleH = 14;
+    let paddleY = getPaddleY(arenaH);
+    let paddleX = arenaW / 2;
+    let speedScale = getSpeedScale(arenaW, arenaH);
+
+    let bricks: WallBrick[] = createWallBreakerLayout(arenaW, arenaH, 1);
     const ballR = 9;
+    let ballX = arenaW / 2;
+    let ballY = paddleY - 16;
+    let ballVx = 215 * speedScale;
+    let ballVy = -265 * speedScale;
 
     let score = 0;
     let lives = 3;
@@ -144,6 +165,38 @@ const WallBreakerGame: React.FC<{
     const drops: Array<{ x: number; y: number; vy: number }> = [];
     const sparks: Array<{ x: number; y: number; vx: number; vy: number; life: number; color: string }> = [];
     const keys = { left: false, right: false };
+
+    const handleResize = () => {
+      const nextW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
+      const nextH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
+      if (Math.abs(nextW - arenaW) < 2 && Math.abs(nextH - arenaH) < 2) return;
+      const sx = nextW / Math.max(1, arenaW);
+      const sy = nextH / Math.max(1, arenaH);
+      arenaW = nextW;
+      arenaH = nextH;
+      configureCanvas(arenaW, arenaH);
+
+      paddleW = getPaddleW(arenaW);
+      paddleY = getPaddleY(arenaH);
+      speedScale = getSpeedScale(arenaW, arenaH);
+      paddleX = Math.max(paddleW / 2 + 8, Math.min(arenaW - paddleW / 2 - 8, paddleX * sx));
+      ballX = Math.max(ballR + 8, Math.min(arenaW - ballR - 8, ballX * sx));
+      ballY = Math.max(ballR + 8, Math.min(paddleY - ballR - 6, ballY * sy));
+
+      for (const b of bricks) {
+        b.x *= sx;
+        b.y *= sy;
+        b.w *= sx;
+        b.h *= sy;
+      }
+      for (const d of drops) {
+        d.x *= sx;
+        d.y *= sy;
+      }
+    };
+
+    const ro = new ResizeObserver(handleResize);
+    ro.observe(container);
 
     const spawnSparks = (x: number, y: number, color: string, count = 8) => {
       for (let i = 0; i < count; i++) {
@@ -163,8 +216,8 @@ const WallBreakerGame: React.FC<{
     };
     const onPointerMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * ARENA_W;
-      paddleX = Math.max(paddleW / 2 + 8, Math.min(ARENA_W - paddleW / 2 - 8, relX));
+      const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * arenaW;
+      paddleX = Math.max(paddleW / 2 + 8, Math.min(arenaW - paddleW / 2 - 8, relX));
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -194,9 +247,10 @@ const WallBreakerGame: React.FC<{
         return;
       }
 
-      if (keys.left) paddleX -= 460 * dt;
-      if (keys.right) paddleX += 460 * dt;
-      paddleX = Math.max(paddleW / 2 + 8, Math.min(ARENA_W - paddleW / 2 - 8, paddleX));
+      const paddleSpeed = Math.max(440, arenaW * 0.72);
+      if (keys.left) paddleX -= paddleSpeed * dt;
+      if (keys.right) paddleX += paddleSpeed * dt;
+      paddleX = Math.max(paddleW / 2 + 8, Math.min(arenaW - paddleW / 2 - 8, paddleX));
 
       ballX += ballVx * dt;
       ballY += ballVy * dt;
@@ -206,13 +260,13 @@ const WallBreakerGame: React.FC<{
         ballX = 8 + ballR;
         ballVx = Math.abs(ballVx);
         SFX.uiTick();
-      } else if (ballX + ballR > ARENA_W - 8) {
-        ballX = ARENA_W - 8 - ballR;
+      } else if (ballX + ballR > arenaW - 8) {
+        ballX = arenaW - 8 - ballR;
         ballVx = -Math.abs(ballVx);
         SFX.uiTick();
       }
-      if (ballY - ballR < 8) {
-        ballY = 8 + ballR;
+      if (ballY - ballR < 40) {
+        ballY = 40 + ballR;
         ballVy = Math.abs(ballVy);
         SFX.uiTick();
       }
@@ -226,7 +280,8 @@ const WallBreakerGame: React.FC<{
         ballX <= paddleX + paddleW / 2 + ballR
       ) {
         const hitOffset = (ballX - paddleX) / (paddleW / 2);
-        const speed = Math.min(430, Math.hypot(ballVx, ballVy) * 1.015);
+        const maxSpd = 460 * speedScale;
+        const speed = Math.min(maxSpd, Math.hypot(ballVx, ballVy) * 1.015);
         const angle = hitOffset * 1.05;
         ballVx = Math.sin(angle) * speed;
         ballVy = -Math.cos(angle) * speed;
@@ -252,7 +307,7 @@ const WallBreakerGame: React.FC<{
             score += b.points;
             SFX.crystal();
             if (b.hasBonusBolt) {
-              drops.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, vy: 145 });
+              drops.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, vy: 155 * speedScale });
             }
             bricks.splice(i, 1);
           } else {
@@ -268,20 +323,20 @@ const WallBreakerGame: React.FC<{
         const d = drops[i];
         d.y += d.vy * dt;
         if (
-          Math.abs(d.x - paddleX) <= paddleW / 2 + 12 &&
-          Math.abs(d.y - paddleY) <= paddleH + 10
+          Math.abs(d.x - paddleX) <= paddleW / 2 + 14 &&
+          Math.abs(d.y - paddleY) <= paddleH + 12
         ) {
           score += 30;
           spawnSparks(d.x, d.y, '#fde047', 10);
           SFX.crystal();
           drops.splice(i, 1);
-        } else if (d.y > ARENA_H + 20) {
+        } else if (d.y > arenaH + 20) {
           drops.splice(i, 1);
         }
       }
 
       // Missed ball
-      if (ballY - ballR > ARENA_H + 14) {
+      if (ballY - ballR > arenaH + 14) {
         lives -= 1;
         if (lives <= 0) {
           finishRound(score >= 120, 'Reactor wall challenge complete');
@@ -289,8 +344,8 @@ const WallBreakerGame: React.FC<{
         }
         ballX = paddleX;
         ballY = paddleY - 16;
-        ballVx = (Math.random() < 0.5 ? -1 : 1) * 205;
-        ballVy = -265;
+        ballVx = (Math.random() < 0.5 ? -1 : 1) * 205 * speedScale;
+        ballVy = -265 * speedScale;
         SFX.chirpConfused();
       }
 
@@ -299,10 +354,10 @@ const WallBreakerGame: React.FC<{
         if (stage === 1) {
           stage = 2;
           score += 60;
-          bricks = createWallBreakerLayout(ARENA_W, ARENA_H, 2);
+          bricks = createWallBreakerLayout(arenaW, arenaH, 2);
           ballX = paddleX;
           ballY = paddleY - 16;
-          ballVy = -280;
+          ballVy = -280 * speedScale;
           SFX.laserSolved();
         } else {
           score += 100;
@@ -320,25 +375,33 @@ const WallBreakerGame: React.FC<{
         if (sp.life <= 0) sparks.splice(i, 1);
       }
 
-      // Render arena
-      ctx.fillStyle = '#091124';
-      ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+      // Render full-screen arena
+      ctx.fillStyle = '#070e20';
+      ctx.fillRect(0, 0, arenaW, arenaH);
 
-      // Subtle blueprint grid
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+      // Subtle engineering blueprint grid
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.07)';
       ctx.lineWidth = 1;
-      for (let gx = 36; gx < ARENA_W; gx += 36) {
+      for (let gx = 40; gx < arenaW; gx += 40) {
         ctx.beginPath();
         ctx.moveTo(gx, 0);
-        ctx.lineTo(gx, ARENA_H);
+        ctx.lineTo(gx, arenaH);
         ctx.stroke();
       }
-      for (let gy = 36; gy < ARENA_H; gy += 36) {
+      for (let gy = 40; gy < arenaH; gy += 40) {
         ctx.beginPath();
         ctx.moveTo(0, gy);
-        ctx.lineTo(ARENA_W, gy);
+        ctx.lineTo(arenaW, gy);
         ctx.stroke();
       }
+
+      // Top boundary line below floating HUD
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(8, 40);
+      ctx.lineTo(arenaW - 8, 40);
+      ctx.stroke();
 
       // Draw bricks
       for (const b of bricks) {
@@ -347,11 +410,9 @@ const WallBreakerGame: React.FC<{
         ctx.roundRect(b.x, b.y, b.w, b.h, 6);
         ctx.fill();
 
-        // Top gloss highlight
         ctx.fillStyle = 'rgba(255,255,255,0.22)';
         ctx.fillRect(b.x + 4, b.y + 3, b.w - 8, 4);
 
-        // Armor rim or crack line
         if (b.maxHp > 1 && b.hp === 2) {
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2;
@@ -371,7 +432,7 @@ const WallBreakerGame: React.FC<{
       for (const d of drops) {
         ctx.fillStyle = '#fde047';
         ctx.beginPath();
-        ctx.arc(d.x, d.y, 9, 0, Math.PI * 2);
+        ctx.arc(d.x, d.y, 10, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#0f172a';
         ctx.font = 'bold 12px sans-serif';
@@ -393,7 +454,7 @@ const WallBreakerGame: React.FC<{
       // Draw plasma ball
       ctx.save();
       ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 16;
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
       ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
@@ -411,7 +472,7 @@ const WallBreakerGame: React.FC<{
       hudTimer += dt;
       if (hudTimer >= 0.12) {
         hudTimer = 0;
-        setHud({ score, lives, timeLeft: Math.ceil(timeLeft), remaining: bricks.length });
+        setHud({ score, lives, timeLeft: Math.ceil(timeLeft), remaining: bricks.length, stage });
       }
       rafId = requestAnimationFrame(loop);
     };
@@ -419,6 +480,7 @@ const WallBreakerGame: React.FC<{
     rafId = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(rafId);
+      ro.disconnect();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       canvas.removeEventListener('pointermove', onPointerMove);
@@ -427,43 +489,51 @@ const WallBreakerGame: React.FC<{
   }, [accentColor]);
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="flex w-full max-w-[720px] items-center justify-between text-sm font-bold text-slate-200 tabular-nums">
-        <div className="flex items-center gap-4">
-          <span>Score: <strong className="text-amber-300">{hud.score}</strong></span>
-          <span className="text-slate-500">·</span>
-          <span>Blocks: <strong className="text-sky-300">{hud.remaining}</strong></span>
+    <div ref={containerRef} className="relative h-full w-full flex-1 overflow-hidden bg-[#070e20]">
+      {/* Floating Translucent HUD */}
+      <div className="pointer-events-none absolute inset-x-3 top-1.5 z-10 flex items-center justify-between text-xs font-bold text-slate-200 sm:inset-x-5 sm:text-sm tabular-nums">
+        <div className="flex items-center gap-2.5 sm:gap-4">
+          <span>
+            Score <strong className="text-amber-300">{hud.score}</strong>
+          </span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
+          <span>
+            Wall <strong className="text-sky-300">{hud.stage}/2</strong>
+          </span>
+          <span className="hidden text-slate-600 sm:inline" aria-hidden="true">·</span>
+          <span className="hidden sm:inline">
+            Blocks <strong className="text-sky-300">{hud.remaining}</strong>
+          </span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2.5 sm:gap-4">
           <div className="flex items-center gap-1" aria-label={`${hud.lives} lives left`}>
             {[0, 1, 2].map((i) => (
               <Heart
                 key={i}
-                className={`h-4 w-4 ${i < hud.lives ? 'fill-rose-500 text-rose-400' : 'text-slate-700'}`}
+                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${i < hud.lives ? 'fill-rose-500 text-rose-400' : 'text-slate-700'}`}
               />
             ))}
           </div>
-          <span className="text-slate-500">·</span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
           <span>{hud.timeLeft}s</span>
         </div>
       </div>
 
       <canvas
         ref={canvasRef}
-        width={ARENA_W}
-        height={ARENA_H}
         data-testid="wall-breaker-canvas"
-        className="w-full max-w-[720px] cursor-none touch-none rounded-2xl border border-slate-700 bg-[#091124] shadow-2xl"
+        className="block h-full w-full cursor-none touch-none"
       />
-      <p className="text-xs font-medium text-slate-400">
-        Move your mouse, drag, or press A / D to bounce the plasma orb and smash every wall block.
+
+      <p className="pointer-events-none safe-bottom absolute inset-x-0 bottom-1.5 text-center text-[11px] font-medium text-slate-400/80">
+        Slide finger, move mouse, or press A / D to bounce the plasma orb
       </p>
     </div>
   );
 };
 
 /* ============================================================================
- * Mini-Game 2: POWER CONNECT (Tactile Conduit Rotation Puzzle)
+ * Mini-Game 2: POWER CONNECT (Full-Screen Tactile Conduit Rotation Puzzle)
  * ========================================================================== */
 const PipeTileSvg: React.FC<{ tile: ConnectTile }> = ({ tile }) => {
   const mask = getTileConnections(tile);
@@ -544,119 +614,188 @@ const PowerConnectGame: React.FC<{
           setCelebrating(false);
         } else {
           const bolts = computeConnectReward(nextCleared, nextMoves);
-          onFinish(nextCleared * 100 + Math.max(0, 60 - nextMoves * 2), bolts, true, `Connected all 3 power grids in ${nextMoves} taps!`);
+          onFinish(
+            nextCleared * 100 + Math.max(0, 60 - nextMoves * 2),
+            bolts,
+            true,
+            `Connected all 3 power grids in ${nextMoves} taps!`
+          );
         }
       }, 720);
     }
   };
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="flex w-full max-w-[420px] items-center justify-between text-sm font-bold text-slate-200 tabular-nums">
-        <span>Board <strong className="text-cyan-300">{boardIdx + 1} / 3</strong></span>
-        <span className="text-slate-500">·</span>
-        <span>Cores: <strong className="text-emerald-300">{puzzle.poweredCores}/{puzzle.totalCores}</strong></span>
-        <span className="text-slate-500">·</span>
-        <span>Taps: <strong className="text-amber-300">{moves}</strong></span>
+    <div className="safe-bottom flex h-full w-full flex-1 flex-col items-center justify-between gap-2 overflow-hidden bg-slate-950 px-3 py-3 sm:px-6 sm:py-4">
+      <div className="flex w-full max-w-xl items-center justify-between text-xs font-bold text-slate-200 sm:text-sm tabular-nums">
+        <span>
+          Board <strong className="text-cyan-300">{boardIdx + 1} / 3</strong>
+        </span>
+        <span className="text-slate-600" aria-hidden="true">·</span>
+        <span>
+          Cores <strong className="text-emerald-300">{puzzle.poweredCores}/{puzzle.totalCores}</strong>
+        </span>
+        <span className="text-slate-600" aria-hidden="true">·</span>
+        <span>
+          Taps <strong className="text-amber-300">{moves}</strong>
+        </span>
       </div>
 
-      <div
-        data-testid="power-connect-grid"
-        className={`grid grid-cols-4 gap-2.5 rounded-2xl border-2 p-4 transition-colors ${
-          celebrating
-            ? 'border-emerald-400 bg-emerald-950/40'
-            : 'border-slate-700 bg-slate-950/90'
-        }`}
-      >
-        {puzzle.grid.map((row, r) =>
-          row.map((tile, c) => {
-            const rotatable = !tile.locked;
-            return (
-              <button
-                key={`${r}-${c}`}
-                type="button"
-                disabled={!rotatable}
-                data-connect-cell={`${r}-${c}`}
-                data-powered={tile.powered ? 'true' : 'false'}
-                onClick={() => handleTapTile(r, c)}
-                aria-label={
-                  tile.kind === 'source'
-                    ? 'Power Source'
-                    : tile.kind === 'core'
-                      ? `Power Core ${tile.powered ? 'Powered' : 'Unpowered'}`
-                      : tile.kind === 'empty'
-                        ? 'Empty Slot'
-                        : `Rotate ${tile.kind} conduit row ${r + 1} column ${c + 1}`
-                }
-                className={`flex h-16 w-16 items-center justify-center rounded-xl border transition-transform sm:h-20 sm:w-20 ${
-                  tile.kind === 'empty'
-                    ? 'border-slate-800/70 bg-slate-900/40'
-                    : rotatable
-                      ? tile.powered
-                        ? 'border-cyan-400/70 bg-cyan-950/40 hover:border-cyan-300 active:scale-95'
-                        : 'border-slate-700 bg-slate-800/90 hover:border-sky-400 active:scale-95'
-                      : 'border-slate-700/80 bg-slate-900'
-                }`}
-              >
-                <PipeTileSvg tile={tile} />
-              </button>
-            );
-          })
-        )}
+      {/* Full-Viewport Scaled Square 4x4 Conduit Grid */}
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+        <div
+          data-testid="power-connect-grid"
+          className={`grid aspect-square w-[min(92vw,calc(100dvh-148px),560px)] grid-cols-4 grid-rows-4 gap-2 rounded-2xl border-2 p-3 transition-colors sm:gap-3 sm:p-4 ${
+            celebrating
+              ? 'border-emerald-400 bg-emerald-950/35'
+              : 'border-slate-700/90 bg-slate-900/90'
+          }`}
+        >
+          {puzzle.grid.map((row, r) =>
+            row.map((tile, c) => {
+              const rotatable = !tile.locked;
+              return (
+                <button
+                  key={`${r}-${c}`}
+                  type="button"
+                  disabled={!rotatable}
+                  data-connect-cell={`${r}-${c}`}
+                  data-powered={tile.powered ? 'true' : 'false'}
+                  onClick={() => handleTapTile(r, c)}
+                  aria-label={
+                    tile.kind === 'source'
+                      ? 'Power Source'
+                      : tile.kind === 'core'
+                        ? `Power Core ${tile.powered ? 'Powered' : 'Unpowered'}`
+                        : tile.kind === 'empty'
+                          ? 'Empty Slot'
+                          : `Rotate ${tile.kind} conduit row ${r + 1} column ${c + 1}`
+                  }
+                  className={`flex h-full w-full items-center justify-center rounded-xl border transition-transform ${
+                    tile.kind === 'empty'
+                      ? 'border-slate-800/70 bg-slate-950/50'
+                      : rotatable
+                        ? tile.powered
+                          ? 'border-cyan-400/70 bg-cyan-950/40 hover:border-cyan-300 active:scale-95'
+                          : 'border-slate-700 bg-slate-800/90 hover:border-sky-400 active:scale-95'
+                        : 'border-slate-700/80 bg-slate-950/90'
+                  }`}
+                >
+                  <PipeTileSvg tile={tile} />
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
 
-      <p className="text-xs font-medium text-slate-400">
-        Tap glowing pipe tiles to rotate them until power flows from the battery to every green core.
+      <p className="text-center text-xs font-medium text-slate-400">
+        Tap conduit tiles to rotate them until power flows from the battery to every green core.
       </p>
     </div>
   );
 };
 
 /* ============================================================================
- * Mini-Game 3: SPACE SHOOTER (HTML5 Canvas)
+ * Mini-Game 3: SPACE SHOOTER (Full-Screen Dynamic Retina HTML5 Canvas)
  * ========================================================================== */
 const SpaceShooterGame: React.FC<{
   accentColor: string;
   onFinish: (score: number, bolts: number, won: boolean, detail: string) => void;
 }> = ({ accentColor, onFinish }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [hud, setHud] = useState({ score: 0, wave: 1, shields: 3, stars: 0, timeLeft: 35 });
+  const burstTriggerRef = useRef<(() => void) | null>(null);
+  const [hud, setHud] = useState({
+    score: 0,
+    wave: 1,
+    shields: 3,
+    stars: 0,
+    timeLeft: 35,
+    burstReady: true
+  });
   const finishRef = useRef(onFinish);
   finishRef.current = onFinish;
 
   useEffect(() => {
+    const container = containerRef.current;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!container || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let shipX = ARENA_W / 2;
-    const shipY = ARENA_H - 46;
+    let arenaW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
+    let arenaH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
+    let dpr = Math.min(2, window.devicePixelRatio || 1);
+
+    const configureCanvas = (w: number, h: number) => {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    configureCanvas(arenaW, arenaH);
+
+    const getShipY = (h: number) => h - Math.max(60, Math.min(86, h * 0.1));
+    let shipX = arenaW / 2;
+    let shipY = getShipY(arenaH);
+
     let score = 0;
     let wave = 1;
     let shields = 3;
     let starsCollected = 0;
     let timeLeft = 35;
     let nextEnemyId = 1;
-    let enemies: SpaceEnemy[] = spawnSpaceWave(ARENA_W, wave, nextEnemyId);
+    let enemies: SpaceEnemy[] = spawnSpaceWave(arenaW, wave, nextEnemyId);
     nextEnemyId += enemies.length + 2;
 
     const bullets: Array<{ x: number; y: number; vx: number; vy: number }> = [];
     const stars: Array<{ x: number; y: number; vy: number }> = [];
     const sparks: Array<{ x: number; y: number; vx: number; vy: number; life: number; color: string }> = [];
-    const bgStars = Array.from({ length: 48 }, (_, i) => ({
-      x: (i * 97) % ARENA_W,
-      y: (i * 61) % ARENA_H,
-      speed: 25 + (i % 4) * 18,
+    const bgStars = Array.from({ length: 72 }, (_, i) => ({
+      x: (i * 137) % arenaW,
+      y: (i * 89) % arenaH,
+      speed: 24 + (i % 5) * 18,
       size: 1 + (i % 2)
     }));
 
-    const keys = { left: false, right: false, burst: false };
+    const keys = { left: false, right: false };
     let fireCooldown = 0;
     let burstCooldown = 0;
     let invulnTimer = 0;
     let hudTimer = 0;
     let ended = false;
+
+    const handleResize = () => {
+      const nextW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
+      const nextH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
+      if (Math.abs(nextW - arenaW) < 2 && Math.abs(nextH - arenaH) < 2) return;
+      const sx = nextW / Math.max(1, arenaW);
+      const sy = nextH / Math.max(1, arenaH);
+      arenaW = nextW;
+      arenaH = nextH;
+      configureCanvas(arenaW, arenaH);
+
+      shipX = Math.max(30, Math.min(arenaW - 30, shipX * sx));
+      shipY = getShipY(arenaH);
+      for (const en of enemies) {
+        en.x = Math.max(en.radius + 10, Math.min(arenaW - en.radius - 10, en.x * sx));
+        en.y *= sy;
+      }
+      for (const st of stars) {
+        st.x *= sx;
+        st.y *= sy;
+      }
+      for (const s of bgStars) {
+        s.x = (s.x * sx) % arenaW;
+        s.y = (s.y * sy) % arenaH;
+      }
+    };
+
+    const ro = new ResizeObserver(handleResize);
+    ro.observe(container);
 
     const spawnBoom = (x: number, y: number, color: string, count = 10) => {
       for (let i = 0; i < count; i++) {
@@ -670,12 +809,13 @@ const SpaceShooterGame: React.FC<{
       if (burstCooldown > 0 || ended) return;
       burstCooldown = 1.25;
       bullets.push(
-        { x: shipX - 10, y: shipY - 18, vx: -95, vy: -460 },
-        { x: shipX, y: shipY - 22, vx: 0, vy: -490 },
-        { x: shipX + 10, y: shipY - 18, vx: 95, vy: -460 }
+        { x: shipX - 10, y: shipY - 18, vx: -105, vy: -520 },
+        { x: shipX, y: shipY - 22, vx: 0, vy: -560 },
+        { x: shipX + 10, y: shipY - 18, vx: 105, vy: -520 }
       );
       SFX.boost();
     };
+    burstTriggerRef.current = triggerTurboBurst;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
@@ -691,8 +831,8 @@ const SpaceShooterGame: React.FC<{
     };
     const onPointerMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * ARENA_W;
-      shipX = Math.max(30, Math.min(ARENA_W - 30, relX));
+      const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * arenaW;
+      shipX = Math.max(30, Math.min(arenaW - 30, relX));
     };
     const onPointerDown = (e: PointerEvent) => {
       onPointerMove(e);
@@ -726,9 +866,10 @@ const SpaceShooterGame: React.FC<{
         return;
       }
 
-      if (keys.left) shipX -= 410 * dt;
-      if (keys.right) shipX += 410 * dt;
-      shipX = Math.max(30, Math.min(ARENA_W - 30, shipX));
+      const shipSpeed = Math.max(410, arenaW * 0.68);
+      if (keys.left) shipX -= shipSpeed * dt;
+      if (keys.right) shipX += shipSpeed * dt;
+      shipX = Math.max(30, Math.min(arenaW - 30, shipX));
 
       fireCooldown -= dt;
       burstCooldown = Math.max(0, burstCooldown - dt);
@@ -736,10 +877,11 @@ const SpaceShooterGame: React.FC<{
 
       // Auto-fire friendly twin lasers
       if (fireCooldown <= 0) {
-        fireCooldown = 0.24;
+        fireCooldown = 0.22;
+        const bulletSpd = Math.max(490, arenaH * 0.95);
         bullets.push(
-          { x: shipX - 11, y: shipY - 16, vx: 0, vy: -470 },
-          { x: shipX + 11, y: shipY - 16, vx: 0, vy: -470 }
+          { x: shipX - 11, y: shipY - 16, vx: 0, vy: -bulletSpd },
+          { x: shipX + 11, y: shipY - 16, vx: 0, vy: -bulletSpd }
         );
       }
 
@@ -748,24 +890,26 @@ const SpaceShooterGame: React.FC<{
         const b = bullets[i];
         b.x += b.vx * dt;
         b.y += b.vy * dt;
-        if (b.y < -16 || b.x < -16 || b.x > ARENA_W + 16) bullets.splice(i, 1);
+        if (b.y < -16 || b.x < -16 || b.x > arenaW + 16) bullets.splice(i, 1);
       }
+
+      const verticalScale = Math.max(0.95, arenaH / 460);
 
       // Move enemies & collide
       for (let i = enemies.length - 1; i >= 0; i--) {
         const en = enemies[i];
         en.x += en.vx * dt;
-        en.y += en.vy * dt;
-        if (en.x < en.radius + 10 || en.x > ARENA_W - en.radius - 10) {
+        en.y += en.vy * verticalScale * dt;
+        if (en.x < en.radius + 10 || en.x > arenaW - en.radius - 10) {
           en.vx = -en.vx;
-          en.x = Math.max(en.radius + 10, Math.min(ARENA_W - en.radius - 10, en.x));
+          en.x = Math.max(en.radius + 10, Math.min(arenaW - en.radius - 10, en.x));
         }
 
         // Bullet hits
         let destroyed = false;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if (Math.hypot(b.x - en.x, b.y - en.y) <= en.radius + 6) {
+          if (Math.hypot(b.x - en.x, b.y - en.y) <= en.radius + 7) {
             bullets.splice(j, 1);
             en.hp -= 1;
             if (en.hp <= 0) {
@@ -773,7 +917,7 @@ const SpaceShooterGame: React.FC<{
               spawnBoom(en.x, en.y, en.color, 12);
               SFX.crystal();
               if (Math.random() < 0.45) {
-                stars.push({ x: en.x, y: en.y, vy: 120 });
+                stars.push({ x: en.x, y: en.y, vy: 125 * verticalScale });
               }
               enemies.splice(i, 1);
               destroyed = true;
@@ -787,7 +931,7 @@ const SpaceShooterGame: React.FC<{
         if (destroyed) continue;
 
         // Ship collision
-        if (invulnTimer <= 0 && Math.hypot(en.x - shipX, en.y - shipY) <= en.radius + 18) {
+        if (invulnTimer <= 0 && Math.hypot(en.x - shipX, en.y - shipY) <= en.radius + 19) {
           shields -= 1;
           invulnTimer = 1.05;
           spawnBoom(shipX, shipY, '#fb7185', 14);
@@ -800,9 +944,9 @@ const SpaceShooterGame: React.FC<{
           continue;
         }
 
-        if (en.y > ARENA_H + 32) {
+        if (en.y > arenaH + 32) {
           en.y = -24;
-          en.x = 44 + Math.random() * (ARENA_W - 88);
+          en.x = 44 + Math.random() * (arenaW - 88);
         }
       }
 
@@ -814,7 +958,7 @@ const SpaceShooterGame: React.FC<{
           finishRound(true, `Cleared all 4 space waves with ${starsCollected} stars!`);
           return;
         }
-        enemies = spawnSpaceWave(ARENA_W, wave, nextEnemyId);
+        enemies = spawnSpaceWave(arenaW, wave, nextEnemyId);
         nextEnemyId += enemies.length + 2;
         SFX.laserSolved();
       }
@@ -823,13 +967,13 @@ const SpaceShooterGame: React.FC<{
       for (let i = stars.length - 1; i >= 0; i--) {
         const st = stars[i];
         st.y += st.vy * dt;
-        if (Math.hypot(st.x - shipX, st.y - shipY) <= 28) {
+        if (Math.hypot(st.x - shipX, st.y - shipY) <= 30) {
           starsCollected += 1;
           score += 25;
           spawnBoom(st.x, st.y, '#fde047', 8);
           SFX.crystal();
           stars.splice(i, 1);
-        } else if (st.y > ARENA_H + 20) {
+        } else if (st.y > arenaH + 20) {
           stars.splice(i, 1);
         }
       }
@@ -844,19 +988,19 @@ const SpaceShooterGame: React.FC<{
       }
       for (const s of bgStars) {
         s.y += s.speed * dt;
-        if (s.y > ARENA_H) {
+        if (s.y > arenaH) {
           s.y = -4;
-          s.x = (s.x + 131) % ARENA_W;
+          s.x = (s.x + 131) % arenaW;
         }
       }
 
       // Render space canvas
-      ctx.fillStyle = '#060c1f';
-      ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+      ctx.fillStyle = '#050a1a';
+      ctx.fillRect(0, 0, arenaW, arenaH);
 
       for (const s of bgStars) {
         ctx.fillStyle = 'rgba(226, 232, 240, 0.55)';
-        ctx.fillRect(s.x, s.y, s.size, s.size * 2);
+        ctx.fillRect(s.x, s.y, s.size, s.size * 2.2);
       }
 
       // Draw enemies
@@ -899,7 +1043,7 @@ const SpaceShooterGame: React.FC<{
       for (const st of stars) {
         ctx.fillStyle = '#fde047';
         ctx.beginPath();
-        ctx.arc(st.x, st.y, 8, 0, Math.PI * 2);
+        ctx.arc(st.x, st.y, 9, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -907,7 +1051,7 @@ const SpaceShooterGame: React.FC<{
       ctx.fillStyle = '#38bdf8';
       for (const b of bullets) {
         ctx.beginPath();
-        ctx.roundRect(b.x - 2.5, b.y - 8, 5, 14, 2.5);
+        ctx.roundRect(b.x - 2.5, b.y - 8, 5, 16, 2.5);
         ctx.fill();
       }
 
@@ -917,23 +1061,22 @@ const SpaceShooterGame: React.FC<{
       if (invulnTimer > 0 && Math.floor(invulnTimer * 16) % 2 === 0) {
         ctx.globalAlpha = 0.45;
       }
-      // Thruster glow
       ctx.fillStyle = '#f59e0b';
       ctx.beginPath();
       ctx.moveTo(-7, 14);
       ctx.lineTo(7, 14);
-      ctx.lineTo(0, 26 + Math.random() * 5);
+      ctx.lineTo(0, 28 + Math.random() * 6);
       ctx.closePath();
       ctx.fill();
-      // Wings
+
       ctx.fillStyle = accentColor;
       ctx.beginPath();
-      ctx.moveTo(0, -22);
-      ctx.lineTo(-22, 14);
-      ctx.lineTo(22, 14);
+      ctx.moveTo(0, -24);
+      ctx.lineTo(-24, 14);
+      ctx.lineTo(24, 14);
       ctx.closePath();
       ctx.fill();
-      // Cute visor cockpit
+
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
       ctx.roundRect(-9, -6, 18, 11, 5);
@@ -956,7 +1099,14 @@ const SpaceShooterGame: React.FC<{
       hudTimer += dt;
       if (hudTimer >= 0.12) {
         hudTimer = 0;
-        setHud({ score, wave, shields, stars: starsCollected, timeLeft: Math.ceil(timeLeft) });
+        setHud({
+          score,
+          wave,
+          shields,
+          stars: starsCollected,
+          timeLeft: Math.ceil(timeLeft),
+          burstReady: burstCooldown <= 0.05
+        });
       }
       rafId = requestAnimationFrame(loop);
     };
@@ -964,6 +1114,8 @@ const SpaceShooterGame: React.FC<{
     rafId = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(rafId);
+      ro.disconnect();
+      burstTriggerRef.current = null;
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       canvas.removeEventListener('pointermove', onPointerMove);
@@ -972,48 +1124,68 @@ const SpaceShooterGame: React.FC<{
   }, [accentColor]);
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="flex w-full max-w-[720px] items-center justify-between text-sm font-bold text-slate-200 tabular-nums">
-        <div className="flex items-center gap-3">
-          <span>Score: <strong className="text-emerald-300">{hud.score}</strong></span>
-          <span className="text-slate-500">·</span>
-          <span>Wave <strong className="text-sky-300">{hud.wave}/4</strong></span>
-          <span className="text-slate-500">·</span>
+    <div ref={containerRef} className="relative h-full w-full flex-1 overflow-hidden bg-[#050a1a]">
+      {/* Floating Translucent HUD */}
+      <div className="pointer-events-none absolute inset-x-3 top-1.5 z-10 flex items-center justify-between text-xs font-bold text-slate-200 sm:inset-x-5 sm:text-sm tabular-nums">
+        <div className="flex items-center gap-2.5 sm:gap-3.5">
+          <span>
+            Score <strong className="text-emerald-300">{hud.score}</strong>
+          </span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
+          <span>
+            Wave <strong className="text-sky-300">{hud.wave}/4</strong>
+          </span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
           <span className="flex items-center gap-1 text-amber-300">
             <Star className="h-3.5 w-3.5 fill-amber-400" />
             {hud.stars}
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3.5">
           <div className="flex items-center gap-1" aria-label={`${hud.shields} shields left`}>
             {[0, 1, 2].map((i) => (
               <Heart
                 key={i}
-                className={`h-4 w-4 ${i < hud.shields ? 'fill-emerald-400 text-emerald-300' : 'text-slate-700'}`}
+                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${i < hud.shields ? 'fill-emerald-400 text-emerald-300' : 'text-slate-700'}`}
               />
             ))}
           </div>
-          <span className="text-slate-500">·</span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
           <span>{hud.timeLeft}s</span>
         </div>
       </div>
 
       <canvas
         ref={canvasRef}
-        width={ARENA_W}
-        height={ARENA_H}
         data-testid="space-shooter-canvas"
-        className="w-full max-w-[720px] cursor-crosshair touch-none rounded-2xl border border-slate-700 bg-[#060c1f] shadow-2xl"
+        className="block h-full w-full cursor-crosshair touch-none"
       />
-      <p className="text-xs font-medium text-slate-400">
-        Move with mouse, drag, or A / D. Click or press Space for a 3-way turbo laser burst!
+
+      {/* Compact Floating Turbo Burst Button for Touch Play */}
+      <button
+        type="button"
+        onClick={() => burstTriggerRef.current?.()}
+        disabled={!hud.burstReady}
+        aria-label="Fire 3-Way Turbo Burst"
+        className={`safe-bottom absolute right-3 bottom-3 z-10 flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-black shadow-lg backdrop-blur-sm transition-transform active:scale-95 sm:right-5 sm:bottom-4 ${
+          hud.burstReady
+            ? 'border-sky-300 bg-sky-500/90 text-slate-950'
+            : 'border-slate-700 bg-slate-900/80 text-slate-500'
+        }`}
+      >
+        <Sparkles className="h-4 w-4" aria-hidden="true" />
+        <span>Burst</span>
+      </button>
+
+      <p className="pointer-events-none safe-bottom absolute bottom-1.5 left-3 hidden text-[11px] font-medium text-slate-400/80 sm:block">
+        Slide or A / D to steer · Tap or Space for 3-way turbo laser burst
       </p>
     </div>
   );
 };
 
 /* ============================================================================
- * STEM Mini-Game A: BUG DETECTIVE (Coding & Debugging Practice)
+ * STEM Mini-Game A: BUG DETECTIVE (Full-Screen Coding & Debugging Studio)
  * ========================================================================== */
 const BUG_PACK_A: BugDetectivePuzzle[] = [
   BUG_DETECTIVE_PUZZLES[0],
@@ -1168,7 +1340,7 @@ const BugDetectiveGame: React.FC<{
       >
         <div className="flex flex-wrap items-center gap-2">
           <BlockIcon type={blk.type} condition={blk.condition} className="h-5 w-5 shrink-0" />
-          <span className="text-xs font-black tracking-wide">
+          <span className="text-xs font-black tracking-wide sm:text-sm">
             {blk.type === 'LOOP'
               ? `LOOP ×${blk.count || 2}`
               : blk.type === 'IF'
@@ -1256,144 +1428,156 @@ const BugDetectiveGame: React.FC<{
   };
 
   return (
-    <div data-testid="bug-detective-game" className="mx-auto flex max-w-2xl flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300 tabular-nums">
-        <div className="flex items-center gap-2">
-          <span className="text-sky-300 font-black">
-            Puzzle {stageIdx + 1}/{puzzles.length}
-          </span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="text-white font-black">{puzzle.title}</span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="text-slate-400">{puzzle.ageBand}</span>
+    <div
+      data-testid="bug-detective-game"
+      className="flex h-full w-full flex-1 flex-col overflow-hidden bg-slate-950"
+    >
+      {/* Main Full-Screen Scrollable Workspace */}
+      <div className="touch-pan-y mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 overflow-y-auto px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300 tabular-nums">
+          <div className="flex items-center gap-2">
+            <span className="font-black text-sky-300">
+              Puzzle {stageIdx + 1}/{puzzles.length}
+            </span>
+            <span className="text-slate-600" aria-hidden="true">·</span>
+            <span className="font-black text-white">{puzzle.title}</span>
+            <span className="text-slate-600" aria-hidden="true">·</span>
+            <span className="text-slate-400">{puzzle.ageBand}</span>
+          </div>
+          <span className="font-black text-emerald-300">Lesson: {puzzle.bugLesson}</span>
         </div>
-        <span className="text-emerald-300 font-black">Lesson: {puzzle.bugLesson}</span>
-      </div>
 
-      {/* Prompt Card */}
-      <div className="rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm font-medium text-slate-100">
-        {puzzle.prompt}
-      </div>
+        <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-12">
+          {/* Left Column: Prompt + Test Track + Feedback */}
+          <div className="flex flex-col gap-3 lg:col-span-6">
+            <div className="rounded-xl border border-slate-700 bg-slate-900/90 px-3.5 py-2.5 text-xs font-medium text-slate-100 sm:text-sm">
+              {puzzle.prompt}
+            </div>
 
-      {/* Track Visualizer */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
-          <span>Test Track</span>
-          <span>Bot Tile: {botTile + 1}/{puzzle.level.track.length}</span>
-        </div>
-        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
-          {puzzle.level.track.map((tile, idx) => {
-            const hasBot = botTile === idx;
-            const tileTone =
-              tile.type === 'gate'
-                ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
-                : tile.type === 'gap'
-                  ? 'border-rose-400/70 bg-rose-950/60 text-rose-200'
-                  : tile.type === 'mud'
-                    ? 'border-amber-500/70 bg-amber-950/60 text-amber-200'
-                    : tile.type === 'ramp'
-                      ? 'border-pink-400/70 bg-pink-950/60 text-pink-200'
-                      : 'border-slate-700 bg-slate-800/90 text-slate-200';
-            return (
+            <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 tabular-nums">
+                <span>Test Track</span>
+                <span>
+                  Bot Tile {botTile + 1}/{puzzle.level.track.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                {puzzle.level.track.map((tile, idx) => {
+                  const hasBot = botTile === idx;
+                  const tileTone =
+                    tile.type === 'gate'
+                      ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                      : tile.type === 'gap'
+                        ? 'border-rose-400/70 bg-rose-950/60 text-rose-200'
+                        : tile.type === 'mud'
+                          ? 'border-amber-500/70 bg-amber-950/60 text-amber-200'
+                          : tile.type === 'ramp'
+                            ? 'border-pink-400/70 bg-pink-950/60 text-pink-200'
+                            : 'border-slate-700 bg-slate-800/90 text-slate-200';
+                  return (
+                    <div
+                      key={idx}
+                      className={`relative flex h-14 flex-col items-center justify-center rounded-xl border text-[11px] font-black uppercase sm:h-16 ${tileTone} ${
+                        hasBot ? 'ring-2 ring-sky-300' : ''
+                      }`}
+                    >
+                      <span>{tile.type === 'normal' ? `Tile ${idx}` : tile.type}</span>
+                      {tile.crystal && <span className="text-[10px] text-cyan-300">Gem</span>}
+                      {hasBot && (
+                        <span className="mt-0.5 rounded bg-sky-400 px-1.5 text-[9px] font-black text-slate-950">
+                          BOT
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {(lastSim || showClue) && (
               <div
-                key={idx}
-                className={`relative flex h-14 flex-col items-center justify-center rounded-xl border text-[11px] font-black uppercase ${tileTone} ${
-                  hasBot ? 'ring-2 ring-sky-300' : ''
+                data-testid="bug-detective-feedback"
+                className={`rounded-xl border px-3.5 py-2.5 text-xs font-bold ${
+                  lastSim?.status === 'win'
+                    ? 'border-emerald-400/80 bg-emerald-500/15 text-emerald-200'
+                    : 'border-amber-400/80 bg-amber-500/15 text-amber-100'
                 }`}
               >
-                <span>{tile.type === 'normal' ? `Tile ${idx}` : tile.type}</span>
-                {tile.crystal && <span className="text-[10px] text-cyan-300">Gem</span>}
-                {hasBot && (
-                  <span className="mt-0.5 rounded bg-sky-400 px-1.5 text-[9px] font-black text-slate-950">
-                    BOT
-                  </span>
-                )}
+                {lastSim?.status === 'win'
+                  ? 'Bug Squashed! SparkBot reached the Finish Gate!'
+                  : lastSim?.failReason || puzzle.prompt}
               </div>
-            );
-          })}
+            )}
+          </div>
+
+          {/* Right Column: Editable Program Blocks */}
+          <div className="flex flex-col gap-2 rounded-xl border border-slate-700 bg-slate-900/75 p-3.5 lg:col-span-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                Program Blocks (Tap to Repair)
+              </span>
+              {puzzle.allowAddMove && (
+                <button
+                  type="button"
+                  data-bug-action="add-move"
+                  onClick={handleAddMove}
+                  className="flex h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-sky-400/80 bg-sky-500/20 px-2.5 text-xs font-black text-sky-100 hover:bg-sky-500/30 active:scale-95"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Add MOVE</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {program.map((blk, i) => renderEditableBlock(blk, i, program.length, true))}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Editable Program Workspace */}
-      <div className="flex flex-col gap-2 rounded-2xl border border-slate-700 bg-slate-950/70 p-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-            Program Blocks (Tap to Repair)
-          </span>
-          {puzzle.allowAddMove && (
+      {/* Slim Pinned Bottom Action Bar */}
+      <div className="safe-bottom border-t border-slate-800 bg-slate-900/95 px-3 py-2 sm:px-6">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              data-bug-action="add-move"
-              onClick={handleAddMove}
-              className="flex h-9 items-center gap-1 whitespace-nowrap rounded-xl border border-sky-400/80 bg-sky-500/20 px-3 text-xs font-black text-sky-100 hover:bg-sky-500/30 active:scale-95"
+              onClick={() => {
+                SFX.click();
+                loadPuzzle(stageIdx);
+              }}
+              className="flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-3 text-xs font-bold text-slate-200 hover:border-slate-500 active:scale-95"
             >
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Add MOVE</span>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              <span>Reset</span>
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={handleStep}
+              className="flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-sky-400/70 bg-sky-500/20 px-3 text-xs font-black text-sky-100 hover:bg-sky-500/30 active:scale-95"
+            >
+              <StepForward className="h-4 w-4" aria-hidden="true" />
+              <span>Step</span>
+            </button>
+          </div>
 
-        <div className="flex flex-col gap-2">
-          {program.map((blk, i) => renderEditableBlock(blk, i, program.length, true))}
-        </div>
-      </div>
-
-      {/* Diagnostic Feedback */}
-      {(lastSim || showClue) && (
-        <div
-          data-testid="bug-detective-feedback"
-          className={`rounded-2xl border px-4 py-2.5 text-xs font-bold ${
-            lastSim?.status === 'win'
-              ? 'border-emerald-400/80 bg-emerald-500/15 text-emerald-200'
-              : 'border-amber-400/80 bg-amber-500/15 text-amber-100'
-          }`}
-        >
-          {lastSim?.status === 'win'
-            ? 'Bug Squashed! SparkBot reached the Finish Gate!'
-            : lastSim?.failReason || puzzle.prompt}
-        </div>
-      )}
-
-      {/* Action Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              SFX.click();
-              loadPuzzle(stageIdx);
-            }}
-            className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-3.5 text-xs font-bold text-slate-200 hover:border-slate-500 active:scale-95"
+            data-testid="bug-test-fix-btn"
+            onClick={handleTestFix}
+            className="flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-4 text-xs font-black text-slate-950 hover:bg-emerald-400 active:scale-95 sm:px-5 sm:text-sm"
           >
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            <span>Reset</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleStep}
-            className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-sky-400/70 bg-sky-500/20 px-3.5 text-xs font-black text-sky-100 hover:bg-sky-500/30 active:scale-95"
-          >
-            <StepForward className="h-4 w-4" aria-hidden="true" />
-            <span>Step</span>
+            <Play className="h-4 w-4 fill-slate-950" aria-hidden="true" />
+            <span>Test Fix</span>
           </button>
         </div>
-
-        <button
-          type="button"
-          data-testid="bug-test-fix-btn"
-          onClick={handleTestFix}
-          className="flex h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-5 text-sm font-black text-slate-950 hover:bg-emerald-400 active:scale-95"
-        >
-          <Play className="h-4 w-4 fill-slate-950" aria-hidden="true" />
-          <span>Test Fix</span>
-        </button>
       </div>
     </div>
   );
 };
 
 /* ============================================================================
- * STEM Mini-Game B: LOGIC GATE LAB (Interactive Digital Logic Circuit)
+ * STEM Mini-Game B: LOGIC GATE LAB (Full-Screen Interactive Circuit Bench)
  * ========================================================================== */
 const LOGIC_PACK_A: LogicGatePuzzle[] = [
   LOGIC_GATE_PUZZLES[0],
@@ -1504,229 +1688,239 @@ const LogicGateLabGame: React.FC<{
   };
 
   return (
-    <div data-testid="logic-gate-lab-game" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300 tabular-nums">
-        <div className="flex items-center gap-2">
-          <span className="text-violet-300 font-black">
-            Board {boardIdx + 1}/{boards.length}
+    <div
+      data-testid="logic-gate-lab-game"
+      className="flex h-full w-full flex-1 flex-col overflow-hidden bg-slate-950"
+    >
+      <div className="touch-pan-y mx-auto flex w-full max-w-6xl flex-1 flex-col gap-3 overflow-y-auto px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300 tabular-nums">
+          <div className="flex items-center gap-2">
+            <span className="font-black text-violet-300">
+              Board {boardIdx + 1}/{boards.length}
+            </span>
+            <span className="text-slate-600" aria-hidden="true">·</span>
+            <span className="font-black text-white">{puzzle.title}</span>
+            <span className="text-slate-600" aria-hidden="true">·</span>
+            <span className="text-slate-400">{puzzle.ageBand}</span>
+          </div>
+          <span className={evalRes.outputActive ? 'font-black text-emerald-300' : 'text-slate-400'}>
+            Live Output: {evalRes.outputActive ? '1 (ON)' : '0 (OFF)'}
           </span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="text-white font-black">{puzzle.title}</span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="text-slate-400">{puzzle.ageBand}</span>
         </div>
-        <span className={evalRes.outputActive ? 'text-emerald-300 font-black' : 'text-slate-400'}>
-          Live Output: {evalRes.outputActive ? '1 (ON)' : '0 (OFF)'}
-        </span>
-      </div>
 
-      {/* 65/35 Desktop Split */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        {/* Interactive SVG Circuit Board (65% -> 8 cols) */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-950/85 p-4 lg:col-span-7">
-          <div className="grid grid-cols-3 items-center gap-2">
-            {/* Column 1: Input Switches */}
-            <div className="flex flex-col gap-3">
-              {puzzle.inputs.map((inp) => {
-                const isOn = Boolean(switchValues[inp.id]);
-                return (
-                  <button
-                    key={inp.id}
-                    type="button"
-                    data-logic-switch={inp.id}
-                    aria-pressed={isOn}
-                    onClick={() => handleToggleSwitch(inp.id)}
-                    className={`flex min-h-[54px] flex-col items-start justify-center rounded-xl border-2 px-3 py-2 text-left transition-colors active:scale-95 ${
-                      isOn
-                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
-                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-400'
-                    }`}
-                  >
-                    <div className="flex w-full items-center justify-between gap-1 text-xs font-black">
-                      <span>{inp.id}</span>
-                      <span className={isOn ? 'text-emerald-300' : 'text-slate-500'}>
-                        {isOn ? '1 ON' : '0 OFF'}
-                      </span>
-                    </div>
-                    <span className="mt-0.5 truncate text-[11px] font-medium text-slate-300">
-                      {inp.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Column 2: Gate Nodes & Live SVG Wires */}
-            <div className="relative flex flex-col items-center justify-center gap-3">
-              <svg viewBox="0 0 180 120" className="h-24 w-full" aria-hidden="true">
-                {puzzle.inputs.map((inp, idx) => {
-                  const yStart = puzzle.inputs.length === 1 ? 60 : idx === 0 ? 32 : 88;
-                  const activeWire = Boolean(evalRes.nodeValues[inp.id]);
+        {/* Spacious Full-Screen Circuit Bench */}
+        <div className="flex flex-1 flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-4">
+          {/* Interactive SVG Circuit Board (8 cols on lg) */}
+          <div className="flex flex-1 flex-col justify-center gap-4 rounded-2xl border border-slate-700 bg-slate-900/85 p-4 sm:p-6 lg:col-span-8">
+            <div className="grid grid-cols-3 items-center gap-2 sm:gap-4">
+              {/* Column 1: Input Switches */}
+              <div className="flex flex-col gap-3">
+                {puzzle.inputs.map((inp) => {
+                  const isOn = Boolean(switchValues[inp.id]);
                   return (
-                    <path
+                    <button
                       key={inp.id}
-                      d={`M 4 ${yStart} C 55 ${yStart}, 55 60, 92 60`}
-                      fill="none"
-                      stroke={activeWire ? '#22d3ee' : '#475569'}
-                      strokeWidth={activeWire ? 5 : 3}
-                      strokeLinecap="round"
-                    />
+                      type="button"
+                      data-logic-switch={inp.id}
+                      aria-pressed={isOn}
+                      onClick={() => handleToggleSwitch(inp.id)}
+                      className={`flex min-h-[58px] flex-col items-start justify-center rounded-xl border-2 px-3 py-2 text-left transition-colors active:scale-95 sm:min-h-[68px] ${
+                        isOn
+                          ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                          : 'border-slate-700 bg-slate-950 text-slate-300 hover:border-sky-400'
+                      }`}
+                    >
+                      <div className="flex w-full items-center justify-between gap-1 text-xs font-black sm:text-sm">
+                        <span>{inp.id}</span>
+                        <span className={isOn ? 'text-emerald-300' : 'text-slate-500'}>
+                          {isOn ? '1 ON' : '0 OFF'}
+                        </span>
+                      </div>
+                      <span className="mt-0.5 truncate text-[11px] font-medium text-slate-300">
+                        {inp.label}
+                      </span>
+                    </button>
                   );
                 })}
-                <line
-                  x1="92"
-                  y1="60"
-                  x2="176"
-                  y2="60"
-                  stroke={evalRes.outputActive ? '#34d399' : '#475569'}
-                  strokeWidth={evalRes.outputActive ? 5 : 3}
-                  strokeLinecap="round"
-                />
-              </svg>
-
-              {hasNotStage && (
-                <div className="rounded-lg border border-amber-400/70 bg-amber-500/15 px-2.5 py-1 text-[11px] font-black text-amber-200">
-                  B → NOT = {evalRes.nodeValues.G_NOT ? '1' : '0'}
-                </div>
-              )}
-
-              <div
-                data-testid="logic-primary-gate"
-                className={`flex min-w-[104px] flex-col items-center rounded-xl border-2 px-3 py-2 text-center ${
-                  evalRes.outputActive
-                    ? 'border-cyan-400 bg-cyan-500/15 text-cyan-100'
-                    : 'border-slate-600 bg-slate-900 text-slate-200'
-                }`}
-              >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {primaryGate.label}
-                </span>
-                <span className="text-base font-black text-white">{primaryGateKind}</span>
               </div>
 
-              {!primaryGate.locked && (
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  {(['AND', 'OR', 'NOT'] as LogicGateKind[]).map((kind) => {
-                    const selected = primaryGateKind === kind;
-                    return (
-                      <button
-                        key={kind}
-                        type="button"
-                        data-logic-gate-choice={kind}
-                        onClick={() => handleSelectGate(primaryGate.id, kind)}
-                        className={`h-9 rounded-xl border px-2.5 text-xs font-black transition-transform active:scale-95 ${
-                          selected
-                            ? 'border-violet-300 bg-violet-500 text-white'
-                            : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-violet-400'
-                        }`}
-                      >
-                        {kind}
-                      </button>
-                    );
-                  })}
+              {/* Column 2: Gate Nodes & Live SVG Wires */}
+              <div className="flex flex-col items-center justify-center gap-2.5">
+                <div className="relative flex w-full items-center justify-center py-2">
+                  <svg viewBox="0 0 180 120" className="h-28 w-full sm:h-36" aria-hidden="true">
+                    {puzzle.inputs.map((inp, idx) => {
+                      const yStart = puzzle.inputs.length === 1 ? 60 : idx === 0 ? 30 : 90;
+                      const activeWire = Boolean(evalRes.nodeValues[inp.id]);
+                      return (
+                        <path
+                          key={inp.id}
+                          d={`M 4 ${yStart} C 48 ${yStart}, 48 60, 90 60`}
+                          fill="none"
+                          stroke={activeWire ? '#22d3ee' : '#475569'}
+                          strokeWidth={activeWire ? 5 : 3}
+                          strokeLinecap="round"
+                        />
+                      );
+                    })}
+                    <line
+                      x1="90"
+                      y1="60"
+                      x2="176"
+                      y2="60"
+                      stroke={evalRes.outputActive ? '#34d399' : '#475569'}
+                      strokeWidth={evalRes.outputActive ? 5 : 3}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+
+                  <div
+                    data-testid="logic-primary-gate"
+                    className={`absolute left-1/2 top-1/2 flex min-w-[82px] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-xl border-2 px-2.5 py-1.5 text-center shadow-lg sm:min-w-[108px] sm:px-3 sm:py-2 ${
+                      evalRes.outputActive
+                        ? 'border-cyan-400 bg-slate-950/95 text-cyan-100 shadow-cyan-500/20'
+                        : 'border-slate-600 bg-slate-950/95 text-slate-200'
+                    }`}
+                  >
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 sm:text-[10px]">
+                      {primaryGate.label}
+                    </span>
+                    <span className="text-sm font-black text-white sm:text-lg">{primaryGateKind}</span>
+                  </div>
                 </div>
-              )}
+
+                {hasNotStage && (
+                  <div className="rounded-lg border border-amber-400/70 bg-amber-500/15 px-2.5 py-1 text-[11px] font-black text-amber-200">
+                    B → NOT = {evalRes.nodeValues.G_NOT ? '1' : '0'}
+                  </div>
+                )}
+
+                {!primaryGate.locked && (
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {(['AND', 'OR', 'NOT'] as LogicGateKind[]).map((kind) => {
+                      const selected = primaryGateKind === kind;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          data-logic-gate-choice={kind}
+                          onClick={() => handleSelectGate(primaryGate.id, kind)}
+                          className={`h-9 rounded-xl border px-3 text-xs font-black transition-transform active:scale-95 ${
+                            selected
+                              ? 'border-violet-300 bg-violet-500 text-white'
+                              : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-violet-400'
+                          }`}
+                        >
+                          {kind}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Column 3: Vault Output Core */}
+              <div className="flex flex-col items-center justify-center">
+                <div
+                  data-testid="logic-output-core"
+                  className={`flex h-24 w-24 flex-col items-center justify-center rounded-2xl border-2 text-center transition-colors sm:h-32 sm:w-32 ${
+                    evalRes.outputActive
+                      ? 'border-emerald-300 bg-emerald-500/20 text-emerald-100 shadow-[0_0_24px_rgba(16,185,129,0.35)]'
+                      : 'border-slate-700 bg-slate-950 text-slate-400'
+                  }`}
+                >
+                  <Cpu
+                    className={`h-7 w-7 sm:h-9 sm:w-9 ${evalRes.outputActive ? 'text-emerald-300' : 'text-slate-500'}`}
+                    aria-hidden="true"
+                  />
+                  <span className="mt-1 text-xs font-black sm:text-sm">{puzzle.outputLabel}</span>
+                  <span className="text-[11px] font-bold">
+                    {evalRes.outputActive ? 'POWERED' : 'OFFLINE'}
+                  </span>
+                </div>
+              </div>
             </div>
+          </div>
 
-            {/* Column 3: Vault Output Core */}
-            <div className="flex flex-col items-center justify-center">
-              <div
-                data-testid="logic-output-core"
-                className={`flex h-24 w-24 flex-col items-center justify-center rounded-2xl border-2 text-center transition-colors ${
-                  evalRes.outputActive
-                    ? 'border-emerald-300 bg-emerald-500/20 text-emerald-100 shadow-[0_0_24px_rgba(16,185,129,0.35)]'
-                    : 'border-slate-700 bg-slate-900 text-slate-400'
-                }`}
-              >
-                <Cpu
-                  className={`h-7 w-7 ${evalRes.outputActive ? 'text-emerald-300' : 'text-slate-500'}`}
-                  aria-hidden="true"
-                />
-                <span className="mt-1 text-xs font-black">{puzzle.outputLabel}</span>
-                <span className="text-[11px] font-bold">
-                  {evalRes.outputActive ? 'POWERED' : 'OFFLINE'}
-                </span>
-              </div>
+          {/* Rule + Truth Table + Hint Panel (4 cols on lg) */}
+          <div className="flex shrink-0 flex-col justify-between gap-3 rounded-2xl border border-slate-700 bg-slate-900/75 p-4 lg:col-span-4 lg:self-start">
+            <div className="flex flex-col gap-3">
+              <p className="text-xs font-medium leading-relaxed text-slate-200 sm:text-sm">
+                {puzzle.ruleSummary}
+              </p>
+
+              {evalRes.truthResults.length > 0 && (
+                <div
+                  data-testid="logic-truth-table"
+                  className="flex flex-col gap-1.5 rounded-xl border border-slate-800 bg-slate-950/90 p-3"
+                >
+                  <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                    Safety Truth Checks
+                  </div>
+                  {evalRes.truthResults.map((row, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-2 text-xs font-bold tabular-nums"
+                    >
+                      <span className="text-slate-300">
+                        {Object.entries(row.inputs)
+                          .map(([k, v]) => `${k}=${v ? 1 : 0}`)
+                          .join(' · ')}
+                      </span>
+                      <span className="text-slate-400">→ Need {row.expected ? 1 : 0}</span>
+                      <span className={row.passed ? 'text-emerald-300' : 'text-rose-300'}>
+                        {row.passed ? 'Pass' : `Got ${row.actual ? 1 : 0}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showHint && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-400/50 bg-amber-500/10 p-2.5 text-xs font-medium text-amber-100">
+                  <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                  <span>{puzzle.hint}</span>
+                </div>
+              )}
+
+              {statusMessage && (
+                <div
+                  className={`rounded-xl border px-3 py-2 text-xs font-bold ${
+                    evalRes.solved
+                      ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-200'
+                      : 'border-rose-400/70 bg-rose-500/15 text-rose-200'
+                  }`}
+                >
+                  {statusMessage}
+                </div>
+              )}
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Rule + Truth Table + Hint Panel (35% -> 5 cols) */}
-        <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-700 bg-slate-950/75 p-4 lg:col-span-5">
-          <div className="flex flex-col gap-3">
-            <p className="text-xs font-medium leading-relaxed text-slate-200">
-              {puzzle.ruleSummary}
-            </p>
-
-            {evalRes.truthResults.length > 0 && (
-              <div
-                data-testid="logic-truth-table"
-                className="flex flex-col gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 p-2.5"
-              >
-                <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                  Safety Truth Checks
-                </div>
-                {evalRes.truthResults.map((row, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between gap-2 text-[11px] font-bold tabular-nums"
-                  >
-                    <span className="text-slate-300">
-                      {Object.entries(row.inputs)
-                        .map(([k, v]) => `${k}=${v ? 1 : 0}`)
-                        .join(' · ')}
-                    </span>
-                    <span className="text-slate-400">→ Need {row.expected ? 1 : 0}</span>
-                    <span className={row.passed ? 'text-emerald-300' : 'text-rose-300'}>
-                      {row.passed ? 'Pass' : `Got ${row.actual ? 1 : 0}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showHint && (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-400/50 bg-amber-500/10 p-2.5 text-xs font-medium text-amber-100">
-                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
-                <span>{puzzle.hint}</span>
-              </div>
-            )}
-
-            {statusMessage && (
-              <div
-                className={`rounded-xl border px-3 py-2 text-xs font-bold ${
-                  evalRes.solved
-                    ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-200'
-                    : 'border-rose-400/70 bg-rose-500/15 text-rose-200'
-                }`}
-              >
-                {statusMessage}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                SFX.uiTick();
-                setShowHint((v) => !v);
-              }}
-              className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-3 text-xs font-bold text-slate-200 hover:border-amber-400 active:scale-95"
-            >
-              <Lightbulb className="h-4 w-4 text-amber-300" aria-hidden="true" />
-              <span>Hint</span>
-            </button>
-            <button
-              type="button"
-              data-testid="logic-verify-btn"
-              onClick={handleVerifyBoard}
-              className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-4 text-xs font-black text-slate-950 hover:bg-emerald-400 active:scale-95"
-            >
-              <Check className="h-4 w-4" aria-hidden="true" />
-              <span>Verify Circuit</span>
-            </button>
-          </div>
+      {/* Slim Pinned Bottom Action Bar */}
+      <div className="safe-bottom border-t border-slate-800 bg-slate-900/95 px-3 py-2 sm:px-6">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              SFX.uiTick();
+              setShowHint((v) => !v);
+            }}
+            className="flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-3 text-xs font-bold text-slate-200 hover:border-amber-400 active:scale-95"
+          >
+            <Lightbulb className="h-4 w-4 text-amber-300" aria-hidden="true" />
+            <span>Hint</span>
+          </button>
+          <button
+            type="button"
+            data-testid="logic-verify-btn"
+            onClick={handleVerifyBoard}
+            className="flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-4 text-xs font-black text-slate-950 hover:bg-emerald-400 active:scale-95 sm:px-5 sm:text-sm"
+          >
+            <Check className="h-4 w-4" aria-hidden="true" />
+            <span>Verify Circuit</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1734,16 +1928,16 @@ const LogicGateLabGame: React.FC<{
 };
 
 /* ============================================================================
- * Main Arcade Game Room Hub Modal
+ * Main Full-Screen Arcade Game Room Hub & Player
  * ========================================================================== */
 const GAME_ICON: Record<ArcadeGameId, React.ReactNode> = {
-  bug_detective: <Bug className="h-7 w-7 text-sky-300" />,
-  logic_gate_lab: <ToggleRight className="h-7 w-7 text-violet-300" />,
-  break_wall: <Blocks className="h-7 w-7 text-amber-300" />,
-  connect_nodes: <Cable className="h-7 w-7 text-cyan-300" />,
-  robot_run: <Zap className="h-7 w-7 text-fuchsia-300" />,
-  space_shooter: <Rocket className="h-7 w-7 text-emerald-300" />,
-  planet_adventure: <Compass className="h-7 w-7 text-teal-300" />
+  bug_detective: <Bug className="h-6 w-6 text-sky-300" />,
+  logic_gate_lab: <ToggleRight className="h-6 w-6 text-violet-300" />,
+  break_wall: <Blocks className="h-6 w-6 text-amber-300" />,
+  connect_nodes: <Cable className="h-6 w-6 text-cyan-300" />,
+  robot_run: <Zap className="h-6 w-6 text-fuchsia-300" />,
+  space_shooter: <Rocket className="h-6 w-6 text-emerald-300" />,
+  planet_adventure: <Compass className="h-6 w-6 text-teal-300" />
 };
 
 export const GameRoomModal: React.FC<GameRoomModalProps> = ({
@@ -1765,12 +1959,19 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
   const [activeGame, setActiveGame] = useState<ArcadeGameId | null>(null);
   const [runKey, setRunKey] = useState(0);
   const [summary, setSummary] = useState<GameRoomRoundSummary | null>(null);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
 
   const charDef = useMemo(() => BOT_CHARACTERS[activeCharacter], [activeCharacter]);
   const planetCaps = useMemo(
     () => (chassisInfo ? derivePlanetCapabilities(chassisInfo) : null),
     [chassisInfo]
   );
+
+  useEffect(() => {
+    const syncFs = () => setIsNativeFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', syncFs);
+    return () => document.removeEventListener('fullscreenchange', syncFs);
+  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -1783,6 +1984,15 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
       setView('ROUND_SUMMARY');
     }
   }, [externalSummary, visible]);
+
+  const toggleBrowserFullscreen = useCallback(() => {
+    SFX.uiTick();
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  }, []);
 
   const handleSelectGame = useCallback(
     (gameId: ArcadeGameId) => {
@@ -1816,6 +2026,8 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
   if (!visible) return null;
 
   const activeCard = ALL_GAME_ROOM_GAMES.find((g) => g.id === activeGame) || null;
+  const canBrowserFullscreen =
+    typeof document !== 'undefined' && Boolean(document.documentElement?.requestFullscreen);
 
   return (
     <div
@@ -1825,80 +2037,166 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
       data-testid="game-room-modal"
       data-gameroom-view={view.toLowerCase()}
       data-active-game={activeGame || ''}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 p-2.5 sm:p-5"
+      data-fullscreen="true"
+      className="fixed inset-0 z-50 flex h-dvh w-screen flex-col overflow-hidden bg-slate-950"
     >
-      <div className="anim-pop flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl">
-        {/* Clean 3-Zone Arcade Header */}
-        <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3.5">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
-            {view !== 'HUB' && (
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.click();
-                  onClearExternalSummary?.();
-                  setView('HUB');
-                  setActiveGame(null);
-                  setSummary(null);
-                }}
-                aria-label="Back to Game Room"
-                className="flex h-9 shrink-0 items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-2.5 text-xs font-bold text-slate-200 hover:border-sky-400 active:scale-95 sm:h-10 sm:gap-1.5 sm:px-3"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="sm:hidden">Games</span>
-                <span className="hidden sm:inline">All Games</span>
-              </button>
-            )}
-            <Gamepad2 className="h-5 w-5 shrink-0 text-amber-300 sm:h-6 sm:w-6" aria-hidden="true" />
-            <h2 className="truncate text-sm font-black tracking-tight text-white sm:text-lg">
-              {view === 'PLAYING' && activeCard ? activeCard.title : 'Mission Game Room'}
-            </h2>
-          </div>
-
-          <div className="hidden shrink-0 items-center gap-3 text-xs font-bold text-slate-300 sm:flex tabular-nums">
-            <span>{charDef.name}</span>
-            <span className="text-slate-600" aria-hidden="true">·</span>
-            <span className="flex items-center gap-1 text-amber-300">
-              <Zap className="h-3.5 w-3.5 fill-amber-400" aria-hidden="true" />
-              {totalBolts} Bolts
-            </span>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {hasNextLevel && (
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.click();
-                  onNextLevel();
-                }}
-                className="flex h-9 items-center gap-1 whitespace-nowrap rounded-xl border border-emerald-300/80 bg-emerald-500 px-2.5 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95 sm:h-10 sm:gap-1.5 sm:px-3.5"
-              >
-                <Play className="h-3.5 w-3.5 fill-slate-950" />
-                <span className="sm:hidden">Next</span>
-                <span className="hidden sm:inline">Next Mission</span>
-              </button>
-            )}
+      {/* Slim Full-Width Header Bar */}
+      <header className="safe-top flex shrink-0 items-center justify-between gap-2 border-b border-slate-800/90 bg-slate-900/95 px-2.5 py-2 backdrop-blur-md sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {view !== 'HUB' && (
             <button
               type="button"
               onClick={() => {
                 SFX.click();
-                onClose();
+                onClearExternalSummary?.();
+                setView('HUB');
+                setActiveGame(null);
+                setSummary(null);
               }}
-              aria-label="Close Game Room"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95 sm:h-10 sm:w-10"
+              aria-label="Back to Game Room"
+              className="flex h-8 shrink-0 items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-2 text-xs font-bold text-slate-200 hover:border-sky-400 active:scale-95 sm:h-9 sm:px-2.5"
             >
-              <X className="h-5 w-5" />
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="sm:hidden">Games</span>
+              <span className="hidden sm:inline">All Games</span>
             </button>
-          </div>
-        </header>
+          )}
+          <Gamepad2 className="h-4.5 w-4.5 shrink-0 text-amber-300 sm:h-5 sm:w-5" aria-hidden="true" />
+          <h2 className="truncate text-xs font-black tracking-tight text-white sm:text-base">
+            {view === 'PLAYING' && activeCard ? activeCard.title : 'Mission Game Room'}
+          </h2>
+        </div>
 
-        {/* Main Content Surface */}
-        <div className="touch-pan-y flex-1 overflow-y-auto p-3.5 sm:p-5">
+        <div className="hidden shrink-0 items-center gap-2.5 text-xs font-bold text-slate-300 md:flex tabular-nums">
+          <span>{charDef.name}</span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
+          <span className="flex items-center gap-1 text-amber-300">
+            <Zap className="h-3.5 w-3.5 fill-amber-400" aria-hidden="true" />
+            {totalBolts} Bolts
+          </span>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          {view === 'PLAYING' && activeGame && (
+            <button
+              type="button"
+              onClick={() => {
+                SFX.click();
+                setRunKey((k) => k + 1);
+              }}
+              aria-label="Restart Mini-Game"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+          )}
+          {canBrowserFullscreen && (
+            <button
+              type="button"
+              data-testid="gameroom-fullscreen-btn"
+              onClick={toggleBrowserFullscreen}
+              aria-label={isNativeFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-sky-300 hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+            >
+              {isNativeFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+          )}
+          {view !== 'PLAYING' && hasNextLevel && (
+            <button
+              type="button"
+              onClick={() => {
+                SFX.click();
+                onNextLevel();
+              }}
+              className="flex h-8 items-center gap-1 whitespace-nowrap rounded-xl border border-emerald-300/80 bg-emerald-500 px-2.5 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95 sm:h-9 sm:px-3"
+            >
+              <Play className="h-3.5 w-3.5 fill-slate-950" />
+              <span className="sm:hidden">Next</span>
+              <span className="hidden sm:inline">Next Mission</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              SFX.click();
+              onClose();
+            }}
+            aria-label="Close Game Room"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Surface: Edge-to-Edge in PLAYING, Clean Full-Screen Hub/Summary */}
+      {view === 'PLAYING' ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {activeGame === 'bug_detective' && (
+            <BugDetectiveGame
+              key={runKey}
+              runSeed={runKey}
+              onFinish={(score, bolts, won, detail, perfectFixes) => {
+                onEducationalProgress?.({
+                  gameId: 'bug_detective',
+                  won,
+                  perfectFixes
+                });
+                handleRoundFinish('bug_detective', 'Bug Detective', score, bolts, won, detail);
+              }}
+            />
+          )}
+
+          {activeGame === 'logic_gate_lab' && (
+            <LogicGateLabGame
+              key={runKey}
+              runSeed={runKey}
+              onFinish={(score, bolts, won, detail, gatesSolved) => {
+                onEducationalProgress?.({
+                  gameId: 'logic_gate_lab',
+                  won,
+                  gatesSolved
+                });
+                handleRoundFinish('logic_gate_lab', 'Logic Gate Lab', score, bolts, won, detail);
+              }}
+            />
+          )}
+
+          {activeGame === 'break_wall' && (
+            <WallBreakerGame
+              key={runKey}
+              accentColor={charDef.accentCss}
+              onFinish={(score, bolts, won, detail) =>
+                handleRoundFinish('break_wall', 'Wall Breaker', score, bolts, won, detail)
+              }
+            />
+          )}
+
+          {activeGame === 'connect_nodes' && (
+            <PowerConnectGame
+              key={runKey}
+              onFinish={(score, bolts, won, detail) =>
+                handleRoundFinish('connect_nodes', 'Power Connect', score, bolts, won, detail)
+              }
+            />
+          )}
+
+          {activeGame === 'space_shooter' && (
+            <SpaceShooterGame
+              key={runKey}
+              accentColor={charDef.accentCss}
+              onFinish={(score, bolts, won, detail) =>
+                handleRoundFinish('space_shooter', 'Space Shooter', score, bolts, won, detail)
+              }
+            />
+          )}
+        </div>
+      ) : (
+        <div className="touch-pan-y safe-bottom flex-1 overflow-y-auto px-3 py-3.5 sm:px-6 sm:py-5">
           {view === 'HUB' && (
-            <div className="flex flex-col gap-5">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 sm:gap-5">
               {/* STEM Lab Mini-Games Section */}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-wider text-sky-300">
@@ -1913,7 +2211,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {EDUCATIONAL_MINI_GAMES.map((game) => (
                     <button
                       key={game.id}
@@ -1921,33 +2219,33 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                       data-arcade-game={game.id}
                       onClick={() => handleSelectGame(game.id)}
                       aria-label={`Play ${game.title}`}
-                      className="group flex flex-col justify-between gap-3 rounded-2xl border border-slate-700/90 bg-slate-800/80 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-sky-400/70 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99]"
+                      className="group flex flex-col justify-between gap-2.5 rounded-2xl border border-slate-700/90 bg-slate-900/90 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-sky-400/70 hover:bg-slate-800/90 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99] sm:p-4"
                     >
-                      <div className="flex items-start gap-3.5">
+                      <div className="flex items-start gap-3">
                         <div
-                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950"
-                          style={{ boxShadow: `0 0 22px ${game.accentHex}22` }}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950"
+                          style={{ boxShadow: `0 0 20px ${game.accentHex}22` }}
                         >
                           {GAME_ICON[game.id]}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h4 className="text-base font-black text-white group-hover:text-sky-200">
+                          <h4 className="text-sm font-black text-white group-hover:text-sky-200 sm:text-base">
                             {game.title}
                           </h4>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                          <p className="mt-0.5 text-xs leading-relaxed text-slate-300">
                             {game.subtitle}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between gap-3 border-t border-slate-700/70 pt-2.5">
+                      <div className="flex items-center justify-between gap-3 border-t border-slate-800 pt-2">
                         <span className="truncate text-[11px] font-medium text-slate-400">
                           {game.controlsHint}
                         </span>
                         <span
-                          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
+                          className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
                           style={{ backgroundColor: game.accentHex }}
                         >
-                          <Play className="h-3.5 w-3.5 fill-slate-950" />
+                          <Play className="h-3 w-3 fill-slate-950" />
                           <span>Play</span>
                         </span>
                       </div>
@@ -1959,14 +2257,14 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
               {/* Action Arcade Games Section */}
               <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-800 pt-4">
                 <p className="text-xs font-black uppercase tracking-wider text-amber-300">
-                  Arcade Action Games · Earn Bonus Bolts
+                  Arcade Action Games · Full-Screen Play
                 </p>
                 <span className="text-xs font-bold text-slate-400 tabular-nums">
                   {ARCADE_GAMES.length} Action Games Ready
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {ARCADE_GAMES.map((game) => {
                   const isPlanetCard = game.id === 'planet_adventure';
                   return (
@@ -1976,35 +2274,35 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                       data-arcade-game={game.id}
                       onClick={() => handleSelectGame(game.id)}
                       aria-label={`Play ${game.title}`}
-                      className={`group flex flex-col justify-between gap-3.5 rounded-2xl border border-slate-700/90 bg-slate-800/75 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99] ${
+                      className={`group flex flex-col justify-between gap-2.5 rounded-2xl border border-slate-700/90 bg-slate-900/90 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-800/90 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99] sm:p-4 ${
                         isPlanetCard ? 'sm:col-span-2' : ''
                       }`}
                     >
-                      <div className="flex items-start gap-3.5">
+                      <div className="flex items-start gap-3">
                         <div
-                          className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950"
-                          style={{ boxShadow: `0 0 22px ${game.accentHex}22` }}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950"
+                          style={{ boxShadow: `0 0 20px ${game.accentHex}22` }}
                         >
                           {GAME_ICON[game.id]}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h3 className="text-base font-black text-white group-hover:text-sky-200">
+                            <h3 className="text-sm font-black text-white group-hover:text-sky-200 sm:text-base">
                               {game.title}
                             </h3>
                             {isPlanetCard && (
-                              <span className="rounded-md border border-teal-400/60 bg-teal-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-teal-300">
+                              <span className="text-[11px] font-black text-teal-300">
                                 3D Equipment Adventure
                               </span>
                             )}
                           </div>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                          <p className="mt-0.5 text-xs leading-relaxed text-slate-300">
                             {game.subtitle}
                           </p>
                           {isPlanetCard && planetCaps && (
                             <div
                               data-testid="planet-card-loadout"
-                              className="mt-2.5 flex flex-wrap items-center gap-1.5"
+                              className="mt-2 flex flex-wrap items-center gap-1.5"
                             >
                               {PLANET_EQUIPMENT_META.map((item) => {
                                 const unlocked =
@@ -2025,7 +2323,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                                     className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-bold ${
                                       unlocked
                                         ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-200'
-                                        : 'border-slate-700 bg-slate-900/70 text-slate-500'
+                                        : 'border-slate-700 bg-slate-950/70 text-slate-500'
                                     }`}
                                   >
                                     <PartIcon id={item.part} className="h-3.5 w-3.5" />
@@ -2038,15 +2336,15 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 border-t border-slate-700/70 pt-3">
+                      <div className="flex items-center justify-between gap-3 border-t border-slate-800 pt-2">
                         <span className="truncate text-[11px] font-medium text-slate-400">
                           {game.controlsHint}
                         </span>
                         <span
-                          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
+                          className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
                           style={{ backgroundColor: game.accentHex }}
                         >
-                          <Play className="h-3.5 w-3.5 fill-slate-950" />
+                          <Play className="h-3 w-3 fill-slate-950" />
                           <span>Play</span>
                         </span>
                       </div>
@@ -2057,69 +2355,10 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
             </div>
           )}
 
-          {view === 'PLAYING' && activeGame === 'bug_detective' && (
-            <BugDetectiveGame
-              key={runKey}
-              runSeed={runKey}
-              onFinish={(score, bolts, won, detail, perfectFixes) => {
-                onEducationalProgress?.({
-                  gameId: 'bug_detective',
-                  won,
-                  perfectFixes
-                });
-                handleRoundFinish('bug_detective', 'Bug Detective', score, bolts, won, detail);
-              }}
-            />
-          )}
-
-          {view === 'PLAYING' && activeGame === 'logic_gate_lab' && (
-            <LogicGateLabGame
-              key={runKey}
-              runSeed={runKey}
-              onFinish={(score, bolts, won, detail, gatesSolved) => {
-                onEducationalProgress?.({
-                  gameId: 'logic_gate_lab',
-                  won,
-                  gatesSolved
-                });
-                handleRoundFinish('logic_gate_lab', 'Logic Gate Lab', score, bolts, won, detail);
-              }}
-            />
-          )}
-
-          {view === 'PLAYING' && activeGame === 'break_wall' && (
-            <WallBreakerGame
-              key={runKey}
-              accentColor={charDef.accentCss}
-              onFinish={(score, bolts, won, detail) =>
-                handleRoundFinish('break_wall', 'Wall Breaker', score, bolts, won, detail)
-              }
-            />
-          )}
-
-          {view === 'PLAYING' && activeGame === 'connect_nodes' && (
-            <PowerConnectGame
-              key={runKey}
-              onFinish={(score, bolts, won, detail) =>
-                handleRoundFinish('connect_nodes', 'Power Connect', score, bolts, won, detail)
-              }
-            />
-          )}
-
-          {view === 'PLAYING' && activeGame === 'space_shooter' && (
-            <SpaceShooterGame
-              key={runKey}
-              accentColor={charDef.accentCss}
-              onFinish={(score, bolts, won, detail) =>
-                handleRoundFinish('space_shooter', 'Space Shooter', score, bolts, won, detail)
-              }
-            />
-          )}
-
           {view === 'ROUND_SUMMARY' && summary && (
             <div
               data-testid="game-room-summary"
-              className="mx-auto flex max-w-md flex-col items-center gap-4 py-6 text-center"
+              className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-4 py-8 text-center"
             >
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-300/60 bg-amber-400/15 text-amber-300">
                 {summary.won ? <Trophy className="h-9 w-9" /> : <Check className="h-9 w-9" />}
@@ -2131,7 +2370,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                 <p className="mt-1 text-sm text-slate-300">{summary.detail}</p>
               </div>
 
-              <div className="flex items-center gap-6 rounded-2xl border border-slate-700 bg-slate-950/75 px-6 py-3.5 text-sm font-bold tabular-nums">
+              <div className="flex items-center gap-6 rounded-2xl border border-slate-700 bg-slate-900/90 px-6 py-3.5 text-sm font-bold tabular-nums">
                 <div className="flex flex-col items-center">
                   <span className="text-[11px] font-medium text-slate-400">Score</span>
                   <span className="text-xl font-black text-sky-300">{summary.score}</span>
@@ -2149,7 +2388,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleSelectGame(summary.gameId)}
-                  className="flex h-12 items-center gap-2 rounded-xl border border-sky-400/80 bg-sky-500 px-5 text-sm font-black text-slate-950 hover:bg-sky-400 active:scale-95"
+                  className="flex h-11 items-center gap-2 rounded-xl border border-sky-400/80 bg-sky-500 px-5 text-sm font-black text-slate-950 hover:bg-sky-400 active:scale-95"
                 >
                   <RotateCcw className="h-4 w-4" />
                   <span>Play Again</span>
@@ -2163,7 +2402,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                     setActiveGame(null);
                     setSummary(null);
                   }}
-                  className="flex h-12 items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-5 text-sm font-bold text-white hover:border-slate-400 active:scale-95"
+                  className="flex h-11 items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-5 text-sm font-bold text-white hover:border-slate-400 active:scale-95"
                 >
                   <Gamepad2 className="h-4 w-4 text-amber-300" />
                   <span>Switch Game</span>
@@ -2172,7 +2411,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

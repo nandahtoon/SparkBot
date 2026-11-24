@@ -325,13 +325,13 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           onPointerDown={(e) => handleExistingDown(e, blk)}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className={`relative flex shrink-0 items-center gap-1.5 rounded-2xl border-2 px-2 py-1.5 transition-all ${
+          className={`relative flex shrink-0 items-center gap-1 rounded-xl border-2 px-1.5 py-1 transition-all ${
             isActive
-              ? 'border-amber-300 bg-amber-400/25 ring-2 ring-amber-300/80 shadow-[0_0_20px_rgba(251,191,36,0.7)]'
+              ? 'border-amber-300 bg-amber-400/25 ring-2 ring-amber-300/80 shadow-[0_0_16px_rgba(251,191,36,0.7)]'
               : isFailing
-                ? 'border-rose-400 bg-rose-500/20 ring-2 ring-rose-400/75 shadow-[0_0_16px_rgba(251,113,133,0.45)]'
+                ? 'border-rose-400 bg-rose-500/20 ring-2 ring-rose-400/75 shadow-[0_0_14px_rgba(251,113,133,0.45)]'
                 : isAncestor
-                  ? 'border-cyan-300 bg-cyan-500/15 shadow-[0_0_16px_rgba(34,211,238,0.45)]'
+                  ? 'border-cyan-300 bg-cyan-500/15 shadow-[0_0_14px_rgba(34,211,238,0.45)]'
                   : isContainerFocused
                     ? isLoop
                       ? 'border-emerald-300 bg-emerald-500/20'
@@ -342,17 +342,17 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           }`}
         >
           {isFailing && (
-            <span className="absolute -left-1.5 -top-2.5 z-10 rounded-md border border-rose-200 bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow">
+            <span className="absolute -left-1.5 -top-2 z-10 rounded bg-rose-500 px-1 py-0.5 text-[9px] font-black leading-none text-white shadow">
               Check
             </span>
           )}
           {isActive && stepInspection && (
-            <span className="tabular absolute -left-1.5 -top-2.5 z-10 rounded-md border border-amber-200 bg-amber-400 px-1.5 py-0.5 text-[10px] font-black leading-none text-slate-950 shadow">
+            <span className="tabular absolute -left-1.5 -top-2 z-10 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-black leading-none text-slate-950 shadow">
               #{stepInspection.stepNumber}
             </span>
           )}
-          <div className="flex flex-col items-center gap-0.5 pr-1">
-            <BlockIcon type={blk.type} condition={blk.condition} className="h-7 w-7" />
+          <div className="flex flex-col items-center gap-0.5 pr-0.5">
+            <BlockIcon type={blk.type} condition={blk.condition} className="h-5.5 w-5.5" />
             {isLoop && (
               <button
                 type="button"
@@ -367,7 +367,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                   });
                 }}
                 aria-label={`Loop count ${blk.count || 2}`}
-                className="tabular rounded-lg bg-emerald-400 px-1.5 py-0.5 text-xs font-black text-slate-950"
+                className="tabular rounded bg-emerald-400 px-1 py-0.2 text-[10px] font-black text-slate-950"
               >
                 ×{blk.count || 2}
               </button>
@@ -376,10 +376,10 @@ export const CodeDock: React.FC<CodeDockProps> = ({
 
           <div
             data-drop-zone={blk.id}
-            className="flex min-h-[54px] min-w-[60px] items-center gap-1.5 rounded-xl border border-dashed border-slate-500/70 bg-slate-950/60 px-2 py-1"
+            className="flex min-h-[40px] min-w-[44px] items-center gap-1 rounded-lg border border-dashed border-slate-500/70 bg-slate-950/60 px-1.5 py-0.5"
           >
             {(blk.children || []).length === 0 ? (
-              <span className="h-3 w-3 rounded-full bg-slate-600/80 mx-auto" />
+              <span className="mx-auto h-2.5 w-2.5 rounded-full bg-slate-600/80" />
             ) : (
               (blk.children || []).map((child) => renderBlock(child))
             )}
@@ -395,9 +395,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
               onChangeProgram(next);
             }}
             aria-label="Remove Block"
-            className="ml-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 text-slate-200 hover:bg-rose-500"
+            className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-slate-200 hover:bg-rose-500"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3 w-3" />
           </button>
         </div>
       );
@@ -419,25 +419,25 @@ export const CodeDock: React.FC<CodeDockProps> = ({
         onPointerDown={(e) => handleExistingDown(e, blk)}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 bg-slate-800 transition-all ${
+        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 bg-slate-800 transition-all sm:h-11 sm:w-11 ${
           isActive
-            ? 'border-amber-300 bg-amber-400/30 scale-110 ring-2 ring-amber-300/80 shadow-[0_0_22px_rgba(251,191,36,0.78)]'
+            ? 'scale-105 border-amber-300 bg-amber-400/30 ring-2 ring-amber-300/80 shadow-[0_0_16px_rgba(251,191,36,0.75)]'
             : isFailing
-              ? 'border-rose-400 bg-rose-500/25 ring-2 ring-rose-400/80 shadow-[0_0_16px_rgba(251,113,133,0.5)]'
+              ? 'border-rose-400 bg-rose-500/25 ring-2 ring-rose-400/80 shadow-[0_0_14px_rgba(251,113,133,0.5)]'
               : border
         }`}
       >
         {isFailing && (
-          <span className="absolute -left-2 -top-2.5 z-10 rounded-md border border-rose-200 bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow">
+          <span className="absolute -left-1.5 -top-2 z-10 rounded bg-rose-500 px-1 py-0.5 text-[9px] font-black leading-none text-white shadow">
             Check
           </span>
         )}
         {isActive && stepInspection && (
-          <span className="tabular absolute -left-2 -top-2.5 z-10 rounded-md border border-amber-200 bg-amber-400 px-1.5 py-0.5 text-[10px] font-black leading-none text-slate-950 shadow">
+          <span className="tabular absolute -left-1.5 -top-2 z-10 rounded bg-amber-400 px-1 py-0.5 text-[9px] font-black leading-none text-slate-950 shadow">
             #{stepInspection.stepNumber}
           </span>
         )}
-        <BlockIcon type={blk.type} className="h-8 w-8" />
+        <BlockIcon type={blk.type} className="h-6 w-6 sm:h-6.5 sm:w-6.5" />
         {!simulating && (
           <button
             type="button"
@@ -448,9 +448,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
               onChangeProgram(next);
             }}
             aria-label="Remove Block"
-            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-slate-200 hover:bg-rose-500"
+            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-slate-200 hover:bg-rose-500"
           >
-            <X className="h-3 w-3" />
+            <X className="h-2.5 w-2.5" />
           </button>
         )}
       </div>
@@ -466,21 +466,21 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             top: `${drag.y}px`,
             transform: 'translate(-50%, -50%)'
           }}
-          className="pointer-events-none fixed z-50 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-sky-300 bg-slate-900/95 shadow-2xl"
+          className="pointer-events-none fixed z-50 flex h-12 w-12 items-center justify-center rounded-xl border-2 border-sky-300 bg-slate-900/95 shadow-2xl"
         >
-          <BlockIcon type={drag.type} condition={drag.condition} className="h-10 w-10" />
+          <BlockIcon type={drag.type} condition={drag.condition} className="h-7 w-7" />
         </div>
       )}
 
-      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-2 sm:px-3">
+      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-1.5 px-2 pb-1 sm:px-3 sm:pb-1.5">
         {hintBanner}
         <div
           data-code-feedback-tier={lastFeedbackTier || ''}
-          className="pointer-events-auto w-full max-w-5xl rounded-3xl border border-slate-600/80 bg-slate-900/95 px-2.5 py-2 shadow-2xl sm:border-2 sm:border-slate-700 sm:px-3.5 sm:py-2.5"
+          className="pointer-events-auto w-full max-w-4xl rounded-2xl border border-slate-600/80 bg-slate-900/94 px-2 py-1.5 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2"
         >
-          {/* Top Row: Command Palette + Right Action Controls (stacked cleanly on phones, side-by-side on sm+) */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="no-scrollbar touch-pan-x flex items-center gap-1.5 overflow-x-auto pt-1.5 pb-0.5 pr-1 sm:gap-2">
+          {/* Top Row: Compact Command Palette + Action Controls */}
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+            <div className="no-scrollbar touch-pan-x flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 pr-1">
               {(['MOVE', 'JUMP', 'BOOST'] as const).map((cmd) => {
                 const isHint =
                   ghostHelp &&
@@ -495,13 +495,13 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                       onPointerDown={(e) => handlePaletteDown(e, cmd)}
                       onPointerMove={handlePointerMove}
                       onPointerUp={handlePointerUp}
-                      className={`flex h-13 w-13 items-center justify-center rounded-2xl border-2 bg-slate-800 transition-transform active:scale-95 sm:h-16 sm:w-16 ${
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl border bg-slate-800 transition-transform active:scale-95 sm:h-11 sm:w-11 ${
                         isHint
-                          ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_16px_rgba(251,191,36,0.5)]'
+                          ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_14px_rgba(251,191,36,0.5)]'
                           : 'border-slate-600 hover:border-sky-400'
                       }`}
                     >
-                      <BlockIcon type={cmd} className="h-7 w-7 sm:h-9 sm:w-9" />
+                      <BlockIcon type={cmd} className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
                     </button>
                     {onOpenDemo && (
                       <button
@@ -513,9 +513,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                           e.stopPropagation();
                           onOpenDemo(cmd);
                         }}
-                        className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-sky-400/80 bg-slate-900 text-sky-300 shadow hover:bg-sky-500 hover:text-slate-950"
+                        className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-sky-400/80 bg-slate-900 text-sky-300 shadow hover:bg-sky-500 hover:text-slate-950"
                       >
-                        <BookOpen className="h-3 w-3" />
+                        <BookOpen className="h-2.5 w-2.5" />
                       </button>
                     )}
                   </div>
@@ -531,9 +531,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     onPointerDown={(e) => handlePaletteDown(e, 'LOOP')}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
-                    className="flex h-13 w-13 items-center justify-center rounded-2xl border-2 border-emerald-500/75 bg-slate-800 transition-transform active:scale-95 hover:border-emerald-300 sm:h-16 sm:w-16"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/75 bg-slate-800 transition-transform active:scale-95 hover:border-emerald-300 sm:h-11 sm:w-11"
                   >
-                    <BlockIcon type="LOOP" className="h-7 w-7 sm:h-9 sm:w-9" />
+                    <BlockIcon type="LOOP" className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
                   </button>
                   {onOpenDemo && (
                     <button
@@ -545,9 +545,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                         e.stopPropagation();
                         onOpenDemo('LOOP');
                       }}
-                      className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-emerald-400/80 bg-slate-900 text-emerald-300 shadow hover:bg-emerald-500 hover:text-slate-950"
+                      className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400/80 bg-slate-900 text-emerald-300 shadow hover:bg-emerald-500 hover:text-slate-950"
                     >
-                      <BookOpen className="h-3 w-3" />
+                      <BookOpen className="h-2.5 w-2.5" />
                     </button>
                   )}
                 </div>
@@ -566,9 +566,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                       onPointerDown={(e) => handlePaletteDown(e, 'IF', 'GAP')}
                       onPointerMove={handlePointerMove}
                       onPointerUp={handlePointerUp}
-                      className="flex h-13 min-w-[64px] items-center justify-center rounded-2xl border-2 border-violet-500/80 bg-slate-800 px-1.5 transition-transform active:scale-95 hover:border-violet-300 sm:h-16 sm:min-w-[74px] sm:px-2"
+                      className="flex h-10 min-w-[50px] items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-11 sm:min-w-[58px] sm:px-1.5"
                     >
-                      <BlockIcon type="IF" condition="GAP" />
+                      <BlockIcon type="IF" condition="GAP" className="scale-90" />
                     </button>
                     {onOpenDemo && (
                       <button
@@ -580,9 +580,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                           e.stopPropagation();
                           onOpenDemo('IF', 'GAP');
                         }}
-                        className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-violet-400/80 bg-slate-900 text-violet-300 shadow hover:bg-violet-500 hover:text-slate-950"
+                        className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-violet-400/80 bg-slate-900 text-violet-300 shadow hover:bg-violet-500 hover:text-slate-950"
                       >
-                        <BookOpen className="h-3 w-3" />
+                        <BookOpen className="h-2.5 w-2.5" />
                       </button>
                     )}
                   </div>
@@ -597,9 +597,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                       onPointerDown={(e) => handlePaletteDown(e, 'IF', 'MUD')}
                       onPointerMove={handlePointerMove}
                       onPointerUp={handlePointerUp}
-                      className="flex h-13 min-w-[64px] items-center justify-center rounded-2xl border-2 border-violet-500/80 bg-slate-800 px-1.5 transition-transform active:scale-95 hover:border-violet-300 sm:h-16 sm:min-w-[74px] sm:px-2"
+                      className="flex h-10 min-w-[50px] items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-11 sm:min-w-[58px] sm:px-1.5"
                     >
-                      <BlockIcon type="IF" condition="MUD" />
+                      <BlockIcon type="IF" condition="MUD" className="scale-90" />
                     </button>
                     {onOpenDemo && (
                       <button
@@ -611,9 +611,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                           e.stopPropagation();
                           onOpenDemo('IF', 'MUD');
                         }}
-                        className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-violet-400/80 bg-slate-900 text-violet-300 shadow hover:bg-violet-500 hover:text-slate-950"
+                        className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-violet-400/80 bg-slate-900 text-violet-300 shadow hover:bg-violet-500 hover:text-slate-950"
                       >
-                        <BookOpen className="h-3 w-3" />
+                        <BookOpen className="h-2.5 w-2.5" />
                       </button>
                     )}
                   </div>
@@ -628,9 +628,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                       onPointerDown={(e) => handlePaletteDown(e, 'IF', 'RAMP')}
                       onPointerMove={handlePointerMove}
                       onPointerUp={handlePointerUp}
-                      className="flex h-13 min-w-[64px] items-center justify-center rounded-2xl border-2 border-violet-500/80 bg-slate-800 px-1.5 transition-transform active:scale-95 hover:border-violet-300 sm:h-16 sm:min-w-[74px] sm:px-2"
+                      className="flex h-10 min-w-[50px] items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-11 sm:min-w-[58px] sm:px-1.5"
                     >
-                      <BlockIcon type="IF" condition="RAMP" />
+                      <BlockIcon type="IF" condition="RAMP" className="scale-90" />
                     </button>
                     {onOpenDemo && (
                       <button
@@ -642,9 +642,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                           e.stopPropagation();
                           onOpenDemo('IF', 'RAMP');
                         }}
-                        className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-violet-400/80 bg-slate-900 text-violet-300 shadow hover:bg-violet-500 hover:text-slate-950"
+                        className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-violet-400/80 bg-slate-900 text-violet-300 shadow hover:bg-violet-500 hover:text-slate-950"
                       >
-                        <BookOpen className="h-3 w-3" />
+                        <BookOpen className="h-2.5 w-2.5" />
                       </button>
                     )}
                   </div>
@@ -653,17 +653,17 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             </div>
 
             {/* Right Controls: Block Par Counter, Trash, Collapse, Step & Run Buttons */}
-            <div className="flex shrink-0 items-center justify-between gap-1.5 sm:justify-end sm:gap-2">
-              <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center justify-between gap-1.5 sm:justify-end">
+              <div className="flex items-center gap-1">
                 <div
                   aria-label={`Blocks ${totalBlocks} of ${parBlocks}`}
-                  className={`flex h-10 items-center gap-1.5 rounded-xl px-2.5 tabular text-xs font-black sm:h-12 sm:px-3 sm:text-sm ${
+                  className={`flex h-8 items-center gap-1 rounded-lg px-2 tabular text-[11px] font-black sm:h-9 sm:text-xs ${
                     totalBlocks <= parBlocks
                       ? 'border border-emerald-500/50 bg-emerald-500/20 text-emerald-300'
                       : 'border border-amber-500/50 bg-amber-500/20 text-amber-300'
                   }`}
                 >
-                  <Puzzle className="h-4 w-4" />
+                  <Puzzle className="h-3.5 w-3.5" />
                   <span>
                     {totalBlocks}/{parBlocks}
                   </span>
@@ -678,13 +678,13 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     onChangeProgram([]);
                   }}
                   aria-label="Clear All Blocks"
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-colors disabled:opacity-40 sm:h-12 sm:w-12 ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 sm:h-9 sm:w-9 ${
                     drag?.kind === 'existing' && drag.moved
                       ? 'border-rose-400 bg-rose-500/30 text-rose-200'
                       : 'border-slate-700 bg-slate-800 text-rose-300 hover:border-rose-400'
                   }`}
                 >
-                  <Trash2 className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                  <Trash2 className="h-4 w-4" />
                 </button>
 
                 {onRequestHint && !simulating && (
@@ -693,9 +693,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     type="button"
                     onClick={onRequestHint}
                     aria-label="Need a Hint"
-                    className="flex h-10 items-center gap-1 rounded-xl border border-amber-400/70 bg-amber-500/15 px-2.5 text-xs font-black text-amber-200 transition-colors hover:border-amber-300 hover:bg-amber-500/25 active:scale-95 sm:h-12"
+                    className="flex h-8 items-center gap-1 rounded-lg border border-amber-400/70 bg-amber-500/15 px-2 text-[11px] font-black text-amber-200 transition-colors hover:border-amber-300 hover:bg-amber-500/25 active:scale-95 sm:h-9"
                   >
-                    <Lightbulb className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     <span className="hidden sm:inline">Hint</span>
                   </button>
                 )}
@@ -704,23 +704,23 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                   type="button"
                   onClick={() => setCollapsed((v) => !v)}
                   aria-label={collapsed ? 'Expand Code Dock' : 'Collapse Code Dock'}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 sm:h-12"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 sm:h-9 sm:w-9"
                 >
-                  {collapsed ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  {collapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
               </div>
 
               {!simulating ? (
-                <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="flex items-center gap-1.5">
                   {onStepProgram && (
                     <button
                       id="stepCodeBtn"
                       type="button"
                       onClick={onStepProgram}
                       aria-label="Step-Through Program"
-                      className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border-2 border-sky-300/90 bg-gradient-to-b from-sky-400 to-sky-600 px-3 text-xs font-black text-slate-950 shadow-[0_4px_0_#0369a1] transition-transform active:translate-y-0.5 sm:h-14 sm:px-4 sm:text-sm lg:h-16"
+                      className="flex h-8.5 items-center justify-center gap-1 rounded-xl border border-sky-300/90 bg-gradient-to-b from-sky-400 to-sky-600 px-2.5 text-[11px] font-black text-slate-950 shadow-[0_2px_0_#0369a1] transition-transform active:translate-y-0.5 sm:h-9.5 sm:px-3 sm:text-xs"
                     >
-                      <StepForward className="h-4.5 w-4.5 stroke-[2.75] sm:h-5 sm:w-5" />
+                      <StepForward className="h-3.5 w-3.5 stroke-[2.75] sm:h-4 sm:w-4" />
                       <span>Step</span>
                     </button>
                   )}
@@ -730,33 +730,33 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     type="button"
                     onClick={onRunProgram}
                     aria-label="Run Robot Program"
-                    className="flex h-12 min-w-[64px] items-center justify-center rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3.5 text-slate-950 shadow-[0_4px_0_#047857] transition-transform active:translate-y-0.5 sm:h-14 sm:min-w-[74px] sm:px-5 lg:h-16"
+                    className="flex h-8.5 min-w-[48px] items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3 text-slate-950 shadow-[0_2px_0_#047857] transition-transform active:translate-y-0.5 sm:h-9.5 sm:min-w-[56px] sm:px-4"
                   >
-                    <Play className="h-7 w-7 fill-slate-950 sm:h-8 sm:w-8" />
+                    <Play className="h-4.5 w-4.5 fill-slate-950 sm:h-5 sm:w-5" />
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5" role="group" aria-label="Simulation Step Controls">
+                <div className="flex items-center gap-1" role="group" aria-label="Simulation Step Controls">
                   {onToggleSimPause && (
                     <button
                       id="simPauseResumeBtn"
                       type="button"
                       onClick={onToggleSimPause}
                       aria-label={simPaused ? 'Resume Simulation' : 'Pause Simulation'}
-                      className={`flex h-11 items-center gap-1.5 rounded-2xl border-2 px-2.5 text-xs font-black transition-transform active:translate-y-0.5 sm:h-14 sm:px-3.5 sm:text-sm ${
+                      className={`flex h-8.5 items-center gap-1 rounded-xl border px-2 text-[11px] font-black transition-transform active:translate-y-0.5 sm:h-9.5 sm:px-2.5 sm:text-xs ${
                         simPaused
-                          ? 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_4px_0_#047857]'
-                          : 'border-amber-200 bg-gradient-to-b from-amber-300 to-amber-500 text-slate-950 shadow-[0_4px_0_#b45309]'
+                          ? 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_2px_0_#047857]'
+                          : 'border-amber-200 bg-gradient-to-b from-amber-300 to-amber-500 text-slate-950 shadow-[0_2px_0_#b45309]'
                       }`}
                     >
                       {simPaused ? (
                         <>
-                          <Play className="h-4 w-4 fill-slate-950" />
+                          <Play className="h-3.5 w-3.5 fill-slate-950" />
                           <span>Resume</span>
                         </>
                       ) : (
                         <>
-                          <Pause className="h-4 w-4 fill-slate-950" />
+                          <Pause className="h-3.5 w-3.5 fill-slate-950" />
                           <span>Pause</span>
                         </>
                       )}
@@ -773,9 +773,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                           ? 'Finish Simulation'
                           : 'Next Instruction Step'
                       }
-                      className="flex h-11 items-center gap-1.5 rounded-2xl border-2 border-sky-200 bg-gradient-to-b from-sky-400 to-sky-600 px-2.5 text-xs font-black text-slate-950 shadow-[0_4px_0_#0369a1] transition-transform active:translate-y-0.5 sm:h-14 sm:px-3.5 sm:text-sm"
+                      className="flex h-8.5 items-center gap-1 rounded-xl border border-sky-200 bg-gradient-to-b from-sky-400 to-sky-600 px-2 text-[11px] font-black text-slate-950 shadow-[0_2px_0_#0369a1] transition-transform active:translate-y-0.5 sm:h-9.5 sm:px-2.5 sm:text-xs"
                     >
-                      <StepForward className="h-4 w-4 stroke-[2.75]" />
+                      <StepForward className="h-3.5 w-3.5 stroke-[2.75]" />
                       <span>{stepInspection?.isLastStep && simAwaitingStep ? 'Finish' : 'Next'}</span>
                     </button>
                   )}
@@ -786,9 +786,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                       type="button"
                       onClick={onStopSim}
                       aria-label="Stop and Reset Simulation"
-                      className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 border-rose-400/80 bg-rose-500/20 text-rose-200 transition-transform hover:bg-rose-500/35 active:scale-95 sm:h-14 sm:w-12"
+                      className="flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-rose-400/80 bg-rose-500/20 text-rose-200 transition-transform hover:bg-rose-500/35 active:scale-95 sm:h-9.5 sm:w-9.5"
                     >
-                      <Square className="h-4 w-4 fill-current" />
+                      <Square className="h-3.5 w-3.5 fill-current" />
                     </button>
                   )}
                 </div>
@@ -802,15 +802,15 @@ export const CodeDock: React.FC<CodeDockProps> = ({
               data-testid="step-inspector-bar"
               data-step-number={stepInspection.stepNumber}
               data-sim-paused={simPaused ? 'true' : 'false'}
-              className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-sky-400/45 bg-slate-950/90 px-2.5 py-1.5 text-xs shadow-inner sm:px-3 sm:py-2"
+              className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5 rounded-xl border border-sky-400/45 bg-slate-950/90 px-2 py-1 text-[11px] shadow-inner sm:px-2.5"
             >
               {/* Left: Step Counter + State Pill + Instruction Outcome */}
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
-                <span className="tabular rounded-lg border border-amber-300/60 bg-amber-400/20 px-2 py-0.5 text-[10px] font-black text-amber-200 sm:text-[11px]">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span className="tabular rounded-md border border-amber-300/60 bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-black text-amber-200">
                   STEP {stepInspection.stepNumber}/{stepInspection.totalSteps}
                 </span>
                 <span
-                  className={`rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                  className={`rounded-md border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                     stepInspection.isFailure
                       ? 'border-rose-400/70 bg-rose-500/25 text-rose-200'
                       : simPaused
@@ -818,31 +818,31 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                         : 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
                   }`}
                 >
-                  {stepInspection.isFailure ? 'Alert' : simPaused ? 'Paused · Inspect' : 'Running'}
+                  {stepInspection.isFailure ? 'Alert' : simPaused ? 'Paused' : 'Running'}
                 </span>
-                <span className="text-[11px] font-bold text-slate-100 sm:text-xs">{stepInspection.statusLabel}</span>
+                <span className="text-[11px] font-bold text-slate-100">{stepInspection.statusLabel}</span>
               </div>
 
               {/* Right: Live Robot Telemetry Readout (Position, Sensor Ahead, Crystals, Hardware) */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold sm:text-[11px]">
+              <div className="flex flex-wrap items-center gap-1 text-[10px] font-bold">
                 <span
-                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 tabular ${TILE_BADGE_STYLE[stepInspection.currentTileType]}`}
+                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 tabular ${TILE_BADGE_STYLE[stepInspection.currentTileType]}`}
                 >
                   <MapPin className="h-3 w-3" aria-hidden="true" />
                   <span>
-                    Tile {stepInspection.tilePosition}/{stepInspection.gateIndex} ·{' '}
+                    {stepInspection.tilePosition}/{stepInspection.gateIndex} ·{' '}
                     {stepInspection.currentTileType.toUpperCase()}
                   </span>
                 </span>
 
                 <span
-                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 ${TILE_BADGE_STYLE[stepInspection.aheadTileType]}`}
+                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 ${TILE_BADGE_STYLE[stepInspection.aheadTileType]}`}
                 >
                   <Eye className="h-3 w-3" aria-hidden="true" />
                   <span>Ahead: {stepInspection.aheadTileType.toUpperCase()}</span>
                 </span>
 
-                <span className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-2 py-0.5 text-cyan-200 tabular">
+                <span className="inline-flex items-center gap-1 rounded-md border border-cyan-400/50 bg-cyan-500/15 px-1.5 py-0.5 text-cyan-200 tabular">
                   <Diamond className="h-3 w-3 fill-cyan-300 text-cyan-300" aria-hidden="true" />
                   <span>
                     {stepInspection.crystalsCollected}/{stepInspection.totalCrystals}
@@ -850,7 +850,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                 </span>
 
                 {stepInspection.activeCapabilities.length > 0 && (
-                  <span className="hidden items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/90 px-2 py-0.5 text-slate-300 md:inline-flex">
+                  <span className="hidden items-center gap-1 rounded-md border border-slate-700 bg-slate-800/90 px-1.5 py-0.5 text-slate-300 md:inline-flex">
                     <Cpu className="h-3 w-3 text-sky-300" aria-hidden="true" />
                     <span>{stepInspection.activeCapabilities.join(' · ')}</span>
                   </span>
@@ -865,13 +865,13 @@ export const CodeDock: React.FC<CodeDockProps> = ({
               ref={railRef}
               data-drop-zone="ROOT"
               onClick={() => setActiveContainerId(null)}
-              className="no-scrollbar touch-pan-x mt-2 flex min-h-[64px] items-center gap-2 overflow-x-auto rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/75 px-2.5 py-1.5 sm:mt-2.5 sm:min-h-[72px] sm:px-3 sm:py-2"
+              className="no-scrollbar touch-pan-x mt-1.5 flex min-h-[50px] items-center gap-1.5 overflow-x-auto rounded-xl border border-dashed border-slate-700 bg-slate-950/75 px-2 py-1 sm:min-h-[56px] sm:px-2.5 sm:py-1.5"
             >
               {program.length === 0 ? (
                 <div className="mx-auto flex items-center gap-2 text-slate-500">
-                  <span className="h-3 w-3 rounded-full bg-sky-400/50" />
-                  <span className="h-3 w-3 rounded-full bg-amber-400/50" />
-                  <span className="h-3 w-3 rounded-full bg-emerald-400/50" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-sky-400/50" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/50" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/50" />
                 </div>
               ) : (
                 program.map((blk) => renderBlock(blk))

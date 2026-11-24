@@ -22,6 +22,7 @@ import * as LevelHistory from './levelHistory';
 import * as PlanetAdv from './planetAdventure';
 import * as ResponsiveCamera from '../three/responsiveCamera';
 import * as AndroidApp from './androidApp';
+import * as TrackSurface from './trackSurface';
 
 test('magnet part attaches cleanly to chassis and lowers Action Dash bolt-per-cube threshold', () => {
   const chassis = E.createEmptyChassis();
@@ -1288,3 +1289,38 @@ test('Android app platform detection, tactile haptics, Back navigation priority,
     assert.ok(fs.statSync(rel).size > 200, `Expected non-empty Android asset: ${rel}`);
   }
 });
+
+test('trackSurface keeps robot flush on top of inclined pink ramps, mud basins, and flat tiles without sinking', () => {
+  const track: E.TrackTile[] = [
+    { type: 'start', crystal: false },
+    { type: 'normal', crystal: false },
+    { type: 'ramp', crystal: false },
+    { type: 'mud', crystal: false },
+    { type: 'gate', crystal: false }
+  ];
+
+  // Workshop turntable & flat tiles sit at y = 0, pitchX = 0
+  const workshop = TrackSurface.sampleTrackSurfaceAtZ(track, 0);
+  assert.equal(workshop.y, 0);
+  assert.equal(workshop.pitchX, 0);
+
+  const normalZ = TrackSurface.getTrackTileCenterZ(1);
+  const normalSurf = TrackSurface.sampleTrackSurfaceAtZ(track, normalZ);
+  assert.equal(normalSurf.y, 0);
+  assert.equal(normalSurf.pitchX, 0);
+
+  // Ramp tile elevates bot cleanly above wedge top (~0.358 at center) and slopes up along -Z
+  const rampCenterZ = TrackSurface.getTrackTileCenterZ(2);
+  const rampLow = TrackSurface.sampleTrackSurfaceAtZ(track, rampCenterZ + 1.0);
+  const rampMid = TrackSurface.sampleTrackSurfaceAtZ(track, rampCenterZ);
+  const rampHigh = TrackSurface.sampleTrackSurfaceAtZ(track, rampCenterZ - 1.0);
+  assert.ok(rampMid.y > 0.35 && rampMid.y < 0.37, `Ramp center height should clear wedge top (got ${rampMid.y})`);
+  assert.ok(rampHigh.y > rampMid.y && rampMid.y > rampLow.y, 'Ramp height must increase monotonically along -Z');
+  assert.equal(rampMid.pitchX, TrackSurface.RAMP_WEDGE_ROT_X);
+
+  // Mud tile top clearance matches mudTop slab
+  const mudSurf = TrackSurface.sampleTrackSurfaceAtZ(track, TrackSurface.getTrackTileCenterZ(3));
+  assert.equal(mudSurf.y, TrackSurface.MUD_TOP_SURFACE_Y);
+  assert.equal(mudSurf.pitchX, 0);
+});
+

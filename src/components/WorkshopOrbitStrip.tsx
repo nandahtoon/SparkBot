@@ -44,9 +44,9 @@ export const WorkshopOrbitStrip: React.FC<WorkshopOrbitStripProps> = ({
         type="button"
         onClick={onRotateLeft}
         aria-label="Rotate Robot Left"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-sky-300 transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/90 text-sky-300 transition-transform hover:border-sky-400 active:scale-95 sm:h-8 sm:w-8"
       >
-        <RotateCcw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        <RotateCcw className="h-3.5 w-3.5" />
       </button>
       <button
         id={autoSpinButtonId}
@@ -54,49 +54,49 @@ export const WorkshopOrbitStrip: React.FC<WorkshopOrbitStripProps> = ({
         aria-pressed={autoSpin}
         onClick={onToggleAutoSpin}
         aria-label="Toggle 360 Auto Spin"
-        className={`flex h-8 shrink-0 items-center gap-1 rounded-xl border px-1.5 text-[11px] font-black transition-transform active:scale-95 sm:h-9 sm:px-2.5 sm:text-xs ${
+        className={`flex h-7 shrink-0 items-center gap-1 rounded-lg border px-1.5 text-[10px] font-black transition-transform active:scale-95 sm:h-8 sm:px-2 sm:text-[11px] ${
           autoSpin
             ? activeSpinStyle
-            : `border-slate-700 bg-slate-800 text-slate-200 ${hoverBorder}`
+            : `border-slate-700 bg-slate-800/90 text-slate-200 ${hoverBorder}`
         }`}
       >
-        <RefreshCw className={`h-3.5 w-3.5 ${autoSpin ? 'animate-spin' : ''}`} />
+        <RefreshCw className={`h-3 w-3 ${autoSpin ? 'animate-spin' : ''}`} />
         <span>360°</span>
       </button>
       <button
         type="button"
         onClick={onRotateRight}
         aria-label="Rotate Robot Right"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-sky-300 transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/90 text-sky-300 transition-transform hover:border-sky-400 active:scale-95 sm:h-8 sm:w-8"
       >
-        <RotateCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        <RotateCw className="h-3.5 w-3.5" />
       </button>
 
-      <div className="mx-0.5 hidden h-5 w-px bg-slate-700 sm:block" aria-hidden="true" />
+      <div className="mx-0.5 hidden h-4 w-px bg-slate-700 sm:block" aria-hidden="true" />
 
       <button
         type="button"
         onClick={onZoomOut}
         aria-label="Zoom Out"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/90 text-slate-200 transition-transform hover:border-sky-400 active:scale-95 sm:h-8 sm:w-8"
       >
-        <ZoomOut className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        <ZoomOut className="h-3.5 w-3.5" />
       </button>
       <button
         type="button"
         onClick={onZoomIn}
         aria-label="Zoom In"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/90 text-slate-200 transition-transform hover:border-sky-400 active:scale-95 sm:h-8 sm:w-8"
       >
-        <ZoomIn className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        <ZoomIn className="h-3.5 w-3.5" />
       </button>
       <button
         type="button"
         onClick={onResetView}
         aria-label="Reset 3D View"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/90 text-slate-300 transition-transform hover:border-sky-400 active:scale-95 sm:h-8 sm:w-8"
       >
-        <Focus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        <Focus className="h-3.5 w-3.5" />
       </button>
     </div>
   );

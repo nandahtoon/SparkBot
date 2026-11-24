@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   BookOpen,
+  Camera,
   Check,
   ChevronDown,
   ChevronUp,
@@ -109,6 +110,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   onRequestHint
 }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [showViewTools, setShowViewTools] = useState(false);
   const [showGuide, setShowGuide] = useState(() => !level.isBonus && !level.isDaily && level.id <= 5);
   useEffect(() => {
     setShowGuide(!level.isBonus && !level.isDaily && level.id <= 5);
@@ -481,25 +483,25 @@ export const BuildDock: React.FC<BuildDockProps> = ({
         />
       )}
 
-      {/* Collapsible Bottom 3D Workshop Part Dock */}
-      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-2 sm:px-3">
+      {/* Reorganized Compact Bottom 3D Workshop Part Dock */}
+      <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-1.5 px-2 sm:px-3">
         {hintBanner}
-        <div className="pointer-events-auto w-full max-w-4xl rounded-2xl border border-slate-600/80 bg-slate-900/95 px-2.5 py-1.5 shadow-2xl sm:rounded-3xl sm:border-2 sm:border-slate-700 sm:px-3.5 sm:py-2">
-          {/* Top Dock Bar: Energy Meter + Live Hover Preview + Bot Painter + Collapse + Next Button */}
-          <div className="flex items-center justify-between gap-1.5 sm:gap-2.5">
-            <div className="flex shrink-0 items-center gap-2 sm:min-w-0 sm:flex-1">
+        <div className="pointer-events-auto w-full max-w-3xl rounded-2xl border border-slate-600/80 bg-slate-900/92 px-2 py-1.5 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2">
+          {/* Compact Top Dock Bar: Energy, Swatches, Quick Tools, Collapse, Next */}
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+            <div className="flex min-w-0 items-center gap-1.5 sm:flex-1">
               <div
                 data-testid="dock-energy-meter"
-                className="flex shrink-0 items-center gap-1 rounded-xl bg-slate-800 px-2 py-1 text-amber-300 sm:px-2.5 sm:py-1"
+                className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-slate-800 px-2 text-amber-300"
               >
-                <Zap className="h-4 w-4 fill-amber-400 text-amber-400" />
-                <span className="tabular text-sm font-black sm:text-base">
+                <Zap className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                <span className="tabular text-xs font-black sm:text-sm">
                   {info.cost}/{budget}
                 </span>
                 {activeTooltip && activeTooltip.plan.netEnergyDelta !== 0 && (
                   <span
                     data-testid="dock-energy-preview-delta"
-                    className={`tabular ml-0.5 rounded-md px-1 py-0.5 text-[10px] font-black leading-none ${
+                    className={`tabular ml-0.5 rounded px-1 py-0.5 text-[10px] font-black leading-none ${
                       !activeTooltip.plan.canAfford
                         ? 'bg-rose-500/25 text-rose-300'
                         : activeTooltip.plan.netEnergyDelta < 0
@@ -513,7 +515,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                   </span>
                 )}
               </div>
-              <div className="relative hidden h-3 flex-1 overflow-hidden rounded-full bg-slate-800 sm:block">
+              <div className="relative hidden h-2 flex-1 overflow-hidden rounded-full bg-slate-800 sm:block">
                 {activeTooltip && activeTooltip.plan.projectedEnergy > info.cost && (
                   <div
                     className={`absolute inset-y-0 left-0 rounded-full transition-all duration-200 ${
@@ -545,9 +547,9 @@ export const BuildDock: React.FC<BuildDockProps> = ({
               id="botPainterBar"
               role="group"
               aria-label="Bot Painter"
-              className="flex shrink-0 items-center gap-1 rounded-2xl border border-slate-700 bg-slate-800/95 px-1.5 py-1 sm:gap-1.5 sm:px-2"
+              className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-800/90 px-1.5 py-1"
             >
-              <Palette className="h-3.5 w-3.5 shrink-0 text-slate-300 sm:h-4 sm:w-4" aria-hidden="true" />
+              <Palette className="hidden h-3 w-3 shrink-0 text-slate-300 sm:block" aria-hidden="true" />
               {BOT_THEME_ORDER.map((themeId) => {
                 const theme = BOT_THEMES[themeId];
                 const active = botTheme === themeId;
@@ -560,89 +562,45 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                     aria-pressed={active}
                     aria-label={`Paint Robot ${theme.label}`}
                     onClick={() => onChangeBotTheme(themeId)}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-transform active:scale-90 sm:h-8 sm:w-8 ${SWATCH_BG[themeId]} ${
+                    className={`flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full border-2 transition-transform active:scale-90 sm:h-6 sm:w-6 ${SWATCH_BG[themeId]} ${
                       active
-                        ? 'scale-105 border-white ring-2 ring-white/50 shadow-md'
+                        ? 'scale-105 border-white ring-1 ring-white/60 shadow-sm'
                         : 'border-slate-950/70 opacity-85 hover:opacity-100'
                     }`}
                   >
-                    {active && <Check className="h-3.5 w-3.5 stroke-[3] text-slate-950" aria-hidden="true" />}
+                    {active && <Check className="h-3 w-3 stroke-[3] text-slate-950" aria-hidden="true" />}
                   </button>
                 );
               })}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setCollapsed((v) => !v)}
-              aria-label={collapsed ? 'Expand Dock' : 'Collapse Dock'}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400"
-            >
-              {collapsed ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-            </button>
+            {/* Compact Workshop Quick Actions */}
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                aria-expanded={showViewTools}
+                onClick={() => setShowViewTools((v) => !v)}
+                aria-label="Toggle 3D Camera & View Tools"
+                title="3D Camera & View Tools"
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors active:scale-95 ${
+                  showViewTools || inspectMode || camera.autoSpin
+                    ? 'border-sky-400 bg-sky-500/20 text-sky-200'
+                    : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-sky-400'
+                }`}
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </button>
 
-            <button
-              id="toCodeBtn"
-              type="button"
-              onClick={onProceedToCode}
-              disabled={!readyForCode}
-              aria-label="Proceed to 3D Coding"
-              className={`flex h-10 min-w-[54px] shrink-0 items-center justify-center rounded-2xl border-2 px-2.5 shadow-lg transition-transform active:scale-95 sm:h-11 sm:min-w-[72px] sm:px-3.5 ${
-                readyForCode
-                  ? 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_4px_0_#047857]'
-                  : 'border-slate-700 bg-slate-800 text-slate-500 opacity-50'
-              }`}
-            >
-              <ArrowRight className="h-6 w-6 stroke-[3]" />
-            </button>
-          </div>
-
-          {/* Integrated 3D Model View & Bot Interaction Strip (single-row swipeable on narrow phones) */}
-          <div
-            id="workshopViewBar"
-            role="group"
-            aria-label="3D Model View Controls"
-            className="no-scrollbar touch-pan-x mt-1.5 flex flex-nowrap items-center justify-between gap-2 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/80 px-1.5 py-1"
-          >
-            <WorkshopOrbitStrip {...camera} autoSpinButtonId="autoSpinBtn" />
-
-            <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               <button
                 id="openPaintBoothBtn"
                 type="button"
                 onClick={onOpenPaintBooth}
                 aria-label="Open Paint Booth"
-                className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-fuchsia-400/80 bg-fuchsia-500/20 px-2 text-[11px] font-black text-fuchsia-200 transition-transform hover:bg-fuchsia-500/30 active:scale-95 sm:px-2.5 sm:text-xs"
+                title="Paint Booth"
+                className="flex h-8 items-center gap-1 rounded-lg border border-fuchsia-400/70 bg-fuchsia-500/15 px-2 text-[11px] font-black text-fuchsia-200 transition-transform hover:bg-fuchsia-500/25 active:scale-95"
               >
-                <Paintbrush className="h-3.5 w-3.5" />
-                <span>Paint Booth</span>
-              </button>
-
-              <button
-                id="workshopProfileBtn"
-                type="button"
-                onClick={onOpenProfile}
-                aria-label="Change Bot Character"
-                className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-sky-400/70 bg-sky-500/15 px-2 text-[11px] font-black text-sky-200 transition-transform hover:bg-sky-500/25 active:scale-95 sm:px-2.5 sm:text-xs"
-              >
-                <UserRound className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">{BOT_CHARACTERS[activeCharacter].name}</span>
-              </button>
-
-              <button
-                id="inspect3DBtn"
-                type="button"
-                aria-pressed={inspectMode}
-                onClick={onToggleInspect}
-                aria-label="Toggle 3D Inspect View"
-                className={`flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-2 text-[11px] font-black transition-transform active:scale-95 sm:px-2.5 sm:text-xs ${
-                  inspectMode
-                    ? 'border-amber-300 bg-amber-400/20 text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
-                    : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-amber-300'
-                }`}
-              >
-                <Eye className="h-3.5 w-3.5" />
-                <span>{inspectMode ? 'Inspecting' : '3D View'}</span>
+                <Paintbrush className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden md:inline">Paint</span>
               </button>
 
               <button
@@ -654,102 +612,158 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                   onRequestHint?.();
                 }}
                 aria-label={showGuide ? 'Hide Equipment Hint' : 'Show Equipment Hint'}
-                className={`flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-2 text-[11px] font-black transition-transform active:scale-95 sm:px-2.5 sm:text-xs ${
+                title="Build Hint"
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors active:scale-95 ${
                   showGuide
                     ? 'border-amber-300 bg-amber-400/20 text-amber-200'
-                    : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-amber-300'
+                    : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-amber-300'
                 }`}
               >
                 <Lightbulb className="h-3.5 w-3.5" />
-                <span>Hint</span>
               </button>
 
               <button
-                id="talkToBotBtn"
                 type="button"
-                onClick={onTalkToBot}
-                aria-label="Say Hi to Robot"
-                className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-pink-400/70 bg-pink-500/20 px-2 text-[11px] font-black text-pink-200 transition-transform hover:bg-pink-500/30 active:scale-95 sm:px-2.5 sm:text-xs"
+                onClick={() => setCollapsed((v) => !v)}
+                aria-label={collapsed ? 'Expand Dock' : 'Collapse Dock'}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400"
               >
-                <Smile className="h-3.5 w-3.5" />
-                <span>Say Hi</span>
+                {collapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+
+              <button
+                id="toCodeBtn"
+                type="button"
+                onClick={onProceedToCode}
+                disabled={!readyForCode}
+                aria-label="Proceed to 3D Coding"
+                className={`flex h-8 min-w-[42px] shrink-0 items-center justify-center rounded-xl border px-2.5 shadow-md transition-transform active:scale-95 sm:min-w-[54px] sm:px-3 ${
+                  readyForCode
+                    ? 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_3px_0_#047857]'
+                    : 'border-slate-700 bg-slate-800 text-slate-500 opacity-50'
+                }`}
+              >
+                <ArrowRight className="h-4.5 w-4.5 stroke-[3]" />
               </button>
             </div>
           </div>
 
-          {/* Kid-Friendly Step-by-Step Equipment Attachment Hint Bar */}
-          {!collapsed && guideActive && (
+          {/* Expandable 3D Camera & Fun Bar (Collapsed by default so 3D stage stays clear) */}
+          {showViewTools && (
             <div
-              data-testid="build-equipment-hint"
-              data-next-part={guide.nextStep?.part || 'ready'}
-              className={`mt-1.5 flex flex-col gap-1.5 rounded-2xl border px-2.5 py-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-3 ${
-                guide.allRecommendedEquipped
-                  ? 'border-emerald-400/60 bg-emerald-950/35'
-                  : 'border-amber-400/50 bg-slate-950/85'
-              }`}
+              id="workshopViewBar"
+              role="group"
+              aria-label="3D Model View Controls"
+              className="no-scrollbar touch-pan-x mt-1.5 flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80 px-1.5 py-1"
             >
-              <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
-                <Lightbulb
-                  className={`mt-0.5 h-4 w-4 shrink-0 sm:mt-0 ${
-                    guide.allRecommendedEquipped ? 'text-emerald-300' : 'text-amber-300'
-                  }`}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="truncate text-xs font-black text-white">
-                    {guide.headline}
-                  </div>
-                  <div className="truncate text-[11px] font-medium text-slate-300">
-                    {guide.actionHint}
-                  </div>
-                </div>
-              </div>
+              <WorkshopOrbitStrip {...camera} autoSpinButtonId="autoSpinBtn" />
 
-              <div className="no-scrollbar touch-pan-x flex max-w-full shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto">
-                {guide.steps.map((step) => (
-                  <button
-                    key={step.part}
-                    type="button"
-                    disabled={step.installed}
-                    data-hint-step={step.part}
-                    aria-label={
-                      step.installed
-                        ? `${step.name} Attached`
-                        : `Attach ${step.name} to ${step.slotLabel}`
-                    }
-                    onClick={() => {
-                      if (!step.installed) {
-                        onPlacePart(step.part, step.targetSlot[0], step.targetSlot[1]);
-                        onSelectPart(null);
-                      }
-                    }}
-                    className={`flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-2.5 text-[11px] font-bold transition-transform active:scale-95 ${
-                      step.installed
-                        ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200'
-                        : step.isNext
-                          ? 'border-amber-300 bg-amber-400 text-slate-950 shadow-sm hover:bg-amber-300'
-                          : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-sky-400'
-                    }`}
-                  >
-                    {step.installed ? (
-                      <Check className="h-3.5 w-3.5 stroke-[3]" aria-hidden="true" />
-                    ) : (
-                      <PartIcon id={step.part} className="h-4 w-4" />
-                    )}
-                    <span>{step.installed ? step.name : `Attach ${step.name}`}</span>
-                  </button>
-                ))}
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  id="workshopProfileBtn"
+                  type="button"
+                  onClick={onOpenProfile}
+                  aria-label="Change Bot Character"
+                  className="flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-sky-400/65 bg-sky-500/15 px-2 text-[10px] font-black text-sky-200 transition-transform hover:bg-sky-500/25 active:scale-95 sm:h-8 sm:text-[11px]"
+                >
+                  <UserRound className="h-3 w-3" />
+                  <span className="hidden sm:inline">{BOT_CHARACTERS[activeCharacter].name}</span>
+                </button>
+
+                <button
+                  id="inspect3DBtn"
+                  type="button"
+                  aria-pressed={inspectMode}
+                  onClick={onToggleInspect}
+                  aria-label="Toggle 3D Inspect View"
+                  className={`flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border px-2 text-[10px] font-black transition-transform active:scale-95 sm:h-8 sm:text-[11px] ${
+                    inspectMode
+                      ? 'border-amber-300 bg-amber-400/20 text-amber-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-amber-300'
+                  }`}
+                >
+                  <Eye className="h-3 w-3" />
+                  <span>{inspectMode ? 'Inspecting' : '3D View'}</span>
+                </button>
+
+                <button
+                  id="talkToBotBtn"
+                  type="button"
+                  onClick={onTalkToBot}
+                  aria-label="Say Hi to Robot"
+                  className="flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-pink-400/65 bg-pink-500/20 px-2 text-[10px] font-black text-pink-200 transition-transform hover:bg-pink-500/30 active:scale-95 sm:h-8 sm:text-[11px]"
+                >
+                  <Smile className="h-3 w-3" />
+                  <span>Say Hi</span>
+                </button>
               </div>
             </div>
           )}
 
-          {/* Draggable / Tappable Oversized Part Cards */}
+          {/* Ultra-Slim Single-Line Equipment Guide Strip */}
+          {!collapsed && guideActive && (
+            <div
+              data-testid="build-equipment-hint"
+              data-next-part={guide.nextStep?.part || 'ready'}
+              className={`mt-1.5 flex items-center justify-between gap-2 rounded-xl border px-2.5 py-1 ${
+                guide.allRecommendedEquipped
+                  ? 'border-emerald-400/55 bg-emerald-950/35'
+                  : 'border-amber-400/45 bg-slate-950/85'
+              }`}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <Lightbulb
+                  className={`h-3.5 w-3.5 shrink-0 ${
+                    guide.allRecommendedEquipped ? 'text-emerald-300' : 'text-amber-300'
+                  }`}
+                  aria-hidden="true"
+                />
+                <span className="truncate text-[11px] font-extrabold text-white sm:text-xs">
+                  {guide.headline}
+                </span>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {guide.nextStep ? (
+                  <button
+                    type="button"
+                    data-hint-step={guide.nextStep.part}
+                    aria-label={`Attach ${guide.nextStep.name} to ${guide.nextStep.slotLabel}`}
+                    onClick={() => {
+                      const step = guide.nextStep!;
+                      onPlacePart(step.part, step.targetSlot[0], step.targetSlot[1]);
+                      onSelectPart(null);
+                    }}
+                    className="flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-amber-200 bg-amber-400 px-2 text-[11px] font-black text-slate-950 shadow-sm transition-transform hover:bg-amber-300 active:scale-95"
+                  >
+                    <PartIcon id={guide.nextStep.part} className="h-3.5 w-3.5" />
+                    <span>Attach</span>
+                  </button>
+                ) : (
+                  <span className="inline-flex h-6 items-center gap-1 rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-2 text-[10px] font-black text-emerald-200">
+                    <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />
+                    Ready
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowGuide(false)}
+                  aria-label="Hide Build Hint"
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Compact Draggable / Tappable Part Tray */}
           {!collapsed && (
             <div
               onScroll={() => {
                 if (hoveredPart) setHoveredPart(null);
               }}
-              className="no-scrollbar touch-pan-x mt-1 flex items-center justify-start gap-2 overflow-x-auto pt-3 pb-0.5 sm:justify-center sm:gap-2.5"
+              className="no-scrollbar touch-pan-x mt-1.5 flex items-center justify-start gap-1.5 overflow-x-auto pb-0.5 sm:justify-center sm:gap-2"
             >
               {PART_ORDER.map((pid) => {
                 const def = PARTS[pid];
@@ -764,7 +778,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                 return (
                   <div
                     key={pid}
-                    className="relative shrink-0"
+                    className="relative shrink-0 pt-1"
                     onMouseEnter={(e) => showPartTooltip(e.currentTarget, pid)}
                     onMouseLeave={() =>
                       setHoveredPart((prev) => (prev?.part === pid ? null : prev))
@@ -784,21 +798,21 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                       onPointerDown={(e) => handlePartPointerDown(e, pid)}
                       onPointerMove={handlePartPointerMove}
                       onPointerUp={handlePartPointerUp}
-                      className={`relative flex h-15 w-15 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 transition-transform active:scale-95 sm:h-[68px] sm:w-[68px] sm:gap-1 ${
+                      className={`relative flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-xl border-2 transition-transform active:scale-95 sm:h-14 sm:w-14 ${
                         isSelected
-                          ? 'border-emerald-300 bg-emerald-500/20 scale-105 shadow-[0_0_16px_rgba(52,211,153,0.45)]'
+                          ? 'border-emerald-300 bg-emerald-500/20 scale-105 shadow-[0_0_12px_rgba(52,211,153,0.45)]'
                           : isHint
-                            ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_18px_rgba(251,191,36,0.55)]'
+                            ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_12px_rgba(251,191,36,0.45)]'
                             : 'border-slate-700 bg-slate-800/95 hover:border-sky-400'
                       }`}
                     >
                       {isGuideNext && !isSelected && (
-                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-amber-200 bg-amber-400 px-1.5 py-0.5 text-[9px] font-black leading-none text-slate-950 shadow">
+                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded border border-amber-200 bg-amber-400 px-1 py-px text-[8px] font-black leading-none text-slate-950 shadow">
                           Next
                         </span>
                       )}
-                      <PartIcon id={pid} className="h-7 w-7 sm:h-9 sm:w-9" />
-                      <span className="tabular rounded-lg bg-slate-950/75 px-1.5 py-0.5 text-[11px] font-extrabold text-amber-300">
+                      <PartIcon id={pid} className="h-6 w-6 sm:h-7 sm:w-7" />
+                      <span className="tabular text-[10px] font-black leading-none text-amber-300">
                         {def.cost}
                       </span>
                     </button>
@@ -813,9 +827,9 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                           setHoveredPart(null);
                           onOpenDemo(pid);
                         }}
-                        className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border border-sky-400/80 bg-slate-900 text-sky-300 shadow hover:bg-sky-500 hover:text-slate-950 active:scale-90"
+                        className="absolute -right-1 top-0 flex h-4.5 w-4.5 items-center justify-center rounded-full border border-sky-400/80 bg-slate-900 text-sky-300 shadow hover:bg-sky-500 hover:text-slate-950 active:scale-90"
                       >
-                        <BookOpen className="h-3.5 w-3.5" />
+                        <BookOpen className="h-2.5 w-2.5" />
                       </button>
                     )}
                   </div>

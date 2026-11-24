@@ -47,6 +47,15 @@ import {
   scaleParticleCount
 } from '../game/graphicsConfig';
 import {
+  RAMP_WEDGE_CENTER_Y,
+  RAMP_WEDGE_LENGTH,
+  RAMP_WEDGE_ROT_X,
+  RAMP_WEDGE_THICKNESS,
+  sampleTrackSurfaceAtZ,
+  TRACK_START_Z,
+  TRACK_TILE_SPACING
+} from '../game/trackSurface';
+import {
   computeActionTrailEmitConfig,
   computeRibbonSegmentSample,
   computeTrailEmitterOffsets,
@@ -128,8 +137,7 @@ interface RunnerEntity {
   active: boolean;
 }
 
-const TILE_SPACING = 3.5;
-const TRACK_START_Z = -4.2;
+const TILE_SPACING = TRACK_TILE_SPACING;
 const LANE_X = [-2.2, 0, 2.2];
 const WALL_X = 3.85;
 const WALL_Y = [1.5, 3.2];
@@ -310,6 +318,7 @@ export class UnifiedWorldController {
   private simStepFinished = false;
   private botTrackZ = 0;
   private botTrackY = 0;
+  private botTrackPitchX = 0;
   private simFromZ = 0;
   private simToZ = 0;
   private simScanMatch: boolean | null = null;
@@ -835,9 +844,13 @@ export class UnifiedWorldController {
       } else if (tile.type === 'ramp') {
         const base = new THREE.Mesh(new RoundedBoxGeometry(3.2, 0.36, TILE_SPACING - 0.18, 2, 0.06), normalMat);
         base.position.set(0, -0.18, tz);
-        const wedge = new THREE.Mesh(new THREE.BoxGeometry(2.85, 0.24, TILE_SPACING - 0.32), rampMat);
-        wedge.position.set(0, 0.22, tz);
-        wedge.rotation.x = 0.24;
+        const wedge = new THREE.Mesh(
+          new THREE.BoxGeometry(2.85, RAMP_WEDGE_THICKNESS, RAMP_WEDGE_LENGTH),
+          rampMat
+        );
+        wedge.position.set(0, RAMP_WEDGE_CENTER_Y, tz);
+        wedge.rotation.x = RAMP_WEDGE_ROT_X;
+        wedge.receiveShadow = true;
         this.trackGroup.add(base, wedge);
       } else {
         const deck = new THREE.Mesh(
@@ -864,8 +877,10 @@ export class UnifiedWorldController {
       }
 
       if (tile.crystal) {
+        const crystalBaseY = tile.type === 'ramp' ? 1.34 : 1.0;
         const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), crystalMat);
-        crystal.position.set(0, 1.05, tz);
+        crystal.position.set(0, crystalBaseY, tz);
+        crystal.userData.baseY = crystalBaseY;
         const halo = new THREE.Mesh(crystalRingGeo, crystalRingMat);
         halo.rotation.x = Math.PI / 2.6;
         crystal.add(halo);
@@ -1151,6 +1166,7 @@ export class UnifiedWorldController {
     this.gateOpenAmt = 1.85;
     this.botTrackZ = startZ;
     this.botTrackY = 0;
+    this.botTrackPitchX = 0;
     this.runnerBotX = 0;
     this.runnerBotY = 0;
     this.prevRunnerBotX = 0;
@@ -1640,6 +1656,7 @@ export class UnifiedWorldController {
   public resetBotToWorkshop() {
     this.botTrackZ = 0;
     this.botTrackY = 0;
+    this.botTrackPitchX = 0;
     this.runnerBotX = 0;
     this.runnerBotY = 0;
     this.runnerBotRoll = 0;
@@ -1882,7 +1899,9 @@ export class UnifiedWorldController {
       const curStep = this.simQueue[this.simIndex];
       if (curStep && curStep.ev.action !== 'SCAN') {
         this.botTrackZ = this.simToZ;
-        this.botTrackY = curStep.ev.status === 'fall' ? -3.5 : 0;
+        const landedSurface = sampleTrackSurfaceAtZ(this.level?.track, this.simToZ);
+        this.botTrackY = curStep.ev.status === 'fall' ? -3.5 : landedSurface.y;
+        this.botTrackPitchX = curStep.ev.status === 'fall' ? 0 : landedSurface.pitchX;
       }
     }
     this.simStepFinished = false;
@@ -2198,7 +2217,8 @@ export class UnifiedWorldController {
     this.crystalMeshes.forEach((m, idx) => {
       if (m.visible) {
         m.rotation.y += dt * 2.2;
-        m.position.y = 1.0 + Math.sin(this.totalTime * 3 + idx) * 0.14;
+        const baseY = typeof m.userData.baseY === 'number' ? m.userData.baseY : 1.0;
+        m.position.y = baseY + Math.sin(this.totalTime * 3 + idx) * 0.14;
       }
     });
 
@@ -2380,23 +2400,37 @@ export class UnifiedWorldController {
           const fZ = ev.fromPos === 0 ? 0 : TRACK_START_Z - ev.fromPos * TILE_SPACING;
           const tZ = ev.toPos === 0 ? 0 : TRACK_START_Z - ev.toPos * TILE_SPACING;
           const gz = THREE.MathUtils.lerp(fZ, tZ, localT);
+          const gSurf = sampleTrackSurfaceAtZ(this.level?.track, gz);
+          const fSurf = sampleTrackSurfaceAtZ(this.level?.track, fZ);
+          const tSurf = sampleTrackSurfaceAtZ(this.level?.track, tZ);
+          const baseLerpY = THREE.MathUtils.lerp(fSurf.y, tSurf.y, localT);
           const gy =
             ev.action === 'JUMP'
-              ? Math.sin(localT * Math.PI) * 1.9
+              ? Math.max(gSurf.y, baseLerpY + Math.sin(localT * Math.PI) * 1.9)
               : ev.action === 'BOOST'
-                ? Math.sin(localT * Math.PI) * 0.95
-                : 0;
+                ? Math.max(gSurf.y + 0.04, baseLerpY + Math.sin(localT * Math.PI) * 0.95)
+                : gSurf.y;
           this.ghostBotGroup.position.set(0, gy, gz);
+          this.ghostBotGroup.rotation.x = gy <= gSurf.y + 0.12 ? gSurf.pitchX : 0;
           this.ghostBotGroup.rotation.y = 0;
           this.ghostBotGroup.scale.setScalar(1.02 + Math.sin(this.totalTime * 8) * 0.03);
           for (let i = 0; i < this.ghostArcDots.length; i++) {
             const dot = this.ghostArcDots[i];
             const f = (i + 1) / (this.ghostArcDots.length + 1);
+            const dzDot = THREE.MathUtils.lerp(fZ, tZ, f);
+            const dotSurf = sampleTrackSurfaceAtZ(this.level?.track, dzDot);
             dot.visible = true;
             _arcPos.set(
               0,
-              (ev.action === 'JUMP' ? Math.sin(f * Math.PI) * 1.9 : ev.action === 'BOOST' ? Math.sin(f * Math.PI) * 0.95 : 0.35),
-              THREE.MathUtils.lerp(fZ, tZ, f)
+              Math.max(
+                dotSurf.y + 0.25,
+                ev.action === 'JUMP'
+                  ? Math.sin(f * Math.PI) * 1.9
+                  : ev.action === 'BOOST'
+                    ? Math.sin(f * Math.PI) * 0.95
+                    : dotSurf.y + 0.35
+              ),
+              dzDot
             );
             dot.position.copy(_arcPos);
             dot.scale.setScalar(0.85);
@@ -2463,19 +2497,23 @@ export class UnifiedWorldController {
           isMoving = !this.simPaused;
           speed = this.simPaused ? 0 : step.ev.action === 'BOOST' ? 14 : 7;
           this.botTrackZ = THREE.MathUtils.lerp(this.simFromZ, this.simToZ, eased);
+          const fromSurf = sampleTrackSurfaceAtZ(this.level?.track, this.simFromZ);
+          const toSurf = sampleTrackSurfaceAtZ(this.level?.track, this.simToZ);
+          const curSurf = sampleTrackSurfaceAtZ(this.level?.track, this.botTrackZ);
+          const baseTrackY = THREE.MathUtils.lerp(fromSurf.y, toSurf.y, eased);
           if (step.ev.action === 'JUMP') {
             isAirborne = t > 0.04 && t < 0.96;
-            this.botTrackY = Math.sin(t * Math.PI) * 1.85;
+            this.botTrackY = Math.max(curSurf.y, baseTrackY + Math.sin(t * Math.PI) * 1.85);
             tiltPitch = (0.5 - t) * 0.45;
           } else if (step.ev.action === 'BOOST') {
             isAirborne = t > 0.15 && t < 0.85;
-            this.botTrackY = Math.sin(t * Math.PI) * 0.95;
+            this.botTrackY = Math.max(curSurf.y + 0.04, baseTrackY + Math.sin(t * Math.PI) * 0.95);
             tiltPitch = t < 0.96 ? -0.18 : 0;
           } else if (step.ev.status === 'fall') {
             this.botTrackY = -t * t * 3.5;
             tiltPitch = 0.5 * t;
           } else {
-            this.botTrackY = 0;
+            this.botTrackY = curSurf.y;
           }
         }
 
@@ -2895,6 +2933,24 @@ export class UnifiedWorldController {
       }
     }
 
+    // Align robot height & slope pitch to track surface (ramps & mud) when on mission track
+    const trackSurface =
+      this.mode === 'SIMULATING' || this.mode === 'CODE_3D' || this.mode === 'CIRCUIT_3D'
+        ? sampleTrackSurfaceAtZ(this.level?.track, this.botTrackZ)
+        : null;
+    if (this.mode === 'CODE_3D' && trackSurface && this.botTrackY >= -0.2) {
+      this.botTrackY = THREE.MathUtils.damp(this.botTrackY, trackSurface.y, 14, dt);
+    }
+    const targetTrackPitchX =
+      trackSurface &&
+      (this.mode === 'SIMULATING' || this.mode === 'CODE_3D') &&
+      !isAirborne &&
+      this.botTrackY >= -0.2 &&
+      this.botTrackY <= trackSurface.y + 0.16
+        ? trackSurface.pitchX
+        : 0;
+    this.botTrackPitchX = THREE.MathUtils.damp(this.botTrackPitchX, targetTrackPitchX, 14, dt);
+
     // Apply Robot World Transform (step slightly left in CIRCUIT_3D so 5x5 board is unobstructed)
     const circuitOffsetX = this.mode === 'CIRCUIT_3D' ? -1.45 : 0;
     this.rig.root.position.set(
@@ -2906,7 +2962,8 @@ export class UnifiedWorldController {
       this.mode === 'PLANET_ADVENTURE_3D' ? this.planetBotY : this.botTrackY,
       this.mode === 'PLANET_ADVENTURE_3D' ? this.planetBotZ : this.botTrackZ
     );
-    this.rig.root.rotation.x = 0;
+    this.rig.root.rotation.x =
+      this.mode === 'SIMULATING' || this.mode === 'CODE_3D' ? this.botTrackPitchX : 0;
     this.rig.root.rotation.z = this.mode === 'ACTION_RUN_3D' ? this.runnerBotRoll : 0;
 
     // Workshop, Paint Booth, Expressive Mood, & Victory Facing: face -Z robot front toward camera
@@ -2937,7 +2994,7 @@ export class UnifiedWorldController {
     const shadowHeightOffset =
       this.mode === 'PLANET_ADVENTURE_3D'
         ? Math.max(0, this.planetBotY - getPlanetGroundY(this.planetBotX, this.planetBotZ))
-        : Math.max(0, this.botTrackY);
+        : Math.max(0, this.botTrackY - (trackSurface?.y ?? 0));
     this.rig.contactShadow.position.y = Math.max(0.02, 0.02 - shadowHeightOffset * 0.8);
     const shScale = THREE.MathUtils.clamp(1 - shadowHeightOffset * 0.18, 0.4, 1);
     this.rig.contactShadow.scale.setScalar(shScale);

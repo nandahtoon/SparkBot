@@ -80,39 +80,39 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
       data-testid="adaptive-hint-banner"
       data-hint-tier={hint.tier}
       data-hint-phase={hint.phase}
-      className={`pointer-events-auto anim-pop flex w-full max-w-4xl flex-col gap-2 rounded-2xl border-2 px-3 py-2 shadow-xl sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${tierTone}`}
+      className={`pointer-events-auto anim-pop flex w-full max-w-3xl flex-col gap-1.5 rounded-xl border px-2.5 py-1.5 shadow-xl backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:gap-2.5 ${tierTone}`}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
-        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/90 sm:mt-0">
+      <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-950/90 sm:mt-0">
           {hint.tier === 3 ? (
-            <Sparkles className={`h-4.5 w-4.5 ${iconTone}`} aria-hidden="true" />
+            <Sparkles className={`h-3.5 w-3.5 ${iconTone}`} aria-hidden="true" />
           ) : (
-            <Lightbulb className={`h-4.5 w-4.5 ${iconTone}`} aria-hidden="true" />
+            <Lightbulb className={`h-3.5 w-3.5 ${iconTone}`} aria-hidden="true" />
           )}
         </div>
 
         <div className="min-w-0 flex-1 text-left">
-          <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+          <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
             <span className={iconTone}>Hint {hint.tier}/3</span>
             <span aria-hidden="true">·</span>
-            <span className="truncate text-white normal-case tracking-normal text-xs font-black">
+            <span className="truncate text-[11px] font-black normal-case tracking-normal text-white">
               {hint.headline}
             </span>
           </div>
-          <p className="mt-0.5 text-xs font-medium leading-snug text-slate-200">
+          <p className="mt-0.5 text-[11px] font-medium leading-snug text-slate-200">
             {hint.clue}
           </p>
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
         {speech.supported && (
           <button
             id="hintReadAloudBtn"
             type="button"
             onClick={() => SPEECH.toggleSpeak(`${hint.headline}. ${hint.clue}`, hintSpeechId)}
             aria-label={isSpeakingThisHint ? 'Stop reading hint aloud' : 'Read hint aloud'}
-            className={`flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-2.5 text-xs font-black transition-transform active:scale-95 ${
+            className={`flex h-7.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border px-2 text-[11px] font-black transition-transform active:scale-95 ${
               isSpeakingThisHint
                 ? 'border-rose-400/80 bg-rose-500/20 text-rose-100'
                 : 'border-slate-600 bg-slate-800 text-sky-200 hover:border-sky-400'
@@ -120,12 +120,12 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
           >
             {isSpeakingThisHint ? (
               <>
-                <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                <Square className="h-3 w-3 fill-current" aria-hidden="true" />
                 <span>Stop</span>
               </>
             ) : (
               <>
-                <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <Volume2 className="h-3 w-3" aria-hidden="true" />
                 <span>Listen</span>
               </>
             )}
@@ -137,9 +137,9 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
             id="hintStepDebugBtn"
             type="button"
             onClick={onStepByStep}
-            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-sky-300/80 bg-sky-500/20 px-3 text-xs font-black text-sky-100 transition-transform hover:bg-sky-500/30 active:scale-95"
+            className="flex h-7.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-sky-300/80 bg-sky-500/20 px-2 text-[11px] font-black text-sky-100 transition-transform hover:bg-sky-500/30 active:scale-95"
           >
-            <StepForward className="h-3.5 w-3.5" aria-hidden="true" />
+            <StepForward className="h-3 w-3" aria-hidden="true" />
             <span>Step By Step</span>
           </button>
         )}
@@ -149,9 +149,9 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
             id="hintShowWhyBtn"
             type="button"
             onClick={() => onOpenDemo(hint.demoTopic!, hint.demoCondition)}
-            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-cyan-300/80 bg-cyan-500/20 px-3 text-xs font-black text-cyan-100 transition-transform hover:bg-cyan-500/30 active:scale-95"
+            className="flex h-7.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-cyan-300/80 bg-cyan-500/20 px-2 text-[11px] font-black text-cyan-100 transition-transform hover:bg-cyan-500/30 active:scale-95"
           >
-            <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            <BookOpen className="h-3 w-3" aria-hidden="true" />
             <span>Show Why</span>
           </button>
         )}
@@ -161,9 +161,9 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
             id="hintApplyParsonsBtn"
             type="button"
             onClick={() => onApplyParsons(hint.parsonsTemplate!)}
-            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-3 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95"
+            className="flex h-7.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 bg-emerald-500 px-2 text-[11px] font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95"
           >
-            <Puzzle className="h-3.5 w-3.5" aria-hidden="true" />
+            <Puzzle className="h-3 w-3" aria-hidden="true" />
             <span>Try Starter Blocks</span>
           </button>
         )}
@@ -173,9 +173,9 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
             id="hintGhostPreviewBtn"
             type="button"
             onClick={onPlayGhostPreview}
-            className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-500 px-3 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95"
+            className="flex h-7.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-300 bg-emerald-500 px-2 text-[11px] font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95"
           >
-            <Ghost className="h-3.5 w-3.5" aria-hidden="true" />
+            <Ghost className="h-3 w-3" aria-hidden="true" />
             <span>Watch Ghost</span>
           </button>
         )}
@@ -185,9 +185,9 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
             id="hintNextTierBtn"
             type="button"
             onClick={onEscalateTier}
-            className="flex h-10 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl border border-amber-300/80 bg-amber-400 px-3 text-xs font-black text-slate-950 transition-transform hover:bg-amber-300 active:scale-95"
+            className="flex h-7.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-amber-300/80 bg-amber-400 px-2 text-[11px] font-black text-slate-950 transition-transform hover:bg-amber-300 active:scale-95"
           >
-            <Lightbulb className="h-3.5 w-3.5" aria-hidden="true" />
+            <Lightbulb className="h-3 w-3" aria-hidden="true" />
             <span>Next Hint</span>
           </button>
         )}
@@ -200,9 +200,9 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
             onDismiss();
           }}
           aria-label="Dismiss Hint"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-white active:scale-95"
+          className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-white active:scale-95"
         >
-          <X className="h-4 w-4" />
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

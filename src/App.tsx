@@ -1866,6 +1866,10 @@ export default function App() {
             beginLevel(generateDailyChallenge(getDailyDateKey()));
           }}
           onStartActionDash={handleStartEndlessDash}
+          onOpenGameRoom={() => {
+            SFX.click();
+            setShowGameRoom(true);
+          }}
           onOpenLevelMap={() => {
             SFX.click();
             setShowMap(true);
