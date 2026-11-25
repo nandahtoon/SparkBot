@@ -16,8 +16,20 @@ import {
   normalizeBotTheme
 } from '../game/engine';
 import type { ProceduralTextures } from './materials';
+import { getSharedTextureSet } from './materials';
 import type { RobotTouchZone } from '../game/robotVoice';
 import type { CodeComplexityTier } from '../game/codeFeedback';
+import {
+  buildChibiEyeAssembly,
+  buildExplorerSneakerBoot,
+  buildGimbalJoint,
+  buildSparkBotChestCore,
+  type ChibiEyeHandle
+} from './botChibiCraft';
+import { disposeObject3D } from './disposeUtils';
+import { RobotKinematicsController } from '../game/springPhysics';
+import type { GraphicsQualityBudget } from '../game/graphicsConfig';
+import { createEnergyShieldMaterial, createPlasmaPlumeMaterial } from './plasmaShaders';
 
 export type BotMood = 'neutral' | 'happy' | 'sad' | 'confused' | 'build' | 'scan' | 'boost' | 'wallrun';
 
@@ -42,6 +54,7 @@ export interface RobotAnimParams {
   scanMatch: boolean | null;
   shieldActive: boolean;
   turboActive: boolean;
+  heightAboveGround?: number;
 }
 
 export interface SlotScreenPoint {
@@ -85,6 +98,9 @@ export interface RobotRig {
   setTheme: (theme: BotThemeId) => void;
   applyPaintConfig: (config: PaintBoothConfig) => void;
   setCharacter: (charId: BotCharacterId) => void;
+  injectImpact: (strength: number, pitchKick?: number, rollKick?: number) => void;
+  setQualityBudget: (budget: GraphicsQualityBudget) => void;
+  dispose: () => void;
 }
 
 const _tmpVec = new THREE.Vector3();
@@ -124,113 +140,139 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   const visual = new THREE.Group();
   root.add(visual);
 
-  // Smooth Pixar / vinyl-ceramic PBR materials with soft clearcoat & varied roughness
+  // Pixar-Grade Toy-Ceramic PBR materials with recessed seam normal/roughness maps & anisotropic brushed metals
+  const ceramicNormalScale = new THREE.Vector2(0.32, 0.32);
+  const metalNormalScale = new THREE.Vector2(0.36, 0.36);
+
   const mats = {
     body: new THREE.MeshPhysicalMaterial({
       color: 0xfbbf24,
       map: tex.chassisPanel,
-      bumpMap: tex.metalBump,
-      bumpScale: 0.004,
-      roughness: 0.28,
-      metalness: 0.14,
-      clearcoat: 0.72,
-      clearcoatRoughness: 0.16
+      normalMap: tex.ceramicNormal,
+      normalScale: ceramicNormalScale,
+      roughnessMap: tex.ceramicRoughness,
+      roughness: 0.92,
+      metalness: 0.1,
+      clearcoat: 0.96,
+      clearcoatRoughness: 0.07,
+      sheen: 0.18,
+      sheenRoughness: 0.55,
+      sheenColor: new THREE.Color(0xfffbeb)
     }),
     accent: new THREE.MeshPhysicalMaterial({
       color: 0x334155,
-      roughness: 0.36,
-      metalness: 0.38,
-      clearcoat: 0.45,
-      clearcoatRoughness: 0.24
+      normalMap: tex.ceramicNormal,
+      normalScale: new THREE.Vector2(0.24, 0.24),
+      roughness: 0.3,
+      metalness: 0.42,
+      clearcoat: 0.65,
+      clearcoatRoughness: 0.16
     }),
     steel: new THREE.MeshPhysicalMaterial({
       color: 0xe2e8f0,
-      roughness: 0.2,
-      metalness: 0.75,
-      clearcoat: 0.5
+      normalMap: tex.brushedMetalNormal,
+      normalScale: metalNormalScale,
+      roughness: 0.18,
+      metalness: 0.86,
+      anisotropy: 0.68,
+      clearcoat: 0.65
     }),
     headShell: new THREE.MeshPhysicalMaterial({
       color: 0xf8fafc,
       map: tex.chassisPanel,
-      bumpMap: tex.metalBump,
-      bumpScale: 0.003,
-      roughness: 0.22,
-      metalness: 0.1,
-      clearcoat: 0.85,
-      clearcoatRoughness: 0.12
+      normalMap: tex.ceramicNormal,
+      normalScale: ceramicNormalScale,
+      roughnessMap: tex.ceramicRoughness,
+      roughness: 0.86,
+      metalness: 0.08,
+      clearcoat: 0.98,
+      clearcoatRoughness: 0.06
     }),
     armPaint: new THREE.MeshPhysicalMaterial({
       color: 0xe2e8f0,
       map: tex.chassisPanel,
-      bumpMap: tex.metalBump,
-      bumpScale: 0.003,
-      roughness: 0.26,
-      metalness: 0.16,
-      clearcoat: 0.68,
-      clearcoatRoughness: 0.16
+      normalMap: tex.ceramicNormal,
+      normalScale: ceramicNormalScale,
+      roughnessMap: tex.ceramicRoughness,
+      roughness: 0.92,
+      metalness: 0.12,
+      clearcoat: 0.92,
+      clearcoatRoughness: 0.08
     }),
     wheelPaint: new THREE.MeshPhysicalMaterial({
       color: 0x38bdf8,
       map: tex.chassisPanel,
-      roughness: 0.26,
+      normalMap: tex.ceramicNormal,
+      normalScale: ceramicNormalScale,
+      roughness: 0.25,
       metalness: 0.22,
-      clearcoat: 0.7
+      clearcoat: 0.78
     }),
     treadPaint: new THREE.MeshPhysicalMaterial({
       color: 0x34d399,
       map: tex.chassisPanel,
-      roughness: 0.38,
+      normalMap: tex.ceramicNormal,
+      normalScale: ceramicNormalScale,
+      roughness: 0.36,
       metalness: 0.2,
-      clearcoat: 0.45
+      clearcoat: 0.52
     }),
     laserPaint: new THREE.MeshPhysicalMaterial({
       color: 0x22d3ee,
       map: tex.chassisPanel,
+      normalMap: tex.ceramicNormal,
+      normalScale: ceramicNormalScale,
       roughness: 0.22,
-      metalness: 0.32,
-      clearcoat: 0.78
+      metalness: 0.3,
+      clearcoat: 0.82
     }),
-    darkFrame: new THREE.MeshStandardMaterial({ color: 0x162032, roughness: 0.42, metalness: 0.45 }),
+    darkFrame: new THREE.MeshStandardMaterial({ color: 0x162032, roughness: 0.44, metalness: 0.46 }),
     rubber: new THREE.MeshStandardMaterial({
       color: 0x172030,
       bumpMap: tex.metalBump,
-      bumpScale: 0.006,
+      bumpScale: 0.008,
       roughness: 0.92,
       metalness: 0.04
     }),
     machinedGunmetal: new THREE.MeshPhysicalMaterial({
       color: 0x334155,
-      bumpMap: tex.metalBump,
-      bumpScale: 0.005,
-      roughness: 0.28,
-      metalness: 0.84,
+      normalMap: tex.brushedMetalNormal,
+      normalScale: metalNormalScale,
+      roughness: 0.27,
+      metalness: 0.86,
+      anisotropy: 0.72,
       clearcoat: 0.28
     }),
     titaniumFrame: new THREE.MeshPhysicalMaterial({
       color: 0x64748b,
-      roughness: 0.3,
-      metalness: 0.78,
-      clearcoat: 0.35
+      normalMap: tex.brushedMetalNormal,
+      normalScale: metalNormalScale,
+      roughness: 0.28,
+      metalness: 0.82,
+      anisotropy: 0.74,
+      clearcoat: 0.36
     }),
     chromeTrim: new THREE.MeshPhysicalMaterial({
       color: 0xf1f5f9,
-      roughness: 0.14,
-      metalness: 0.94,
-      clearcoat: 0.85
+      roughness: 0.13,
+      metalness: 0.95,
+      anisotropy: 0.55,
+      clearcoat: 0.88
     }),
     brushedCopper: new THREE.MeshPhysicalMaterial({
       color: 0xd97706,
-      bumpMap: tex.metalBump,
-      bumpScale: 0.004,
-      roughness: 0.24,
-      metalness: 0.9,
-      clearcoat: 0.35
+      normalMap: tex.brushedMetalNormal,
+      normalScale: metalNormalScale,
+      roughness: 0.23,
+      metalness: 0.92,
+      anisotropy: 0.78,
+      clearcoat: 0.38
     }),
     caliperRed: new THREE.MeshPhysicalMaterial({
       color: 0xdc2626,
-      roughness: 0.22,
-      metalness: 0.32,
-      clearcoat: 0.88
+      roughness: 0.2,
+      metalness: 0.34,
+      clearcoat: 0.9
     }),
     exhaustInterior: new THREE.MeshStandardMaterial({
       color: 0x0b1120,
@@ -241,14 +283,14 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     amberGlow: new THREE.MeshStandardMaterial({
       color: 0xfbbf24,
       emissive: 0xf59e0b,
-      emissiveIntensity: 1.35,
+      emissiveIntensity: 0.55,
       roughness: 0.16,
       metalness: 0.1
     }),
     laserCrystal: new THREE.MeshPhysicalMaterial({
       color: 0x22d3ee,
       emissive: 0x06b6d4,
-      emissiveIntensity: 1.9,
+      emissiveIntensity: 0.95,
       roughness: 0.08,
       metalness: 0.1,
       clearcoat: 1.0
@@ -256,7 +298,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     magnetCoreGlow: new THREE.MeshStandardMaterial({
       color: 0xa5b4fc,
       emissive: 0x6366f1,
-      emissiveIntensity: 1.45,
+      emissiveIntensity: 0.65,
       roughness: 0.14,
       metalness: 0.2
     }),
@@ -308,29 +350,38 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     }),
     eyeGlow: new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
+      map: tex.chibiIris,
       emissive: 0x38bdf8,
-      emissiveIntensity: 1.55,
-      roughness: 0.12,
-      metalness: 0.05
+      emissiveMap: tex.chibiIris,
+      emissiveIntensity: 0.55,
+      roughness: 0.09,
+      metalness: 0.04
     }),
     eyeDeep: new THREE.MeshStandardMaterial({
-      color: 0x091326,
-      roughness: 0.08,
-      metalness: 0.1
+      color: 0x071020,
+      roughness: 0.06,
+      metalness: 0.08
+    }),
+    eyelidMat: new THREE.MeshPhysicalMaterial({
+      color: 0x1e293b,
+      roughness: 0.22,
+      metalness: 0.18,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.12
     }),
     catchlight: new THREE.MeshBasicMaterial({ color: 0xffffff }),
     cheekBlush: new THREE.MeshBasicMaterial({
       color: 0xfb7185,
       transparent: true,
-      opacity: 0.58,
+      opacity: 0.64,
       depthWrite: false
     }),
     mouthPink: new THREE.MeshBasicMaterial({ color: 0xf472b6, side: THREE.DoubleSide }),
     happyArc: new THREE.MeshStandardMaterial({
       color: 0x7dd3fc,
       emissive: 0x38bdf8,
-      emissiveIntensity: 1.4,
-      roughness: 0.15
+      emissiveIntensity: 0.68,
+      roughness: 0.12
     }),
     tearMat: new THREE.MeshPhysicalMaterial({
       color: 0x67e8f9,
@@ -361,58 +412,42 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
       clearcoat: 1.0,
       clearcoatRoughness: 0.05
     }),
-    flameMat: new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.82,
-      depthWrite: false
-    }),
+    flameMat: createPlasmaPlumeMaterial({ coreHex: 0xe0f2fe, outerHex: 0x38bdf8 }),
     flameCoreMat: new THREE.MeshBasicMaterial({
       color: 0xe0f2fe,
       transparent: true,
-      opacity: 0.94,
-      depthWrite: false
+      opacity: 0.88,
+      depthWrite: false,
+      toneMapped: false
     }),
-    boostOuterMat: new THREE.MeshBasicMaterial({
-      color: 0xf472b6,
-      transparent: true,
-      opacity: 0.84,
-      depthWrite: false
-    }),
+    boostOuterMat: createPlasmaPlumeMaterial({ coreHex: 0xfdf2f8, outerHex: 0xf472b6 }),
     boostCoreMat: new THREE.MeshBasicMaterial({
       color: 0xfdf2f8,
       transparent: true,
-      opacity: 0.95,
-      depthWrite: false
+      opacity: 0.9,
+      depthWrite: false,
+      toneMapped: false
     }),
     scanCone: new THREE.MeshBasicMaterial({
       color: 0xa78bfa,
       transparent: true,
       opacity: 0.0,
       side: THREE.DoubleSide,
-      depthWrite: false
+      depthWrite: false,
+      toneMapped: false
     }),
-    shield: new THREE.MeshPhysicalMaterial({
-      color: 0x38bdf8,
-      emissive: 0x0284c7,
-      emissiveIntensity: 0.45,
-      transparent: true,
-      opacity: 0.0,
-      roughness: 0.1,
-      metalness: 0.1,
-      depthWrite: false
-    }),
+    shield: createEnergyShieldMaterial(0x38bdf8),
     antennaGlow: new THREE.MeshStandardMaterial({
       color: 0xfde047,
       emissive: 0xfbbf24,
-      emissiveIntensity: 1.5,
-      roughness: 0.18
+      emissiveIntensity: 0.58,
+      roughness: 0.16
     }),
     sparkleMat: new THREE.MeshBasicMaterial({ color: 0xfde047 }),
     questionMat: new THREE.MeshStandardMaterial({
       color: 0xc084fc,
       emissive: 0xa855f7,
-      emissiveIntensity: 1.5,
+      emissiveIntensity: 0.68,
       roughness: 0.2
     })
   };
@@ -436,7 +471,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   visual.userData.paintPart = 'chassis' as PaintPartKey;
   torsoGroup.add(chassisMesh);
 
-  // Soft sculpted waist belt + rounded pelvis connector
+  // Soft sculpted waist belt + chrome buckle + rounded pelvis connector
   const waistBelt = new THREE.Mesh(
     new THREE.TorusGeometry(0.36, 0.055, 14, 32),
     mats.accent
@@ -446,6 +481,18 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   waistBelt.scale.set(1.06, 0.92, 1.0);
   torsoGroup.add(waistBelt);
 
+  const beltBuckle = new THREE.Mesh(
+    new RoundedBoxGeometry(0.18, 0.085, 0.07, 3, 0.025),
+    mats.chromeTrim
+  );
+  beltBuckle.position.set(0, 0.48, -0.375);
+  const beltGem = new THREE.Mesh(
+    new RoundedBoxGeometry(0.08, 0.04, 0.04, 2, 0.015),
+    mats.amberGlow
+  );
+  beltGem.position.set(0, 0.48, -0.402);
+  torsoGroup.add(beltBuckle, beltGem);
+
   const pelvisMesh = new THREE.Mesh(
     new THREE.CylinderGeometry(0.34, 0.26, 0.16, 24),
     mats.darkFrame
@@ -453,38 +500,35 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   pelvisMesh.position.set(0, 0.42, 0);
   torsoGroup.add(pelvisMesh);
 
-  // Soft rounded neck collar ring
+  // Soft rounded neck collar ring + satin chrome bezel
   const collar = new THREE.Mesh(
     new THREE.TorusGeometry(0.28, 0.068, 14, 28),
     mats.accent
   );
   collar.rotation.x = Math.PI / 2;
   collar.position.set(0, 1.24, -0.01);
-  torsoGroup.add(collar);
+  const collarChrome = new THREE.Mesh(
+    new THREE.TorusGeometry(0.245, 0.022, 12, 28),
+    mats.chromeTrim
+  );
+  collarChrome.rotation.x = Math.PI / 2;
+  collarChrome.position.set(0, 1.29, -0.01);
+  torsoGroup.add(collar, collarChrome);
 
-  // Classic SparkBot accents (hidden on Sprout/Nova/RoboBuddy/LearnBot)
-  const sparkBotChestGroup = new THREE.Group();
-  const hatchPlate = new THREE.Mesh(
-    new RoundedBoxGeometry(0.62, 0.36, 0.08, 4, 0.03),
-    mats.hazard
-  );
-  hatchPlate.position.set(0, 0.76, -0.4);
-  const chestGauge = new THREE.Mesh(
-    new RoundedBoxGeometry(0.38, 0.08, 0.05, 3, 0.025),
-    mats.eyeGlow
-  );
-  chestGauge.position.set(0, 1.04, -0.4);
-  const solarDeck = new THREE.Mesh(
-    new RoundedBoxGeometry(0.5, 0.04, 0.28, 2, 0.015),
-    mats.solarPanel
-  );
-  solarDeck.position.set(0, 1.24, 0.24);
-  solarDeck.rotation.x = -0.22;
-  sparkBotChestGroup.add(hatchPlate, chestGauge, solarDeck);
+  // Glossy Chibi SparkBot Chest Heart-Spark Telemetry Core (hidden on Sprout/Nova/RoboBuddy/LearnBot)
+  const sparkBotChestGroup = buildSparkBotChestCore({
+    chestCoreTex: tex.chestCore,
+    chromeMat: mats.chromeTrim,
+    darkMat: mats.darkFrame,
+    brassMat: mats.brass,
+    eyeGlowMat: mats.eyeGlow,
+    solarMat: mats.solarPanel,
+    amberGlowMat: mats.amberGlow
+  });
   torsoGroup.add(sparkBotChestGroup);
 
   // ---------------------------------------------------------
-  // 2. Sculpted Chubby Articulated Arms + Cute Rounded Hands
+  // 2. Sculpted Chubby Articulated Arms + Gimbal Joints + Cute Rounded Hands
   // ---------------------------------------------------------
   interface ArmRig {
     shoulder: THREE.Group;
@@ -501,18 +545,31 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     shoulder.position.set(side * 0.52, 0.98, -0.02);
     shoulder.userData.paintPart = 'arms' as PaintPartKey;
 
-    // Rounded toy-ceramic shoulder pauldron + dark inner ball joint
-    const innerJoint = new THREE.Mesh(new THREE.SphereGeometry(0.105, 18, 14), mats.darkFrame);
-    shoulder.add(innerJoint);
+    // Articulated titanium/chrome ball-and-socket shoulder gimbal + glossy toy-ceramic pauldron
+    const shoulderGimbal = buildGimbalJoint({
+      radius: 0.1,
+      titaniumMat: mats.titaniumFrame,
+      chromeMat: mats.chromeTrim,
+      brassMat: mats.brass
+    });
+    shoulder.add(shoulderGimbal);
 
-    const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.135, 20, 16), mats.armPaint);
-    pauldron.scale.set(1.05, 0.95, 1.05);
-    pauldron.position.set(side * 0.04, 0.02, 0);
+    const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.138, 22, 16), mats.armPaint);
+    pauldron.scale.set(1.06, 0.94, 1.06);
+    pauldron.position.set(side * 0.045, 0.03, 0);
     pauldron.castShadow = !isSoftwareGl;
     shoulder.add(pauldron);
 
-    // Chubby capsule upper arm angling smoothly downward/forward
-    const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.18, 10, 18), mats.armPaint);
+    const pauldronTrim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.118, 0.016, 10, 22),
+      mats.chromeTrim
+    );
+    pauldronTrim.rotation.y = Math.PI / 2;
+    pauldronTrim.position.set(side * 0.08, 0.01, 0);
+    shoulder.add(pauldronTrim);
+
+    // Chubby glossy capsule upper arm angling smoothly downward/forward
+    const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.086, 0.18, 10, 18), mats.armPaint);
     upperArm.rotation.x = Math.PI / 2;
     upperArm.position.set(side * 0.05, -0.03, -0.17);
     upperArm.castShadow = !isSoftwareGl;
@@ -522,32 +579,39 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     elbow.position.set(side * 0.05, -0.03, -0.32);
     shoulder.add(elbow);
 
-    const elbowCap = new THREE.Mesh(new THREE.SphereGeometry(0.082, 16, 14), mats.bootTrim);
-    elbow.add(elbowCap);
+    const elbowGimbal = buildGimbalJoint({
+      radius: 0.082,
+      titaniumMat: mats.titaniumFrame,
+      chromeMat: mats.chromeTrim,
+      brassMat: mats.brass
+    });
+    elbow.add(elbowGimbal);
 
-    const foreArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.082, 0.15, 10, 18), mats.armPaint);
+    const foreArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.084, 0.15, 10, 18), mats.armPaint);
     foreArm.rotation.x = Math.PI / 2;
     foreArm.position.set(0, 0, -0.13);
     elbow.add(foreArm);
 
-    const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.082, 0.02, 10, 20), mats.brass);
+    const cuffRing = new THREE.Mesh(new THREE.TorusGeometry(0.084, 0.02, 10, 22), mats.chromeTrim);
     cuffRing.position.set(0, 0, -0.2);
-    elbow.add(cuffRing);
+    const cuffAccent = new THREE.Mesh(new THREE.TorusGeometry(0.088, 0.012, 8, 20), mats.brass);
+    cuffAccent.position.set(0, 0, -0.175);
+    elbow.add(cuffRing, cuffAccent);
 
     const wrist = new THREE.Group();
     wrist.position.set(0, 0, -0.25);
     elbow.add(wrist);
 
-    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 14), mats.darkFrame);
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.076, 16, 14), mats.titaniumFrame);
     wrist.add(palm);
 
-    // Cute rounded smooth C-mitten fingers
-    const pincerL = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.075, 8, 14), mats.armPaint);
+    // Cute rounded smooth C-mitten fingers with glossy toy finish
+    const pincerL = new THREE.Mesh(new THREE.CapsuleGeometry(0.033, 0.078, 8, 14), mats.armPaint);
     pincerL.rotation.x = Math.PI / 2;
     pincerL.position.set(0, 0.042, -0.07);
     wrist.add(pincerL);
 
-    const pincerR = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.075, 8, 14), mats.armPaint);
+    const pincerR = new THREE.Mesh(new THREE.CapsuleGeometry(0.033, 0.078, 8, 14), mats.armPaint);
     pincerR.rotation.x = Math.PI / 2;
     pincerR.position.set(0, -0.042, -0.07);
     wrist.add(pincerR);
@@ -564,8 +628,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   });
 
   // ---------------------------------------------------------
-  // 3. Cute Sculpted Articulated Legs & Explorer Boots
-  //    (Replaces ugly flat skids when no wheels/treads attached)
+  // 3. Cute Sculpted Articulated Legs, Gimbal Hips & Explorer Sneaker Boots
   // ---------------------------------------------------------
   const bootsGroup = new THREE.Group();
   const legPivots: THREE.Group[] = [];
@@ -573,36 +636,28 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     const legPivot = new THREE.Group();
     legPivot.position.set(side * 0.24, 0.42, 0);
 
-    const hipJoint = new THREE.Mesh(new THREE.SphereGeometry(0.095, 16, 14), mats.darkFrame);
-    legPivot.add(hipJoint);
+    const hipGimbal = buildGimbalJoint({
+      radius: 0.092,
+      titaniumMat: mats.titaniumFrame,
+      chromeMat: mats.chromeTrim,
+      brassMat: mats.brass
+    });
+    legPivot.add(hipGimbal);
 
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.14, 10, 18), mats.headShell);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.096, 0.14, 10, 18), mats.headShell);
     shin.position.set(0, -0.14, 0);
     shin.castShadow = !isSoftwareGl;
     legPivot.add(shin);
 
-    // Chunky rounded explorer sneaker/boot grounded cleanly at y = -0.42 (world y = 0.0)
-    const bootUpper = new THREE.Mesh(
-      new RoundedBoxGeometry(0.24, 0.15, 0.34, 5, 0.07),
-      mats.headShell
-    );
-    bootUpper.position.set(0, -0.31, -0.05);
-    bootUpper.castShadow = !isSoftwareGl;
-    legPivot.add(bootUpper);
-
-    const bootToeTrim = new THREE.Mesh(
-      new RoundedBoxGeometry(0.255, 0.06, 0.36, 4, 0.025),
-      mats.bootTrim
-    );
-    bootToeTrim.position.set(0, -0.36, -0.05);
-    legPivot.add(bootToeTrim);
-
-    const bootSole = new THREE.Mesh(
-      new RoundedBoxGeometry(0.265, 0.055, 0.38, 4, 0.02),
-      mats.rubber
-    );
-    bootSole.position.set(0, -0.392, -0.05);
-    legPivot.add(bootSole);
+    const sneakerBoot = buildExplorerSneakerBoot({
+      isSoftwareGl,
+      shellMat: mats.headShell,
+      trimMat: mats.bootTrim,
+      rubberMat: mats.rubber,
+      chromeMat: mats.chromeTrim,
+      glowMat: mats.eyeGlow
+    });
+    legPivot.add(sneakerBoot);
 
     bootsGroup.add(legPivot);
     legPivots.push(legPivot);
@@ -610,18 +665,21 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   visual.add(bootsGroup);
 
   // ---------------------------------------------------------
-  // 4. Short Smooth Neck + Expressive Oversized Chibi Head
+  // 4. Articulated Ribbed Neck + Expressive Oversized Chibi Head
   // ---------------------------------------------------------
   const neckGroup = new THREE.Group();
   neckGroup.position.set(0, 1.25, -0.01);
   visual.add(neckGroup);
 
-  const neckCore = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.22, 20), mats.darkFrame);
+  const neckCore = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.145, 0.22, 20), mats.titaniumFrame);
   neckCore.position.y = 0.1;
-  const neckRing = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.028, 10, 22), mats.steel);
-  neckRing.rotation.x = Math.PI / 2;
-  neckRing.position.y = 0.11;
-  neckGroup.add(neckCore, neckRing);
+  const neckRingLower = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.024, 10, 24), mats.chromeTrim);
+  neckRingLower.rotation.x = Math.PI / 2;
+  neckRingLower.position.y = 0.065;
+  const neckRingUpper = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.022, 10, 24), mats.brass);
+  neckRingUpper.rotation.x = Math.PI / 2;
+  neckRingUpper.position.y = 0.145;
+  neckGroup.add(neckCore, neckRingLower, neckRingUpper);
 
   const headGroup = new THREE.Group();
   headGroup.position.set(0, 0.44, -0.02);
@@ -638,25 +696,36 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   antennaBulb.position.set(0, 0.62, 0.02);
   headGroup.add(antennaBulb);
 
-  // ---- 4a. Classic / LearnBot Twin Binocular Pods ----
+  // ---- 4a. Glossy Chibi Twin Binocular Pods (SparkBot & LearnBot) ----
   const podsGroup = new THREE.Group();
   headGroup.add(podsGroup);
 
-  const eyeBridge = new THREE.Mesh(new RoundedBoxGeometry(0.32, 0.14, 0.18, 4, 0.04), mats.darkFrame);
+  const eyeBridge = new THREE.Mesh(new RoundedBoxGeometry(0.32, 0.14, 0.18, 4, 0.05), mats.darkFrame);
   eyeBridge.position.set(0, 0.04, -0.05);
-  podsGroup.add(eyeBridge);
+  const bridgeTrim = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.05, 0.21, 3, 0.02), mats.chromeTrim);
+  bridgeTrim.position.set(0, 0.04, -0.06);
+  podsGroup.add(eyeBridge, bridgeTrim);
 
   const brows: THREE.Mesh[] = [];
   [-1, 1].forEach((side) => {
-    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.19, 0.36, 28), mats.headShell);
+    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.215, 0.195, 0.36, 32), mats.headShell);
     pod.rotation.x = Math.PI / 2;
     pod.position.set(side * 0.24, 0.04, -0.06);
     pod.castShadow = !isSoftwareGl;
     podsGroup.add(pod);
 
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.195, 0.032, 14, 28), mats.accent);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.032, 14, 32), mats.accent);
     rim.position.set(side * 0.24, 0.04, -0.24);
     podsGroup.add(rim);
+
+    const chromeRing = new THREE.Mesh(new THREE.TorusGeometry(0.182, 0.012, 10, 28), mats.chromeTrim);
+    chromeRing.position.set(side * 0.24, 0.04, -0.252);
+    podsGroup.add(chromeRing);
+
+    const earBolt = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.055, 16), mats.brass);
+    earBolt.rotation.z = Math.PI / 2;
+    earBolt.position.set(side * 0.455, 0.04, -0.06);
+    podsGroup.add(earBolt);
 
     const barrel = new THREE.Mesh(new THREE.CircleGeometry(0.18, 28), mats.eyeDeep);
     barrel.rotation.y = Math.PI;
@@ -664,15 +733,15 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     podsGroup.add(barrel);
 
     const glassCap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.185, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.38),
+      new THREE.SphereGeometry(0.186, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.38),
       mats.glassLens
     );
     glassCap.rotation.x = -Math.PI / 2;
     glassCap.position.set(side * 0.24, 0.04, -0.17);
     podsGroup.add(glassCap);
 
-    const brow = new THREE.Mesh(new RoundedBoxGeometry(0.27, 0.06, 0.12, 4, 0.025), mats.body);
-    brow.position.set(side * 0.24, 0.25, -0.19);
+    const brow = new THREE.Mesh(new RoundedBoxGeometry(0.26, 0.058, 0.115, 4, 0.026), mats.body);
+    brow.position.set(side * 0.24, 0.255, -0.195);
     podsGroup.add(brow);
     brows.push(brow);
   });
@@ -724,7 +793,8 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   visorHelmetGroup.visible = false;
   headGroup.add(visorHelmetGroup);
 
-  // ---- 4c. Living Expressive Eyes (Iris + Pupil + Twin Specular Catchlights + Cheeks + Smile!) ----
+  // ---- 4c. Layered Glossy Chibi Eyes (Luminous Iris + Triple Catchlights + Articulated Eyelids + Blush + Smile) ----
+  const chibiEyes: ChibiEyeHandle[] = [];
   const eyeGroups: THREE.Group[] = [];
   const eyeIrisMeshes: THREE.Mesh[] = [];
   const eyePupilGroups: THREE.Group[] = [];
@@ -733,35 +803,23 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   const tears: THREE.Mesh[] = [];
 
   [-1, 1].forEach((side) => {
-    const eg = new THREE.Group();
-    eg.position.set(side * 0.24, 0.05, -0.258);
+    const eye = buildChibiEyeAssembly({
+      irisMat: mats.eyeGlow,
+      pupilMat: mats.eyeDeep,
+      catchlightMat: mats.catchlight,
+      lidMat: mats.eyelidMat,
+      corneaMat: mats.glassLens
+    });
+    eye.group.position.set(side * 0.24, 0.05, -0.258);
+    headGroup.add(eye.group);
+    chibiEyes.push(eye);
+    eyeGroups.push(eye.group);
+    eyeIrisMeshes.push(eye.irisMesh);
+    eyePupilGroups.push(eye.pupilGroup);
 
-    const iris = new THREE.Mesh(new THREE.CircleGeometry(0.125, 24), mats.eyeGlow);
-    iris.rotation.y = Math.PI;
-    eg.add(iris);
-    eyeIrisMeshes.push(iris);
-
-    const pGroup = new THREE.Group();
-    pGroup.position.set(0, 0, -0.006);
-    const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.072, 20), mats.eyeDeep);
-    pupil.rotation.y = Math.PI;
-    // Crisp twin Pixar white specular catchlights for living warmth!
-    const catchBig = new THREE.Mesh(new THREE.CircleGeometry(0.032, 16), mats.catchlight);
-    catchBig.rotation.y = Math.PI;
-    catchBig.position.set(-0.026, 0.034, -0.005);
-    const catchSmall = new THREE.Mesh(new THREE.CircleGeometry(0.016, 12), mats.catchlight);
-    catchSmall.rotation.y = Math.PI;
-    catchSmall.position.set(0.028, -0.024, -0.005);
-    pGroup.add(pupil, catchBig, catchSmall);
-    eg.add(pGroup);
-    eyePupilGroups.push(pGroup);
-
-    headGroup.add(eg);
-    eyeGroups.push(eg);
-
-    // Smooth 3D glowing happy ^ ^ crescent arc (positioned cleanly proud of visor!)
+    // Smooth 3D glowing happy ^ ^ crescent arc (positioned cleanly proud of visor/pods)
     const happyArc = new THREE.Mesh(
-      new THREE.TorusGeometry(0.095, 0.026, 12, 24, Math.PI),
+      new THREE.TorusGeometry(0.095, 0.028, 12, 26, Math.PI),
       mats.happyArc
     );
     happyArc.position.set(side * 0.24, 0.03, -0.268);
@@ -769,12 +827,12 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     headGroup.add(happyArc);
     happyArcs.push(happyArc);
 
-    // Soft rosy coral cheek blush ovals
-    const blush = new THREE.Mesh(new THREE.CircleGeometry(0.062, 18), mats.cheekBlush);
+    // Soft rosy coral cheek blush ovals (active across ALL 5 bots for cohesive chibi cuteness!)
+    const blush = new THREE.Mesh(new THREE.CircleGeometry(0.064, 20), mats.cheekBlush);
     blush.rotation.y = Math.PI;
-    blush.scale.set(1.35, 0.72, 1);
-    blush.position.set(side * 0.28, -0.06, -0.44);
-    blush.visible = false;
+    blush.scale.set(1.38, 0.72, 1);
+    blush.position.set(side * 0.28, -0.065, -0.44);
+    blush.visible = true;
     headGroup.add(blush);
     cheekBlushes.push(blush);
 
@@ -874,7 +932,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   const leafGlowMat = new THREE.MeshStandardMaterial({
     color: 0x34d399,
     emissive: 0x10b981,
-    emissiveIntensity: 1.5,
+    emissiveIntensity: 0.62,
     roughness: 0.2
   });
   const leafL = new THREE.Mesh(new THREE.SphereGeometry(0.065, 14, 12), leafGlowMat);
@@ -1055,7 +1113,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
       new THREE.MeshStandardMaterial({
         color: 0x7dd3fc,
         emissive: 0x38bdf8,
-        emissiveIntensity: 1.4,
+        emissiveIntensity: 0.58,
         roughness: 0.12
       })
     );
@@ -1163,9 +1221,18 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   // 6. Modular Swappable 3D Equipment Part Groups (High-Detail PBR Assemblies)
   // ---------------------------------------------------------
 
-  // 6a. Standard Wheels (Precision Off-Road Alloy Wheels, Tread Lugs, Brake Calipers & Coil-Over Suspension)
+  // 6a. Standard Wheels (Precision Off-Road Alloy Wheels, Tread Lugs, Brake Calipers & Articulated Coil-Over Suspension)
   const wheelsGroup = new THREE.Group();
   const spinningWheels: THREE.Group[] = [];
+  const wheelSuspensions: Array<{
+    pivot: THREE.Group;
+    upperArm: THREE.Mesh;
+    shockCoil: THREE.Mesh;
+    brakeDisc: THREE.Mesh;
+    caliper: THREE.Mesh;
+    side: number;
+    zSign: number;
+  }> = [];
 
   const wheelTireGeo = new THREE.CylinderGeometry(0.245, 0.245, 0.19, 28);
   wheelTireGeo.rotateZ(Math.PI / 2);
@@ -1320,6 +1387,15 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
 
       wheelsGroup.add(wPivot);
       spinningWheels.push(wPivot);
+      wheelSuspensions.push({
+        pivot: wPivot,
+        upperArm,
+        shockCoil,
+        brakeDisc,
+        caliper,
+        side,
+        zSign: zOff < 0 ? -1 : 1
+      });
     });
   });
   wheelsGroup.visible = false;
@@ -1479,10 +1555,11 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   treadsGroup.visible = false;
   visual.add(treadsGroup);
 
-  // 6c. Jump Thrusters (Twin Pressurized Rocket Canisters, Copper Manifold & Lathe Bell Nozzles)
+  // 6c. Jump Thrusters (Twin Pressurized Rocket Canisters, Copper Manifold & Articulated Lathe Bell Nozzles)
   const thrustersGroup = new THREE.Group();
   thrustersGroup.position.set(0, 0.82, 0.54);
   const thrusterFlames: THREE.Object3D[] = [];
+  const thrusterNozzles: THREE.Group[] = [];
 
   // Contoured LatheGeometry rocket bell nozzle
   const bellProfile = [
@@ -1607,6 +1684,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
       nozzleGroup,
       flameGroup
     );
+    thrusterNozzles.push(nozzleGroup);
     thrusterFlames.push(flameGroup);
   });
   thrustersGroup.visible = false;
@@ -1676,7 +1754,8 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   turbineHub.rotation.x = Math.PI;
   turbineRear.add(shroudRing, exhaustInner, afterburnerRing, turbineHub);
 
-  // 6 angled vectoring exhaust petals + recessed turbine fan blades
+  // 6 angled vectoring exhaust petals + recessed turbine fan blades (animated flare on boost!)
+  const boosterPetals: Array<{ mesh: THREE.Mesh; angle: number }> = [];
   const petalGeo = new THREE.BoxGeometry(0.052, 0.13, 0.016);
   const bladeGeo = new THREE.BoxGeometry(0.018, 0.008, 0.095);
   for (let p = 0; p < 6; p++) {
@@ -1686,6 +1765,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     petal.rotation.y = -a + Math.PI / 2;
     petal.rotation.x = -0.14;
     turbineRear.add(petal);
+    boosterPetals.push({ mesh: petal, angle: a });
 
     const blade = new THREE.Mesh(bladeGeo, mats.chromeTrim);
     blade.position.set(Math.cos(a) * 0.055, 0.015, Math.sin(a) * 0.055);
@@ -1957,19 +2037,25 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   shieldMesh.visible = false;
   visual.add(shieldMesh);
 
-  // Soft Radial Contact Shadow
-  const contactShadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.1, 2.1),
-    new THREE.MeshBasicMaterial({
-      map: tex.shadowBlob,
-      transparent: true,
-      opacity: 0.62,
-      depthWrite: false
-    })
-  );
+  // Soft Radial Contact Shadow (scales and softens dynamically with jump elevation)
+  const contactShadowMat = new THREE.MeshBasicMaterial({
+    map: tex.shadowBlob,
+    transparent: true,
+    opacity: 0.64,
+    depthWrite: false
+  });
+  const contactShadow = new THREE.Mesh(new THREE.PlaneGeometry(2.15, 2.15), contactShadowMat);
   contactShadow.rotation.x = -Math.PI / 2;
   contactShadow.position.y = 0.02;
   root.add(contactShadow);
+
+  // Dynamic lightweight Robot Underglow PointLight (casts subtle state-tinted studio sheen onto turntable/track)
+  const botUnderGlow = new THREE.PointLight(0x38bdf8, 0.3, 4.6, 2);
+  botUnderGlow.position.set(0, 0.65, -0.25);
+  botUnderGlow.visible = !isSoftwareGl;
+  root.add(botUnderGlow);
+  let dynamicBotLightAllowed = !isSoftwareGl;
+  const _glowTargetColor = new THREE.Color(0x38bdf8);
 
   const partGroups: Record<PartId, THREE.Group> = {
     wheels: wheelsGroup,
@@ -2016,8 +2102,20 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     magnet: false
   };
 
+  const kinematics = new RobotKinematicsController();
+
   function triggerPartPop(part: PartId) {
     popScales[part] = 0.18;
+    kinematics.injectImpact(0.72, 0.22, 0);
+  }
+
+  function injectImpact(strength: number, pitchKick = 0, rollKick = 0) {
+    kinematics.injectImpact(strength, pitchKick, rollKick);
+  }
+
+  function setQualityBudget(budget: GraphicsQualityBudget) {
+    dynamicBotLightAllowed = !isSoftwareGl && budget.dynamicBotLightEnabled;
+    botUnderGlow.visible = dynamicBotLightAllowed;
   }
 
   function setTheme(theme: BotThemeId) {
@@ -2071,27 +2169,33 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     // Oversized binocular eyes for LearnBot matching its adorable reference art
     podsGroup.scale.setScalar(isLearn ? 1.22 : 1.0);
 
-    // Clean non-Z-fighting front Z clearance for eyes, cheeks, and mouth
+    // Clean non-Z-fighting front Z clearance for eyes, rosy cheeks, and mouth
     const eyeZ = isVisor ? -0.442 : isLearn ? -0.305 : -0.258;
     const eyeXSpan = isVisor ? 0.195 : isLearn ? 0.29 : 0.24;
-    const eyeScale = isLearn ? 1.38 : isVisor ? 0.92 : 1.0;
+    const eyeScale = isLearn ? 1.36 : isVisor ? 0.96 : 1.06;
     currentEyeXSpan = eyeXSpan;
 
     eyeGroups.forEach((eg, idx) => {
       const s = idx === 0 ? -1 : 1;
       eg.position.set(s * eyeXSpan, 0.055, eyeZ);
       eg.scale.setScalar(eyeScale);
-      happyArcs[idx].position.set(s * eyeXSpan, 0.04, eyeZ - 0.012);
-      happyArcs[idx].scale.setScalar(isLearn ? 1.15 : 0.96);
+      happyArcs[idx].position.set(s * eyeXSpan, 0.04, eyeZ - 0.014);
+      happyArcs[idx].scale.setScalar(isLearn ? 1.15 : 0.98);
       tears[idx].position.set(s * eyeXSpan, -0.09, eyeZ - 0.02);
-      cheekBlushes[idx].visible = isVisor;
-      cheekBlushes[idx].position.set(s * 0.275, -0.065, eyeZ - 0.002);
+      // Rosy chibi cheek blush visible on ALL 5 characters, positioned snugly under each eye/visor!
+      cheekBlushes[idx].visible = true;
+      cheekBlushes[idx].position.set(
+        s * (isVisor ? 0.275 : isLearn ? 0.31 : 0.255),
+        isVisor ? -0.068 : -0.115,
+        eyeZ - 0.008
+      );
+      cheekBlushes[idx].scale.set(isVisor ? 1.38 : 1.05, isVisor ? 0.72 : 0.56, 1);
     });
 
-    // Cute smiling mouth visible on Sprout, RoboBuddy, and LearnBot (Nova has a 3D golden beak!)
-    cuteMouthMesh.visible = norm === 'sprout' || norm === 'robobuddy' || isLearn;
-    cuteMouthMesh.position.set(0, isLearn ? -0.075 : -0.055, eyeZ - 0.004);
-    cuteMouthMesh.scale.setScalar(isLearn ? 0.85 : 1.0);
+    // Cute smiling mouth visible on SparkBot, Sprout, RoboBuddy, and LearnBot (Nova has a 3D golden beak!)
+    cuteMouthMesh.visible = norm !== 'nova';
+    cuteMouthMesh.position.set(0, isVisor ? -0.058 : isLearn ? -0.088 : -0.072, eyeZ - 0.006);
+    cuteMouthMesh.scale.setScalar(isLearn ? 0.85 : isVisor ? 1.0 : 0.76);
 
     const def = BOT_CHARACTERS[norm];
     mats.accent.color.set(def.defaultAccentHex);
@@ -2131,8 +2235,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     }
   }
 
-  // Smooth spring state
-  let squashY = 1;
+  // Smooth spring & expressive animation state
   let droopY = 0;
   let headPitch = 0;
   let headYaw = 0;
@@ -2141,6 +2244,10 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   let wheelAngle = 0;
   let tearPhase = 0;
   let blinkTimer = 3.2;
+  let saccadeTimer = 1.8;
+  let saccadeX = 0;
+  let saccadeY = 0;
+  let nozzleFlare = 0;
 
   function update(p: RobotAnimParams) {
     const dt = Math.min(p.dt, 0.05);
@@ -2333,11 +2440,21 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
       targetSquash = 1 + breath * 0.016;
     }
 
-    squashY = THREE.MathUtils.damp(squashY, targetSquash, 10, dt);
+    // Second-order spring kinematics: volume-preserving squash-and-stretch, suspension & weight lean
+    const kin = kinematics.step({
+      dt,
+      targetSquash,
+      speed: p.speed,
+      isAirborne: p.isAirborne,
+      targetPitch: p.tiltPitch,
+      targetRoll: p.tiltRoll,
+      turbulence: p.isMoving ? Math.sin(p.time * 14) * 0.04 : 0
+    });
+
     droopY = THREE.MathUtils.damp(droopY, targetDroop, 10, dt);
-    headPitch = THREE.MathUtils.damp(headPitch, targetHeadPitch, 9, dt);
+    headPitch = THREE.MathUtils.damp(headPitch, targetHeadPitch + kin.inertialPitch * 0.45, 9, dt);
     headYaw = THREE.MathUtils.damp(headYaw, targetHeadYaw, 9, dt);
-    headRoll = THREE.MathUtils.damp(headRoll, targetHeadRoll, 9, dt);
+    headRoll = THREE.MathUtils.damp(headRoll, targetHeadRoll + kin.inertialRoll * 0.35, 9, dt);
     if (isCelebrating || (isCodeFeedback && (fbTier === 'loop' || fbTier === 'nested'))) {
       celebrateSpin = THREE.MathUtils.damp(celebrateSpin, targetSpinY, 12, dt);
     } else if (isTouched) {
@@ -2347,56 +2464,135 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
       celebrateSpin = THREE.MathUtils.damp(celebrateSpin, 0, 9, dt);
     }
 
-    visual.position.y = droopY;
-    const invXZ = 1 / Math.sqrt(Math.max(0.8, squashY));
-    visual.scale.set(invXZ, squashY, invXZ);
-    visual.rotation.x = THREE.MathUtils.damp(visual.rotation.x, p.tiltPitch, 10, dt);
+    visual.position.y = droopY + kin.suspensionOffset;
+    visual.scale.set(kin.squashXZ, kin.squashY, kin.squashXZ);
+    visual.rotation.x = THREE.MathUtils.damp(visual.rotation.x, p.tiltPitch + kin.inertialPitch, 11, dt);
     visual.rotation.y = celebrateSpin;
-    visual.rotation.z = THREE.MathUtils.damp(visual.rotation.z, p.tiltRoll, 10, dt);
+    visual.rotation.z = THREE.MathUtils.damp(visual.rotation.z, p.tiltRoll + kin.inertialRoll, 11, dt);
 
+    // Height-reactive soft contact shadow grounding
+    const elevation = Math.max(0, (p.heightAboveGround ?? 0) + Math.max(0, droopY));
+    const shadowScale = 1 + Math.min(0.65, elevation * 0.24);
+    contactShadow.scale.setScalar(shadowScale);
+    contactShadowMat.opacity = THREE.MathUtils.clamp(0.64 / (1 + elevation * 0.55), 0.16, 0.66);
+
+    // Secondary antenna spring whip inertia
     headGroup.rotation.set(headPitch, headYaw, headRoll);
+    if (antennaStem.visible) {
+      const baseAntZ = activeCharacter === 'sprout' ? 0.34 : 0;
+      antennaStem.rotation.x = kin.antennaWhipX * 0.65;
+      antennaStem.rotation.z = baseAntZ + kin.antennaWhipZ * 0.65;
+      const baseBulbX = activeCharacter === 'sprout' ? -0.43 : 0;
+      const baseBulbY = activeCharacter === 'sprout' ? 0.64 : 0.62;
+      antennaBulb.position.set(
+        baseBulbX - kin.antennaWhipZ * 0.08,
+        baseBulbY,
+        0.02 + kin.antennaWhipX * 0.08
+      );
+    }
+
+    // Dynamic Robot Underglow Light synced smoothly with robot state
+    if (dynamicBotLightAllowed) {
+      const glowHex =
+        p.mood === 'boost' || p.turboActive
+          ? 0xf472b6
+          : p.mood === 'scan'
+            ? p.scanMatch === true
+              ? 0x34d399
+              : 0x22d3ee
+            : isInstalling || p.mood === 'build'
+              ? 0xfbbf24
+              : isCelebrating || showHappy
+                ? 0xfde047
+                : eyeHex;
+      _glowTargetColor.setHex(glowHex);
+      botUnderGlow.color.lerp(_glowTargetColor, 1 - Math.exp(-8 * dt));
+      const targetGlowInt =
+        p.mood === 'boost' || p.turboActive || isInstalling
+          ? 0.52
+          : p.isAirborne || isCelebrating
+            ? 0.34
+            : 0.22;
+      botUnderGlow.intensity = THREE.MathUtils.damp(botUnderGlow.intensity, targetGlowInt, 9, dt);
+    }
+
     mats.antennaGlow.color.setHex(antennaHex);
     mats.antennaGlow.emissive.setHex(antennaHex);
     mats.eyeGlow.color.setHex(eyeHex);
     mats.eyeGlow.emissive.setHex(eyeHex);
 
-    // Natural eye blinking
+    // Organic smooth eyelid blinking & subtle micro eye-saccades
     blinkTimer -= dt;
-    let eyeScaleY = 1;
+    let blinkClose = 0;
     if (blinkTimer <= 0) {
-      if (blinkTimer > -0.11) eyeScaleY = 0.1;
-      else blinkTimer = 2.6 + (Math.sin(p.time * 1.7) + 1) * 1.2;
+      if (blinkTimer > -0.14) {
+        const phase = Math.abs((blinkTimer + 0.07) / 0.07);
+        blinkClose = Math.max(0, 1 - phase);
+      } else {
+        blinkTimer = 2.6 + (Math.sin(p.time * 1.7) + 1) * 1.25;
+      }
     }
 
-    const baseEyeScale = activeCharacter === 'learnbot' ? 1.38 : activeCharacter === 'sparkbot' ? 1.0 : 0.92;
+    saccadeTimer -= dt;
+    if (saccadeTimer <= 0) {
+      saccadeTimer = 1.6 + Math.abs(Math.sin(p.time * 2.13)) * 1.8;
+      saccadeX = Math.sin(p.time * 7.3) * 0.011;
+      saccadeY = Math.cos(p.time * 5.9) * 0.008;
+    }
+
+    const baseEyeScale = activeCharacter === 'learnbot' ? 1.36 : activeCharacter === 'sparkbot' ? 1.06 : 0.96;
     eyeGroups.forEach((eg, idx) => {
       eg.visible = !showHappy;
       happyArcs[idx].visible = showHappy;
-      if (showConfused) {
-        eg.scale.set(baseEyeScale, baseEyeScale * (idx === 0 ? 0.5 : 1.08), 1);
-      } else {
-        eg.scale.set(baseEyeScale, baseEyeScale * eyeScaleY, 1);
+      eg.scale.setScalar(baseEyeScale);
+
+      const eyeHandle = chibiEyes[idx];
+      if (eyeHandle) {
+        const upperTarget = showSad
+          ? 0.42
+          : showConfused && idx === 0
+            ? 0.56
+            : blinkClose * 0.98;
+        const lowerTarget = showSad
+          ? 0.16
+          : showConfused && idx === 1
+            ? 0.18
+            : blinkClose * 0.92;
+        const nextU = THREE.MathUtils.damp(eyeHandle.upperLid.scale.y, Math.max(0.001, upperTarget), 24, dt);
+        const nextL = THREE.MathUtils.damp(eyeHandle.lowerLid.scale.y, Math.max(0.001, lowerTarget), 24, dt);
+        eyeHandle.upperLid.scale.set(1, nextU, 1);
+        eyeHandle.upperLid.visible = nextU > 0.02;
+        eyeHandle.lowerLid.scale.set(1, nextL, 1);
+        eyeHandle.lowerLid.visible = nextL > 0.02;
       }
-      eyePupilGroups[idx].position.x = -p.lookX * 0.026;
-      eyePupilGroups[idx].position.y = p.lookY * 0.024;
+
+      const targetPupilX = -p.lookX * 0.028 + saccadeX;
+      const targetPupilY = p.lookY * 0.024 + saccadeY;
+      eyePupilGroups[idx].position.x = THREE.MathUtils.damp(eyePupilGroups[idx].position.x, targetPupilX, 14, dt);
+      eyePupilGroups[idx].position.y = THREE.MathUtils.damp(eyePupilGroups[idx].position.y, targetPupilY, 14, dt);
       if (brows[idx]) {
         brows[idx].rotation.z = showSad
-          ? (idx === 0 ? 0.32 : -0.32)
+          ? (idx === 0 ? 0.34 : -0.34)
           : showConfused
-            ? (idx === 0 ? -0.24 : 0.12)
+            ? (idx === 0 ? -0.26 : 0.14)
             : showHappy
-              ? (idx === 0 ? -0.16 : 0.16)
-              : 0;
+              ? (idx === 0 ? -0.18 : 0.18)
+              : Math.sin(p.time * 2.3) * 0.025 * (idx === 0 ? -1 : 1);
       }
     });
+
+    // Subtle glowing blush pulse when happy/touched
+    mats.cheekBlush.opacity = isTouched || showHappy ? 0.78 : showSad ? 0.34 : 0.58;
 
     // Cute mouth expressive bounce when talking/happy
     if (cuteMouthMesh.visible) {
       const talkOpen =
         isTouched || isCelebrating || showHappy
-          ? 0.95 + Math.abs(Math.sin(p.time * 14)) * 0.45
-          : 0.72 + Math.sin(p.time * 2.3) * 0.06;
-      const mouthBase = activeCharacter === 'learnbot' ? 0.85 : 1.0;
+          ? 0.98 + Math.abs(Math.sin(p.time * 14)) * 0.45
+          : showSad
+            ? 0.35
+            : 0.72 + Math.sin(p.time * 2.3) * 0.06;
+      const mouthBase = activeCharacter === 'learnbot' ? 0.85 : activeCharacter === 'sparkbot' ? 0.76 : 1.0;
       cuteMouthMesh.scale.set(mouthBase, mouthBase * talkOpen, 1);
     }
 
@@ -2555,7 +2751,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
       (arm.weldTip.material as THREE.MeshBasicMaterial).opacity = Math.max(0, weldAlpha);
     });
 
-    // Spin wheels & treads proportionally
+    // Spin wheels & treads proportionally + animate articulated coil-over wheel suspension!
     const spinFeedbackWheels = isCodeFeedback && (fbTier === 'simple' || fbTier === 'loop' || fbTier === 'nested');
     if (p.isMoving || p.speed > 0.1 || isCelebrating || spinFeedbackWheels) {
       const spinRate = isCelebrating || fbTier === 'nested' ? 8.5 : spinFeedbackWheels ? 5.5 : Math.max(4, p.speed);
@@ -2567,33 +2763,71 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
         sp.rotation.x = wheelAngle * 1.4;
       });
     }
+    if (wheelsGroup.visible) {
+      for (let i = 0; i < wheelSuspensions.length; i++) {
+        const ws = wheelSuspensions[i];
+        const travel = THREE.MathUtils.clamp(
+          -kin.suspensionOffset * 0.95 + ws.zSign * kin.suspensionPitchBias * 0.45,
+          -0.065,
+          0.075
+        );
+        ws.pivot.position.y = 0.25 + travel;
+        ws.brakeDisc.position.y = 0.25 + travel;
+        ws.caliper.position.y = 0.315 + travel;
+        ws.upperArm.rotation.z = ws.side * (-0.22 + travel * 2.4);
+        ws.shockCoil.scale.y = THREE.MathUtils.clamp(1 - travel * 4.2, 0.72, 1.28);
+      }
+    }
 
-    // Thruster & Booster Flames
+    // Volumetric GLSL Thruster & Booster Plasma Plumes + Articulated Vectoring Nozzle Flaps
     const codeFlamePreview =
       isCodeFeedback && ((fbTier === 'dynamic' && fbProgress > 0.25) || (fbTier === 'nested' && fbProgress < 0.65));
     const fireThrusters =
       p.isAirborne || p.mood === 'boost' || (isCelebrating && p.celebrateTimer > 1.15) || codeFlamePreview;
+    const fireBooster =
+      (p.mood === 'boost' || p.turboActive || (isCelebrating && p.celebrateTimer > 1.15) || codeFlamePreview) &&
+      boosterGroup.visible;
+
+    mats.flameMat.uniforms.uTime.value = p.time;
+    mats.flameMat.uniforms.uIntensity.value = fireThrusters ? 1.15 + Math.sin(p.time * 28) * 0.16 : 0.0;
+    mats.boostOuterMat.uniforms.uTime.value = p.time;
+    mats.boostOuterMat.uniforms.uIntensity.value = fireBooster ? 1.28 + Math.sin(p.time * 34) * 0.18 : 0.0;
+
+    nozzleFlare = THREE.MathUtils.damp(nozzleFlare, fireThrusters || fireBooster ? 1 : 0, 12, dt);
+
     thrusterFlames.forEach((f, i) => {
       f.visible = fireThrusters && thrustersGroup.visible;
       if (f.visible) {
-        f.scale.setScalar(0.85 + Math.sin(p.time * 32 + i) * 0.25);
+        const s = 0.88 + Math.sin(p.time * 32 + i) * 0.2;
+        f.scale.set(0.96, s, 0.96);
       }
     });
-    boostFlame.visible =
-      (p.mood === 'boost' || p.turboActive || (isCelebrating && p.celebrateTimer > 1.15) || codeFlamePreview) &&
-      boosterGroup.visible;
+    if (thrustersGroup.visible) {
+      for (let i = 0; i < thrusterNozzles.length; i++) {
+        thrusterNozzles[i].rotation.x = 0.2 + nozzleFlare * 0.14;
+      }
+    }
+    boostFlame.visible = fireBooster;
     if (boostFlame.visible) {
-      boostFlame.scale.set(1, 0.9 + Math.sin(p.time * 38) * 0.35, 1);
+      boostFlame.scale.set(1.04, 0.94 + Math.sin(p.time * 38) * 0.3, 1.04);
+    }
+    if (boosterGroup.visible) {
+      for (let i = 0; i < boosterPetals.length; i++) {
+        const bp = boosterPetals[i];
+        bp.mesh.rotation.x = -0.14 + nozzleFlare * 0.28;
+        const r = 0.125 + nozzleFlare * 0.016;
+        bp.mesh.position.x = Math.cos(bp.angle) * r;
+        bp.mesh.position.z = Math.sin(bp.angle) * r;
+      }
     }
 
-    // Subtle live equipment animations (optical crystal shimmer + inductive coil pulse)
+    // Steady calm equipment visuals (no idle pulsing flicker in the workshop)
     if (laserGroup.visible) {
-      crystalTip.rotation.z = p.time * (p.mood === 'scan' ? 4.2 : 1.1);
-      mats.laserCrystal.emissiveIntensity =
-        p.mood === 'scan' ? 2.4 + Math.sin(p.time * 18) * 0.5 : 1.7 + Math.sin(p.time * 3.4) * 0.25;
+      crystalTip.rotation.z = p.time * (p.mood === 'scan' ? 3.2 : 0.6);
+      mats.laserCrystal.emissiveIntensity = p.mood === 'scan' ? 1.25 : 0.78;
     }
     if (magnetGroup.visible) {
-      mats.magnetCoreGlow.emissiveIntensity = 1.25 + Math.sin(p.time * 4.5) * 0.35;
+      mats.magnetCoreGlow.emissiveIntensity = 0.58;
     }
 
     // Sensor Scan Cone
@@ -2617,18 +2851,21 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     }
     if (learnBotHeadGroup.visible) {
       antennaStar.rotation.y = p.time * (isCelebrating ? 5.5 : 1.9);
+      antennaStar.rotation.x = kin.antennaWhipX * 0.55;
+      antennaStar.rotation.z = kin.antennaWhipZ * 0.55;
       antennaStar.position.y = 0.64 + Math.sin(p.time * 4.5) * 0.025;
     }
     if (sproutExtrasGroup.visible) {
-      scarfTailPivot.rotation.y = Math.sin(p.time * 4.2) * 0.18;
-      scarfTailPivot.rotation.x = Math.cos(p.time * 3.2) * 0.08;
+      scarfTailPivot.rotation.y = Math.sin(p.time * 4.2) * 0.18 + kin.antennaWhipZ * 0.5;
+      scarfTailPivot.rotation.x = Math.cos(p.time * 3.2) * 0.08 + kin.antennaWhipX * 0.45;
     }
 
-    // Shield Bubble
+    // Fresnel Holographic Energy Shield Bubble
     shieldMesh.visible = p.shieldActive || p.turboActive;
     if (shieldMesh.visible) {
-      mats.shield.color.setHex(p.turboActive ? 0xfbbf24 : 0x38bdf8);
-      mats.shield.opacity = 0.22 + Math.sin(p.time * 6) * 0.06;
+      mats.shield.uniforms.uTime.value = p.time;
+      mats.shield.uniforms.uColor.value.setHex(p.turboActive ? 0xfbbf24 : 0x38bdf8);
+      mats.shield.uniforms.uOpacity.value = 0.72 + Math.sin(p.time * 6) * 0.14;
     }
   }
 
@@ -2703,6 +2940,13 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     };
   }
 
+  function dispose() {
+    disposeObject3D(root, getSharedTextureSet(tex));
+  }
+
+  // Align default SparkBot chibi cheeks, mouth, and binocular eyes immediately on construction
+  setCharacter('sparkbot');
+
   // Keep reference clean to avoid unused variable warning
   void currentEyeXSpan;
   void eyeIrisMeshes;
@@ -2720,6 +2964,9 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     triggerPartPop,
     setTheme,
     applyPaintConfig,
-    setCharacter
+    setCharacter,
+    injectImpact,
+    setQualityBudget,
+    dispose
   };
 }

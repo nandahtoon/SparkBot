@@ -28,8 +28,8 @@ export default defineConfig(() => {
             'Build, code, and solve puzzles in this interactive 3D robotics adventure for young engineers.',
           theme_color: '#0b1222',
           background_color: '#0b1222',
-          display: 'standalone',
-          display_override: ['standalone', 'fullscreen'],
+          display: 'fullscreen',
+          display_override: ['fullscreen', 'standalone'],
           orientation: 'any',
           start_url: '/',
           scope: '/',
@@ -72,8 +72,9 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,webp,svg,woff2}'],
+          globIgnores: ['downloads/**'],
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -106,6 +107,56 @@ export default defineConfig(() => {
           type: 'module',
         },
       }),
+      // Serves the synced native Android Studio project ZIP without bundling it into Capacitor web assets.
+      {
+        name: 'serve-android-export',
+        configureServer(server) {
+          server.middlewares.use('/downloads/sparkbot-android-project.zip', (_req, res, next) => {
+            const zipPath = path.resolve(import.meta.dirname, 'exports/sparkbot-android-project.zip');
+            if (!fs.existsSync(zipPath)) {
+              next();
+              return;
+            }
+            const stat = fs.statSync(zipPath);
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Length', String(stat.size));
+            res.setHeader(
+              'Content-Disposition',
+              'attachment; filename="sparkbot-android-project.zip"'
+            );
+            fs.createReadStream(zipPath).pipe(res);
+          });
+        },
+        configurePreviewServer(server) {
+          server.middlewares.use('/downloads/sparkbot-android-project.zip', (_req, res, next) => {
+            const zipPath = path.resolve(import.meta.dirname, 'exports/sparkbot-android-project.zip');
+            if (!fs.existsSync(zipPath)) {
+              next();
+              return;
+            }
+            const stat = fs.statSync(zipPath);
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Length', String(stat.size));
+            res.setHeader(
+              'Content-Disposition',
+              'attachment; filename="sparkbot-android-project.zip"'
+            );
+            fs.createReadStream(zipPath).pipe(res);
+          });
+        },
+        closeBundle(error?: Error): void {
+          if (error || process.env.SKIP_ANDROID_ZIP_COPY === '1') {
+            return;
+          }
+          const zipSrc = path.resolve(import.meta.dirname, 'exports/sparkbot-android-project.zip');
+          const distDir = path.resolve(import.meta.dirname, 'dist');
+          if (fs.existsSync(distDir) && fs.existsSync(zipSrc)) {
+            const outDir = path.resolve(distDir, 'downloads');
+            fs.mkdirSync(outDir, {recursive: true});
+            fs.copyFileSync(zipSrc, path.resolve(outDir, 'sparkbot-android-project.zip'));
+          }
+        },
+      },
       // Copies src/assets into dist/ so root-relative URLs like
       // "/src/assets/images/..." (e.g. generate_image output) still resolve
       // in production builds. Do not remove.

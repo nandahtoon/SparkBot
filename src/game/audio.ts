@@ -25,10 +25,71 @@ class SoundEngine {
   private glideNode: AudioBufferSourceNode | null = null;
   private glideGain: GainNode | null = null;
   private activeVoiceNodes: AudioNode[] = [];
+  private unlocked = false;
   public muted = false;
   public sfxVolume = DEFAULT_AUDIO_SETTINGS.sfxVolume;
   public uiVolume = DEFAULT_AUDIO_SETTINGS.uiVolume;
   public voiceVolume = DEFAULT_AUDIO_SETTINGS.voiceVolume;
+
+  constructor() {
+    this.installGestureUnlocker();
+  }
+
+  private installGestureUnlocker() {
+    if (typeof window === 'undefined') return;
+    const handleUnlock = () => {
+      this.unlock();
+      if (this.unlocked) {
+        window.removeEventListener('pointerdown', handleUnlock, true);
+        window.removeEventListener('touchstart', handleUnlock, true);
+        window.removeEventListener('click', handleUnlock, true);
+        window.removeEventListener('keydown', handleUnlock, true);
+      }
+    };
+    window.addEventListener('pointerdown', handleUnlock, { capture: true, passive: true });
+    window.addEventListener('touchstart', handleUnlock, { capture: true, passive: true });
+    window.addEventListener('click', handleUnlock, { capture: true, passive: true });
+    window.addEventListener('keydown', handleUnlock, { capture: true, passive: true });
+  }
+
+  /**
+   * Unlocks & primes Web Audio on the first user gesture (required by mobile/Android/Chrome autoplay policies).
+   */
+  public unlock() {
+    if (typeof window === 'undefined') return;
+    if (!this.ctx) {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return;
+      try {
+        this.ctx = new AC();
+      } catch {
+        return;
+      }
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx
+        .resume()
+        .then(() => {
+          this.unlocked = this.ctx?.state === 'running';
+        })
+        .catch(() => {});
+    }
+    try {
+      // 1-sample silent buffer pulse unlocks iOS / Android WebView audio immediately
+      const silent = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+      const src = this.ctx.createBufferSource();
+      src.buffer = silent;
+      src.connect(this.ctx.destination);
+      src.start(0);
+      if (this.ctx.state === 'running') {
+        this.unlocked = true;
+      }
+    } catch {
+      // Ignore if context cannot accept buffer yet
+    }
+  }
 
   public applySettings(muted: boolean, audio?: Partial<AudioSettings> | null) {
     this.muted = Boolean(muted);
@@ -113,6 +174,35 @@ class SoundEngine {
     return { ctx: this.ctx, out: this.masterBus ?? this.ctx.destination, gainScale };
   }
 
+  /**
+   * Executes audio synthesis synchronously when AudioContext is running,
+   * or right after `ctx.resume()` resolves if it was suspended so sounds are never dropped.
+   */
+  private withReadyAudio(
+    channel: AudioChannel,
+    fn: (env: { ctx: AudioContext; out: AudioNode; gainScale: number }) => void
+  ) {
+    const env = this.ensure(channel);
+    if (!env) return;
+    if (env.ctx.state === 'running') {
+      fn(env);
+      return;
+    }
+    env.ctx
+      .resume()
+      .then(() => {
+        if (!this.ctx || this.ctx.state !== 'running') return;
+        const freshGain = this.getChannelOutputGain(channel);
+        if (freshGain <= 0.001) return;
+        fn({
+          ctx: this.ctx,
+          out: this.masterBus ?? this.ctx.destination,
+          gainScale: freshGain
+        });
+      })
+      .catch(() => {});
+  }
+
   private noiseBurst(
     channel: AudioChannel,
     dur: number,
@@ -121,26 +211,26 @@ class SoundEngine {
     vol: number,
     delay = 0
   ) {
-    const env = this.ensure(channel);
-    if (!env || !this.noiseBuf) return;
-    const { ctx, out, gainScale } = env;
-    const t = ctx.currentTime + delay;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuf;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(filterFreq, t);
-    filter.Q.setValueAtTime(q, t);
-    const gain = ctx.createGain();
-    const scaledVol = Math.max(0.0002, vol * gainScale);
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.linearRampToValueAtTime(scaledVol, t + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(out);
-    src.start(t);
-    src.stop(t + dur + 0.02);
+    this.withReadyAudio(channel, ({ ctx, out, gainScale }) => {
+      if (!this.noiseBuf) return;
+      const t = ctx.currentTime + delay;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(filterFreq, t);
+      filter.Q.setValueAtTime(q, t);
+      const gain = ctx.createGain();
+      const scaledVol = Math.max(0.0002, vol * gainScale);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(scaledVol, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(out);
+      src.start(t);
+      src.stop(t + dur + 0.02);
+    });
   }
 
   private filteredTone(
@@ -153,35 +243,34 @@ class SoundEngine {
     cutoffHz: number,
     delay = 0
   ) {
-    const env = this.ensure(channel);
-    if (!env) return;
-    const { ctx, out, gainScale } = env;
-    const scaledVol = Math.max(0.0002, vol * gainScale);
-    const t = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const lp = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
+    this.withReadyAudio(channel, ({ ctx, out, gainScale }) => {
+      const scaledVol = Math.max(0.0002, vol * gainScale);
+      const t = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const lp = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
 
-    osc.type = type;
-    osc.frequency.setValueAtTime(Math.max(20, freq), t);
-    if (endFreq !== freq) {
-      osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), t + dur);
-    }
+      osc.type = type;
+      osc.frequency.setValueAtTime(Math.max(20, freq), t);
+      if (endFreq !== freq) {
+        osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), t + dur);
+      }
 
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(cutoffHz, t);
-    lp.Q.setValueAtTime(0.8, t);
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(cutoffHz, t);
+      lp.Q.setValueAtTime(0.8, t);
 
-    const attack = Math.min(0.016, dur * 0.25);
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.linearRampToValueAtTime(scaledVol, t + attack);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      const attack = Math.min(0.016, dur * 0.25);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(scaledVol, t + attack);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
-    osc.connect(lp);
-    lp.connect(gain);
-    gain.connect(out);
-    osc.start(t);
-    osc.stop(t + dur + 0.03);
+      osc.connect(lp);
+      lp.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + dur + 0.03);
+    });
   }
 
   // ---------- UI CHANNEL SOUNDS ----------
@@ -456,186 +545,193 @@ class SoundEngine {
    * Zero text-to-speech or human voice APIs are used.
    */
   public speakWallE(phrase: WallEPhraseId = 'greeting', pitchScale = 1.0, variant = 0) {
-    const env = this.ensure('voice');
-    if (!env) return;
-    const { ctx, out, gainScale } = env;
+    this.withReadyAudio('voice', ({ ctx, out, gainScale }) => {
+      this.cancelSpeech();
 
-    this.cancelSpeech();
+      const syllables = composeWallEPhrase(phrase, pitchScale, variant);
+      const now = ctx.currentTime;
 
-    const syllables = composeWallEPhrase(phrase, pitchScale, variant);
-    const now = ctx.currentTime;
+      // Master vocal presence bus: warm mid-range vocal boost + gentle lowpass + cute studio echo
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(Math.max(0.0002, 0.72 * gainScale), now);
 
-    // Master vocal warmth bus (clear presence lowpass + gentle slap echo into soft-limited master bus)
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(Math.max(0.0002, 1.0 * gainScale), now);
+      const presenceEq = ctx.createBiquadFilter();
+      presenceEq.type = 'peaking';
+      presenceEq.frequency.setValueAtTime(1150, now);
+      presenceEq.Q.setValueAtTime(0.9, now);
+      presenceEq.gain.setValueAtTime(4.5, now);
 
-    const warmthLp = ctx.createBiquadFilter();
-    warmthLp.type = 'lowpass';
-    warmthLp.frequency.setValueAtTime(4200, now);
-    warmthLp.Q.setValueAtTime(0.65, now);
+      const warmthLp = ctx.createBiquadFilter();
+      warmthLp.type = 'lowpass';
+      warmthLp.frequency.setValueAtTime(4400, now);
+      warmthLp.Q.setValueAtTime(0.65, now);
 
-    const echoDelay = ctx.createDelay(0.25);
-    echoDelay.delayTime.setValueAtTime(0.072, now);
-    const echoGain = ctx.createGain();
-    echoGain.gain.setValueAtTime(0.18, now);
-    const echoLp = ctx.createBiquadFilter();
-    echoLp.type = 'lowpass';
-    echoLp.frequency.setValueAtTime(2200, now);
+      const echoDelay = ctx.createDelay(0.25);
+      echoDelay.delayTime.setValueAtTime(0.058, now);
+      const echoGain = ctx.createGain();
+      echoGain.gain.setValueAtTime(0.16, now);
+      const echoLp = ctx.createBiquadFilter();
+      echoLp.type = 'lowpass';
+      echoLp.frequency.setValueAtTime(2400, now);
 
-    masterGain.connect(warmthLp);
-    warmthLp.connect(out);
-    warmthLp.connect(echoDelay);
-    echoDelay.connect(echoLp);
-    echoLp.connect(echoGain);
-    echoGain.connect(out);
+      masterGain.connect(presenceEq);
+      presenceEq.connect(warmthLp);
+      warmthLp.connect(out);
+      warmthLp.connect(echoDelay);
+      echoDelay.connect(echoLp);
+      echoLp.connect(echoGain);
+      echoGain.connect(out);
 
-    this.activeVoiceNodes.push(masterGain);
+      this.activeVoiceNodes.push(masterGain);
 
-    for (const syl of syllables) {
-      const t0 = now + syl.delay;
-      const tMid = t0 + syl.dur * 0.48;
-      const tEnd = t0 + syl.dur;
+      for (const syl of syllables) {
+        const t0 = now + syl.delay;
+        const tMid = t0 + syl.dur * 0.48;
+        const tEnd = t0 + syl.dur;
 
-      // 1. Optional tiny WALL-E binocular-shutter / micro-servo onset tick
-      if (syl.servoClick && this.noiseBuf) {
-        const clickSrc = ctx.createBufferSource();
-        clickSrc.buffer = this.noiseBuf;
-        const clickBp = ctx.createBiquadFilter();
-        clickBp.type = 'bandpass';
-        clickBp.frequency.setValueAtTime(1950, t0);
-        clickBp.Q.setValueAtTime(3.2, t0);
-        const clickGain = ctx.createGain();
-        clickGain.gain.setValueAtTime(0.0001, t0);
-        clickGain.gain.linearRampToValueAtTime(0.085, t0 + 0.004);
-        clickGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.018);
-        clickSrc.connect(clickBp);
-        clickBp.connect(clickGain);
-        clickGain.connect(masterGain);
-        clickSrc.start(t0);
-        clickSrc.stop(t0 + 0.024);
+        // 1. Tiny WALL-E binocular-shutter / micro-servo onset tick
+        if (syl.servoClick && this.noiseBuf) {
+          const clickSrc = ctx.createBufferSource();
+          clickSrc.buffer = this.noiseBuf;
+          const clickBp = ctx.createBiquadFilter();
+          clickBp.type = 'bandpass';
+          clickBp.frequency.setValueAtTime(2100, t0);
+          clickBp.Q.setValueAtTime(2.6, t0);
+          const clickGain = ctx.createGain();
+          clickGain.gain.setValueAtTime(0.0001, t0);
+          clickGain.gain.linearRampToValueAtTime(0.11, t0 + 0.004);
+          clickGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
+          clickSrc.connect(clickBp);
+          clickBp.connect(clickGain);
+          clickGain.connect(masterGain);
+          clickSrc.start(t0);
+          clickSrc.stop(t0 + 0.026);
+        }
+
+        // 2. Expressive vocal core (clear sine/triangle pitch melody + harmonic sawtooth reed for vowel formants)
+        const oscCore = ctx.createOscillator();
+        const oscWarm = ctx.createOscillator();
+        const oscReed = ctx.createOscillator();
+        const coreMix = ctx.createGain();
+        const reedSource = ctx.createGain();
+
+        oscCore.type = 'sine';
+        oscWarm.type = 'triangle';
+        oscReed.type = 'sawtooth';
+
+        const f0 = Math.max(95, syl.fStart);
+        const fm = Math.max(95, syl.fMid);
+        const f1 = Math.max(95, syl.fEnd);
+        for (const osc of [oscCore, oscWarm, oscReed]) {
+          osc.frequency.setValueAtTime(f0, t0);
+          osc.frequency.exponentialRampToValueAtTime(fm, tMid);
+          osc.frequency.exponentialRampToValueAtTime(f1, tEnd);
+        }
+
+        // Endearing organic WALL-E mechanical vibrato
+        const vib = ctx.createOscillator();
+        const vibGain = ctx.createGain();
+        vib.type = 'sine';
+        vib.frequency.setValueAtTime(syl.vibratoHz, t0);
+        vibGain.gain.setValueAtTime(fm * syl.vibratoDepth * 1.15, t0);
+        vib.connect(vibGain);
+        vibGain.connect(oscCore.frequency);
+        vibGain.connect(oscWarm.frequency);
+        vibGain.connect(oscReed.frequency);
+
+        // Direct melodic core (ensures voice is ALWAYS clear and audible on mobile & laptop speakers)
+        const coreLp = ctx.createBiquadFilter();
+        coreLp.type = 'lowpass';
+        coreLp.frequency.setValueAtTime(2600, t0);
+        coreMix.gain.setValueAtTime(0.46, t0);
+
+        const warmCoreGain = ctx.createGain();
+        warmCoreGain.gain.setValueAtTime(0.28, t0);
+        oscCore.connect(coreMix);
+        oscWarm.connect(warmCoreGain);
+        warmCoreGain.connect(coreLp);
+        coreMix.connect(coreLp);
+
+        // Rich sawtooth reed feeding morphing vowel formant resonators (F1 & F2)
+        reedSource.gain.setValueAtTime(0.62, t0);
+        oscReed.connect(reedSource);
+
+        if (syl.breathy && syl.breathy > 0 && this.noiseBuf) {
+          const airSrc = ctx.createBufferSource();
+          airSrc.buffer = this.noiseBuf;
+          const airGain = ctx.createGain();
+          airGain.gain.setValueAtTime(0.065 * syl.breathy, t0);
+          airSrc.connect(airGain);
+          airGain.connect(reedSource);
+          airSrc.start(t0);
+          airSrc.stop(tEnd + 0.03);
+        }
+
+        // 3. Dual parallel morphing Formant Filters (F1 & F2) with warm musical Q
+        const fromF = VOWEL_FORMANTS[syl.vowelFrom];
+        const toF = VOWEL_FORMANTS[syl.vowelTo];
+
+        const f1Filter = ctx.createBiquadFilter();
+        f1Filter.type = 'bandpass';
+        f1Filter.frequency.setValueAtTime(fromF.f1, t0);
+        f1Filter.frequency.exponentialRampToValueAtTime(toF.f1, tEnd);
+        f1Filter.Q.setValueAtTime(Math.min(2.4, fromF.q1 * 0.68), t0);
+
+        const f2Filter = ctx.createBiquadFilter();
+        f2Filter.type = 'bandpass';
+        f2Filter.frequency.setValueAtTime(fromF.f2, t0);
+        f2Filter.frequency.exponentialRampToValueAtTime(toF.f2, tEnd);
+        f2Filter.Q.setValueAtTime(Math.min(2.8, fromF.q2 * 0.65), t0);
+
+        const f1Gain = ctx.createGain();
+        f1Gain.gain.setValueAtTime(0.78, t0);
+        const f2Gain = ctx.createGain();
+        f2Gain.gain.setValueAtTime(0.64, t0);
+
+        const sylEnv = ctx.createGain();
+        const attack = Math.min(0.018, syl.dur * 0.22);
+        const releaseStart = Math.max(t0 + attack, tEnd - Math.min(0.045, syl.dur * 0.32));
+        sylEnv.gain.setValueAtTime(0.0001, t0);
+        sylEnv.gain.linearRampToValueAtTime(1.0, t0 + attack);
+        sylEnv.gain.setValueAtTime(0.92, releaseStart);
+        sylEnv.gain.exponentialRampToValueAtTime(0.0001, tEnd + 0.015);
+
+        coreLp.connect(sylEnv);
+        reedSource.connect(f1Filter);
+        reedSource.connect(f2Filter);
+        f1Filter.connect(f1Gain);
+        f2Filter.connect(f2Gain);
+        f1Gain.connect(sylEnv);
+        f2Gain.connect(sylEnv);
+        sylEnv.connect(masterGain);
+
+        // 4. Cute EVE-style melodic shimmer overtone (+1 octave soft chime)
+        if (syl.sparkle) {
+          const oscSparkle = ctx.createOscillator();
+          const sparkleEnv = ctx.createGain();
+          oscSparkle.type = 'sine';
+          oscSparkle.frequency.setValueAtTime(f0 * 2, t0);
+          oscSparkle.frequency.exponentialRampToValueAtTime(fm * 2, tMid);
+          oscSparkle.frequency.exponentialRampToValueAtTime(f1 * 2, tEnd);
+          sparkleEnv.gain.setValueAtTime(0.0001, t0);
+          sparkleEnv.gain.linearRampToValueAtTime(0.22, t0 + 0.015);
+          sparkleEnv.gain.exponentialRampToValueAtTime(0.0001, tEnd);
+          oscSparkle.connect(sparkleEnv);
+          sparkleEnv.connect(masterGain);
+          oscSparkle.start(t0);
+          oscSparkle.stop(tEnd + 0.03);
+        }
+
+        oscCore.start(t0);
+        oscWarm.start(t0);
+        oscReed.start(t0);
+        vib.start(t0);
+        oscCore.stop(tEnd + 0.03);
+        oscWarm.stop(tEnd + 0.03);
+        oscReed.stop(tEnd + 0.03);
+        vib.stop(tEnd + 0.03);
       }
-
-      // 2. Vocal cord excitation: warm triangle + soft reed sawtooth + gentle vibrato LFO
-      const oscWarm = ctx.createOscillator();
-      const oscReed = ctx.createOscillator();
-      const warmMix = ctx.createGain();
-      const reedMix = ctx.createGain();
-      const sourceMix = ctx.createGain();
-
-      oscWarm.type = 'triangle';
-      oscReed.type = 'sawtooth';
-      warmMix.gain.setValueAtTime(0.78, t0);
-      reedMix.gain.setValueAtTime(0.22, t0);
-
-      // 3-point expressive pitch glide (creates cute emotional inflection!)
-      const f0 = Math.max(90, syl.fStart);
-      const fm = Math.max(90, syl.fMid);
-      const f1 = Math.max(90, syl.fEnd);
-      for (const osc of [oscWarm, oscReed]) {
-        osc.frequency.setValueAtTime(f0, t0);
-        osc.frequency.exponentialRampToValueAtTime(fm, tMid);
-        osc.frequency.exponentialRampToValueAtTime(f1, tEnd);
-      }
-
-      // Subtle organic mechanical vibrato
-      const vib = ctx.createOscillator();
-      const vibGain = ctx.createGain();
-      vib.type = 'sine';
-      vib.frequency.setValueAtTime(syl.vibratoHz, t0);
-      vibGain.gain.setValueAtTime(fm * syl.vibratoDepth, t0);
-      vib.connect(vibGain);
-      vibGain.connect(oscWarm.frequency);
-      vibGain.connect(oscReed.frequency);
-
-      oscWarm.connect(warmMix);
-      oscReed.connect(reedMix);
-      warmMix.connect(sourceMix);
-      reedMix.connect(sourceMix);
-
-      // Optional soft airy breath inside the vocal tract
-      let airSrc: AudioBufferSourceNode | null = null;
-      if (syl.breathy && syl.breathy > 0 && this.noiseBuf) {
-        airSrc = ctx.createBufferSource();
-        airSrc.buffer = this.noiseBuf;
-        const airGain = ctx.createGain();
-        airGain.gain.setValueAtTime(0.055 * syl.breathy, t0);
-        airSrc.connect(airGain);
-        airGain.connect(sourceMix);
-        airSrc.start(t0);
-        airSrc.stop(tEnd + 0.03);
-      }
-
-      // 3. Dual parallel morphing Formant Filters (F1 & F2) + warm body sub-tap
-      const fromF = VOWEL_FORMANTS[syl.vowelFrom];
-      const toF = VOWEL_FORMANTS[syl.vowelTo];
-
-      const f1Filter = ctx.createBiquadFilter();
-      f1Filter.type = 'bandpass';
-      f1Filter.frequency.setValueAtTime(fromF.f1, t0);
-      f1Filter.frequency.exponentialRampToValueAtTime(toF.f1, tEnd);
-      f1Filter.Q.setValueAtTime(fromF.q1, t0);
-
-      const f2Filter = ctx.createBiquadFilter();
-      f2Filter.type = 'bandpass';
-      f2Filter.frequency.setValueAtTime(fromF.f2, t0);
-      f2Filter.frequency.exponentialRampToValueAtTime(toF.f2, tEnd);
-      f2Filter.Q.setValueAtTime(fromF.q2, t0);
-
-      const bodyLp = ctx.createBiquadFilter();
-      bodyLp.type = 'lowpass';
-      bodyLp.frequency.setValueAtTime(920, t0);
-
-      const f1Gain = ctx.createGain();
-      f1Gain.gain.setValueAtTime(0.58, t0);
-      const f2Gain = ctx.createGain();
-      f2Gain.gain.setValueAtTime(0.46, t0);
-      const bodyGain = ctx.createGain();
-      bodyGain.gain.setValueAtTime(0.22, t0);
-
-      const sylEnv = ctx.createGain();
-      const attack = Math.min(0.022, syl.dur * 0.24);
-      const releaseStart = Math.max(t0 + attack, tEnd - Math.min(0.045, syl.dur * 0.35));
-      sylEnv.gain.setValueAtTime(0.0001, t0);
-      sylEnv.gain.linearRampToValueAtTime(0.92, t0 + attack);
-      sylEnv.gain.setValueAtTime(0.86, releaseStart);
-      sylEnv.gain.exponentialRampToValueAtTime(0.0001, tEnd + 0.012);
-
-      sourceMix.connect(f1Filter);
-      sourceMix.connect(f2Filter);
-      sourceMix.connect(bodyLp);
-      f1Filter.connect(f1Gain);
-      f2Filter.connect(f2Gain);
-      bodyLp.connect(bodyGain);
-      f1Gain.connect(sylEnv);
-      f2Gain.connect(sylEnv);
-      bodyGain.connect(sylEnv);
-      sylEnv.connect(masterGain);
-
-      // 4. Optional cute musical bell shimmer overtone (+1 octave sine)
-      let oscSparkle: OscillatorNode | null = null;
-      if (syl.sparkle) {
-        oscSparkle = ctx.createOscillator();
-        const sparkleEnv = ctx.createGain();
-        oscSparkle.type = 'sine';
-        oscSparkle.frequency.setValueAtTime(f0 * 2, t0);
-        oscSparkle.frequency.exponentialRampToValueAtTime(fm * 2, tMid);
-        oscSparkle.frequency.exponentialRampToValueAtTime(f1 * 2, tEnd);
-        sparkleEnv.gain.setValueAtTime(0.0001, t0);
-        sparkleEnv.gain.linearRampToValueAtTime(0.1, t0 + 0.016);
-        sparkleEnv.gain.exponentialRampToValueAtTime(0.0001, tEnd);
-        oscSparkle.connect(sparkleEnv);
-        sparkleEnv.connect(masterGain);
-        oscSparkle.start(t0);
-        oscSparkle.stop(tEnd + 0.03);
-      }
-
-      oscWarm.start(t0);
-      oscReed.start(t0);
-      vib.start(t0);
-      oscWarm.stop(tEnd + 0.03);
-      oscReed.stop(tEnd + 0.03);
-      vib.stop(tEnd + 0.03);
-    }
+    });
   }
 
   public chirpHappy() {
@@ -700,81 +796,80 @@ class SoundEngine {
    * played strictly when a new STEM Fact Card or Mastery Badge tier unlocks.
    */
   public milestoneUnlock(kind: MilestoneUnlockKind = 'both') {
-    const env = this.ensure('sfx');
-    if (!env) return;
-    const { ctx, out, gainScale } = env;
-    const profile = MILESTONE_SOUND_PROFILES[kind] || MILESTONE_SOUND_PROFILES.both;
-    const now = ctx.currentTime;
+    this.withReadyAudio('sfx', ({ ctx, out, gainScale }) => {
+      const profile = MILESTONE_SOUND_PROFILES[kind] || MILESTONE_SOUND_PROFILES.both;
+      const now = ctx.currentTime;
 
-    // 1. Warm foundational fifth pad to give the unlock chime emotional depth
-    for (const [idx, ratio] of [1, 1.5].entries()) {
-      const pad = ctx.createOscillator();
-      const padGain = ctx.createGain();
-      pad.type = 'sine';
-      pad.frequency.setValueAtTime(profile.chordRootHz * ratio, now);
-      const peak = (idx === 0 ? 0.14 : 0.09) * gainScale;
-      padGain.gain.setValueAtTime(0.0001, now);
-      padGain.gain.linearRampToValueAtTime(peak, now + 0.05);
-      padGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
-      pad.connect(padGain);
-      padGain.connect(out);
-      pad.start(now);
-      pad.stop(now + 0.75);
-    }
+      // 1. Warm foundational fifth pad to give the unlock chime emotional depth
+      for (const [idx, ratio] of [1, 1.5].entries()) {
+        const pad = ctx.createOscillator();
+        const padGain = ctx.createGain();
+        pad.type = 'sine';
+        pad.frequency.setValueAtTime(profile.chordRootHz * ratio, now);
+        const peak = (idx === 0 ? 0.14 : 0.09) * gainScale;
+        padGain.gain.setValueAtTime(0.0001, now);
+        padGain.gain.linearRampToValueAtTime(peak, now + 0.05);
+        padGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+        pad.connect(padGain);
+        padGain.connect(out);
+        pad.start(now);
+        pad.stop(now + 0.75);
+      }
 
-    // 2. Ascending celesta/bell arpeggio with +1 octave crystalline shimmer overtone
-    profile.notesHz.forEach((freq, i) => {
-      const t = now + i * profile.stepDelaySec;
-      const isFinal = i === profile.notesHz.length - 1;
-      const dur = isFinal ? 0.48 : 0.24;
+      // 2. Ascending celesta/bell arpeggio with +1 octave crystalline shimmer overtone
+      profile.notesHz.forEach((freq, i) => {
+        const t = now + i * profile.stepDelaySec;
+        const isFinal = i === profile.notesHz.length - 1;
+        const dur = isFinal ? 0.48 : 0.24;
 
-      const bell = ctx.createOscillator();
-      const bellGain = ctx.createGain();
-      bell.type = 'sine';
-      bell.frequency.setValueAtTime(freq, t);
-      bellGain.gain.setValueAtTime(0.0001, t);
-      bellGain.gain.linearRampToValueAtTime((isFinal ? 0.22 : 0.17) * gainScale, t + 0.012);
-      bellGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      bell.connect(bellGain);
-      bellGain.connect(out);
-      bell.start(t);
-      bell.stop(t + dur + 0.02);
+        const bell = ctx.createOscillator();
+        const bellGain = ctx.createGain();
+        bell.type = 'sine';
+        bell.frequency.setValueAtTime(freq, t);
+        bellGain.gain.setValueAtTime(0.0001, t);
+        bellGain.gain.linearRampToValueAtTime((isFinal ? 0.22 : 0.17) * gainScale, t + 0.012);
+        bellGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        bell.connect(bellGain);
+        bellGain.connect(out);
+        bell.start(t);
+        bell.stop(t + dur + 0.02);
 
-      const overtone = ctx.createOscillator();
-      const overGain = ctx.createGain();
-      overtone.type = 'triangle';
-      overtone.frequency.setValueAtTime(freq * 2, t);
-      overGain.gain.setValueAtTime(0.0001, t);
-      overGain.gain.linearRampToValueAtTime((isFinal ? 0.085 : 0.055) * gainScale, t + 0.01);
-      overGain.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.75);
-      overtone.connect(overGain);
-      overGain.connect(out);
-      overtone.start(t);
-      overtone.stop(t + dur);
+        const overtone = ctx.createOscillator();
+        const overGain = ctx.createGain();
+        overtone.type = 'triangle';
+        overtone.frequency.setValueAtTime(freq * 2, t);
+        overGain.gain.setValueAtTime(0.0001, t);
+        overGain.gain.linearRampToValueAtTime((isFinal ? 0.085 : 0.055) * gainScale, t + 0.01);
+        overGain.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.75);
+        overtone.connect(overGain);
+        overGain.connect(out);
+        overtone.start(t);
+        overtone.stop(t + dur);
+      });
+
+      // 3. Soft filtered sparkle-dust noise sweep synchronized with the climax note
+      if (this.noiseBuf) {
+        const shimmerStart = now + Math.max(0, (profile.notesHz.length - 2) * profile.stepDelaySec);
+        const src = ctx.createBufferSource();
+        src.buffer = this.noiseBuf;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(profile.shimmerHz * 0.72, shimmerStart);
+        filter.frequency.exponentialRampToValueAtTime(profile.shimmerHz * 1.25, shimmerStart + 0.28);
+        filter.Q.setValueAtTime(1.4, shimmerStart);
+
+        const nGain = ctx.createGain();
+        nGain.gain.setValueAtTime(0.0001, shimmerStart);
+        nGain.gain.linearRampToValueAtTime(0.08 * gainScale, shimmerStart + 0.03);
+        nGain.gain.exponentialRampToValueAtTime(0.0001, shimmerStart + 0.34);
+
+        src.connect(filter);
+        filter.connect(nGain);
+        nGain.connect(out);
+        src.start(shimmerStart);
+        src.stop(shimmerStart + 0.36);
+      }
     });
-
-    // 3. Soft filtered sparkle-dust noise sweep synchronized with the climax note
-    if (this.noiseBuf) {
-      const shimmerStart = now + Math.max(0, (profile.notesHz.length - 2) * profile.stepDelaySec);
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuf;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(profile.shimmerHz * 0.72, shimmerStart);
-      filter.frequency.exponentialRampToValueAtTime(profile.shimmerHz * 1.25, shimmerStart + 0.28);
-      filter.Q.setValueAtTime(1.4, shimmerStart);
-
-      const nGain = ctx.createGain();
-      nGain.gain.setValueAtTime(0.0001, shimmerStart);
-      nGain.gain.linearRampToValueAtTime(0.08 * gainScale, shimmerStart + 0.03);
-      nGain.gain.exponentialRampToValueAtTime(0.0001, shimmerStart + 0.34);
-
-      src.connect(filter);
-      filter.connect(nGain);
-      nGain.connect(out);
-      src.start(shimmerStart);
-      src.stop(shimmerStart + 0.36);
-    }
   }
 }
 

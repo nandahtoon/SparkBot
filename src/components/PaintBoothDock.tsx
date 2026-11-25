@@ -16,7 +16,6 @@ import {
   Sparkles,
   Star,
   Trash2,
-  UserRound,
   Zap
 } from 'lucide-react';
 import {
@@ -50,7 +49,6 @@ interface PaintBoothDockProps {
   onApplySavedTheme: (theme: SavedPaintTheme) => void;
   onDeleteSavedTheme: (id: string) => void;
   onResetPaint: () => void;
-  onOpenProfile: () => void;
   onExit: () => void;
 }
 
@@ -80,7 +78,6 @@ export const PaintBoothDock: React.FC<PaintBoothDockProps> = ({
   onApplySavedTheme,
   onDeleteSavedTheme,
   onResetPaint,
-  onOpenProfile,
   onExit
 }) => {
   const [themeName, setThemeName] = useState('');
@@ -138,18 +135,8 @@ export const PaintBoothDock: React.FC<PaintBoothDockProps> = ({
             <WorkshopOrbitStrip {...camera} accent="fuchsia" />
           </div>
 
-          {/* Right Actions: Character, Reset Paint, Collapse, Done */}
+          {/* Right Actions: Reset Paint, Collapse, Done */}
           <div className="flex shrink-0 items-center gap-1">
-            <button
-              id="boothProfileBtn"
-              type="button"
-              onClick={onOpenProfile}
-              aria-label="Change Bot Character"
-              className="flex h-8 items-center gap-1 rounded-xl border border-sky-400/70 bg-sky-500/15 px-2 text-[11px] font-black text-sky-200 hover:bg-sky-500/25 active:scale-95"
-            >
-              <UserRound className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{activeChar.name}</span>
-            </button>
             <button
               id="resetPaintBtn"
               type="button"

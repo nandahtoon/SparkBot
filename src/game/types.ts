@@ -335,6 +335,7 @@ export interface SaveProfile {
   audio?: AudioSettings;
   gentleSpeed: boolean;
   lowGraphics?: boolean;
+  graphicsQuality?: import('./graphicsConfig').GraphicsQualityMode;
   challengeTimerEnabled?: boolean;
   readAloudEnabled?: boolean;
   hapticsEnabled?: boolean;

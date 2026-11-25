@@ -30,8 +30,10 @@ import { SFX } from '../game/audio';
 import {
   createProceduralTextures,
   detectSoftwareGl,
+  getSharedTextureSet,
   scheduleAfterDraw
 } from './materials';
+import { clearAndDisposeGroup, disposeObject3D } from './disposeUtils';
 import {
   clampWorkshopOrbit,
   DEFAULT_WORKSHOP_ORBIT,
@@ -39,14 +41,23 @@ import {
 } from '../game/audioConfig';
 import type { RobotTouchZone } from '../game/robotVoice';
 import {
-  createPartPlacement3DBurst,
-  evaluatePuffScale
-} from '../game/partParticles';
-import {
+  AdaptiveQualityMonitor,
   getGraphicsQualityBudget,
-  scaleParticleCount
+  type GraphicsQualityBudget,
+  type GraphicsQualityMode
 } from '../game/graphicsConfig';
+import { CameraJuiceController } from '../game/springPhysics';
+import { RenderPipeline } from './renderPipeline';
+import { VfxManager } from './vfxManager';
 import {
+  CIRCUIT_BOARD_Y,
+  CIRCUIT_BOARD_Z_OFFSET,
+  CIRCUIT_BOT_X,
+  clampTrackBotZBeforeClosedGate,
+  GATE_BOT_STOP_Z_OFFSET,
+  GATE_DECK_WIDTH,
+  GATE_WALL_Z_OFFSET,
+  getTrackBotStopZ,
   RAMP_WEDGE_CENTER_Y,
   RAMP_WEDGE_LENGTH,
   RAMP_WEDGE_ROT_X,
@@ -55,15 +66,14 @@ import {
   TRACK_START_Z,
   TRACK_TILE_SPACING
 } from '../game/trackSurface';
-import {
-  computeActionTrailEmitConfig,
-  computeRibbonSegmentSample,
-  computeTrailEmitterOffsets,
-  createActionTrailSpawnSample,
-  evaluateTrailParticleTransform,
-  type ActionTrailParticleInit
-} from '../game/actionTrail';
 import type { CodeBlockFeedback, CodeComplexityTier } from '../game/codeFeedback';
+import {
+  isPreviewItemHighlighted,
+  samplePathSegmentPoint,
+  samplePathSegmentPointInto,
+  type LivePathPreview,
+  type PathPreviewSegment
+} from '../game/pathPreview';
 import {
   CHASSIS_SLOT_OFFSETS,
   createRobotRig,
@@ -152,7 +162,6 @@ const _beamMid = new THREE.Vector3();
 const _beamUp = new THREE.Vector3(0, 1, 0);
 const _quat = new THREE.Quaternion();
 const _dummy = new THREE.Object3D();
-const _color = new THREE.Color();
 const _ghostPos = new THREE.Vector3();
 const _arcPos = new THREE.Vector3();
 const _weldStart = new THREE.Vector3();
@@ -168,10 +177,19 @@ export class UnifiedWorldController {
   private container: HTMLElement;
   private cb: WorldCallbacks;
   private renderer: THREE.WebGLRenderer | null = null;
+  private renderPipeline: RenderPipeline | null = null;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
+  private camBasePos = new THREE.Vector3(3.2, 2.5, 5.2);
+  private cameraJuice = new CameraJuiceController();
   private isSoftwareGl: boolean;
+  private qualityMonitor: AdaptiveQualityMonitor;
+  private qualityBudget: GraphicsQualityBudget;
+  private vfx: VfxManager;
   private tex;
+  private sharedTextures: Set<THREE.Texture>;
+  private envMapTexture: THREE.Texture | null = null;
+  private contextLost = false;
   private rig;
 
   private mode: WorldMode = 'TITLE';
@@ -239,74 +257,9 @@ export class UnifiedWorldController {
   private circuitBeamGroup = new THREE.Group();
   private circuitInteractables: THREE.Object3D[] = [];
 
-  // Particle Spark Ring Buffer
-  private sparkInst: THREE.InstancedMesh;
-  private sparks: Array<{
-    active: boolean;
-    x: number;
-    y: number;
-    z: number;
-    vx: number;
-    vy: number;
-    vz: number;
-    life: number;
-    maxLife: number;
-    color: number;
-  }> = [];
-  private sparkCursor = 0;
-
-  // Soft 3D Pastel Puff Ring Buffer (for cute color-coded part placement puffs)
-  private puffInst: THREE.InstancedMesh;
-  private puffs: Array<{
-    active: boolean;
-    x: number;
-    y: number;
-    z: number;
-    vx: number;
-    vy: number;
-    vz: number;
-    life: number;
-    maxLife: number;
-    baseScale: number;
-    color: number;
-  }> = [];
-  private puffCursor = 0;
-  private placementBurstSeq = 0;
-
-  // High-Speed Action Dash Trailing Particle Ring Buffer (Additive Neon Speed Streaks)
-  private trailInst: THREE.InstancedMesh;
-  private trailParticles: Array<{
-    active: boolean;
-    x: number;
-    y: number;
-    z: number;
-    vx: number;
-    vy: number;
-    vz: number;
-    life: number;
-    maxLife: number;
-    baseWidth: number;
-    streakLength: number;
-    color: number;
-    spin: number;
-    roll: number;
-  }> = [];
-  private trailCursor = 0;
-  private trailEmitAccum = 0;
-  private trailColorSeq = 0;
-  private trailAnchorIdx = 0;
+  // Runner velocity tracking for slipstream trails
   private prevRunnerBotX = 0;
   private prevRunnerBotY = 0;
-
-  // Continuous Curved 3D Slipstream Ribbons (Left Wake, Right Wake, Center Booster Wake)
-  private trailRibbons: Array<{
-    mesh: THREE.Mesh;
-    positions: Float32Array;
-    colors: Float32Array;
-    history: Array<{ x: number; y: number; z: number; roll: number; color: number; halfWidth: number }>;
-    count: number;
-  }> = [];
-  private ribbonSampleTimer = 0;
 
   // Track Simulation Playback
   private simQueue: SimStepAnim[] = [];
@@ -362,6 +315,35 @@ export class UnifiedWorldController {
   private ghostElapsed = 0;
   private ghostDuration = 2.8;
 
+  // Live 3D Holographic Trajectory Path Preview (visible in CODE_3D when enabled)
+  private pathPreviewGroup = new THREE.Group();
+  private pathPreviewModel: LivePathPreview | null = null;
+  private pathPreviewEnabled = true;
+  private pathPreviewBuiltLowGfx = false;
+  private pathHoveredBlockId: string | null = null;
+  private pathReducedMotion = false;
+  private pathSegmentVisuals: Array<{
+    segment: PathPreviewSegment;
+    group: THREE.Group;
+    materials: THREE.MeshBasicMaterial[];
+    baseOpacities: number[];
+  }> = [];
+  private pathScanVisuals: Array<{
+    blockId: string;
+    ancestorBlockIds: string[];
+    mesh: THREE.Mesh;
+    material: THREE.MeshBasicMaterial;
+    baseOpacity: number;
+    baseY: number;
+  }> = [];
+  private pathPulseDots: Array<{
+    mesh: THREE.Mesh;
+    material: THREE.MeshBasicMaterial;
+    phaseOffset: number;
+  }> = [];
+  private pathEndpointBeacon: THREE.Group | null = null;
+  private pathEndpointHazardGlyph: THREE.Mesh | null = null;
+
   // Loop & Input
   private pacer: { cancel: () => void } | null = null;
   private disposed = false;
@@ -377,6 +359,9 @@ export class UnifiedWorldController {
     this.container = container;
     this.cb = callbacks;
     this.isSoftwareGl = detectSoftwareGl();
+    this.qualityMonitor = new AdaptiveQualityMonitor({ isSoftwareGl: this.isSoftwareGl });
+    this.qualityBudget = this.qualityMonitor.getBudget();
+    this.lowGraphics = this.qualityBudget.lowGraphics;
 
     this.width = Math.max(320, container.clientWidth || window.innerWidth);
     this.height = Math.max(240, container.clientHeight || window.innerHeight);
@@ -386,7 +371,7 @@ export class UnifiedWorldController {
     this.scene.fog = new THREE.FogExp2(0x13203d, 0.0115);
 
     this.camera = new THREE.PerspectiveCamera(52, this.width / this.height, 0.15, 220);
-    this.camera.position.set(3.2, 2.5, 5.2);
+    this.camera.position.copy(this.camBasePos);
     this.camera.lookAt(0, 1.0, 0);
 
     try {
@@ -398,19 +383,32 @@ export class UnifiedWorldController {
       });
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.15;
+      this.renderer.toneMappingExposure = 0.96;
       this.renderer.setPixelRatio(
-        this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
+        this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, this.qualityBudget.maxPixelRatio)
       );
       this.renderer.setSize(this.width, this.height);
-      this.renderer.shadowMap.enabled = !this.isSoftwareGl;
+      this.renderer.shadowMap.enabled = !this.isSoftwareGl && this.qualityBudget.shadowsEnabled;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       container.innerHTML = '';
       container.appendChild(this.renderer.domElement);
 
       const pmrem = new THREE.PMREMGenerator(this.renderer);
-      this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      this.scene.environment = envTex;
+      this.scene.environmentIntensity = 0.42;
+      this.envMapTexture = envTex;
       pmrem.dispose();
+
+      this.renderPipeline = new RenderPipeline(
+        this.renderer,
+        this.scene,
+        this.camera,
+        this.width,
+        this.height,
+        this.isSoftwareGl,
+        this.qualityBudget
+      );
 
       this.renderer.domElement.addEventListener('webglcontextlost', this.handleContextLost);
       this.renderer.domElement.addEventListener('webglcontextrestored', this.handleContextRestored);
@@ -420,6 +418,7 @@ export class UnifiedWorldController {
 
     const maxAniso = this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 1;
     this.tex = createProceduralTextures(maxAniso);
+    this.sharedTextures = getSharedTextureSet(this.tex);
 
     this.env = buildWorkshopEnvironment(this.scene, this.tex, this.isSoftwareGl);
 
@@ -431,147 +430,18 @@ export class UnifiedWorldController {
     this.circuitGroup.add(this.circuitBeamGroup);
     this.scene.add(this.runnerGroup);
 
-    // Pre-allocate welding/crystal/confetti spark pool (72 particles)
-    const sparkCount = 72;
-    this.sparkInst = new THREE.InstancedMesh(
-      new THREE.OctahedronGeometry(0.095, 0),
-      new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      sparkCount
-    );
-    this.sparkInst.frustumCulled = false;
-    this.scene.add(this.sparkInst);
-    for (let i = 0; i < sparkCount; i++) {
-      this.sparks.push({
-        active: false,
-        x: 0,
-        y: -50,
-        z: 0,
-        vx: 0,
-        vy: 0,
-        vz: 0,
-        life: 0,
-        maxLife: 0.6,
-        color: 0xfde047
-      });
-      _dummy.position.set(0, -50, 0);
-      _dummy.scale.setScalar(0.001);
-      _dummy.updateMatrix();
-      this.sparkInst.setMatrixAt(i, _dummy.matrix);
-    }
-
-    // Pre-allocate soft pastel 3D puff pool (48 low-poly puffy spheres for part placement)
-    const puffCount = 48;
-    this.puffInst = new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(0.11, 1),
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.72,
-        metalness: 0.04
-      }),
-      puffCount
-    );
-    this.puffInst.frustumCulled = false;
-    this.scene.add(this.puffInst);
-    for (let i = 0; i < puffCount; i++) {
-      this.puffs.push({
-        active: false,
-        x: 0,
-        y: -50,
-        z: 0,
-        vx: 0,
-        vy: 0,
-        vz: 0,
-        life: 0,
-        maxLife: 0.7,
-        baseScale: 1,
-        color: 0xbae6fd
-      });
-      _dummy.position.set(0, -50, 0);
-      _dummy.scale.setScalar(0.001);
-      _dummy.updateMatrix();
-      this.puffInst.setMatrixAt(i, _dummy.matrix);
-    }
-
-    // Pre-allocate Action Dash slender plasma speed-streak pool (160 additive glowing needles)
-    const trailCount = 160;
-    this.trailInst = new THREE.InstancedMesh(
-      new THREE.OctahedronGeometry(0.052, 0),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.92,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      }),
-      trailCount
-    );
-    this.trailInst.frustumCulled = false;
-    this.scene.add(this.trailInst);
-    for (let i = 0; i < trailCount; i++) {
-      this.trailParticles.push({
-        active: false,
-        x: 0,
-        y: -50,
-        z: 0,
-        vx: 0,
-        vy: 0,
-        vz: 0,
-        life: 0,
-        maxLife: 0.35,
-        baseWidth: 1,
-        streakLength: 1,
-        color: 0x38bdf8,
-        spin: 5,
-        roll: 0
-      });
-      _dummy.position.set(0, -50, 0);
-      _dummy.scale.setScalar(0.001);
-      _dummy.updateMatrix();
-      this.trailInst.setMatrixAt(i, _dummy.matrix);
-      _color.setHex(0x38bdf8);
-      this.trailInst.setColorAt(i, _color);
-    }
-    this.trailInst.instanceMatrix.needsUpdate = true;
-    if (this.trailInst.instanceColor) this.trailInst.instanceColor.needsUpdate = true;
-
-    // Pre-allocate 3 continuous curved neon slipstream ribbons (Left, Right, Center/Booster)
-    const ribbonPoints = 16;
-    const ribbonMat = new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.64,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    });
-    const ribbonIndices: number[] = [];
-    for (let i = 0; i < ribbonPoints - 1; i++) {
-      const a = i * 2;
-      const b = a + 1;
-      const c = a + 2;
-      const d = a + 3;
-      ribbonIndices.push(a, b, c, b, d, c);
-    }
-    for (let rIdx = 0; rIdx < 3; rIdx++) {
-      const positions = new Float32Array(ribbonPoints * 2 * 3);
-      const colors = new Float32Array(ribbonPoints * 2 * 3);
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      geo.setIndex(ribbonIndices);
-      const mesh = new THREE.Mesh(geo, ribbonMat);
-      mesh.frustumCulled = false;
-      mesh.visible = false;
-      this.scene.add(mesh);
-      const history: Array<{ x: number; y: number; z: number; roll: number; color: number; halfWidth: number }> = [];
-      for (let p = 0; p < ribbonPoints; p++) {
-        history.push({ x: 0, y: -50, z: 0, roll: 0, color: 0x38bdf8, halfWidth: 0.14 });
-      }
-      this.trailRibbons.push({ mesh, positions, colors, history, count: 0 });
-    }
+    this.vfx = new VfxManager(this.scene);
 
     this.setupGhostPreviewRig();
+    this.pathReducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.cameraJuice.setReducedMotion(this.pathReducedMotion);
+    this.pathPreviewGroup.visible = false;
+    this.scene.add(this.pathPreviewGroup);
     this.setupActionRunnerPool();
+    this.applyQualityBudget(this.qualityBudget);
 
     window.addEventListener('resize', this.handleResize);
     if (typeof ResizeObserver !== 'undefined') {
@@ -590,10 +460,31 @@ export class UnifiedWorldController {
 
   private handleContextLost = (e: Event) => {
     e.preventDefault();
+    this.contextLost = true;
+    this.pacer?.cancel();
+    this.pacer = null;
     this.cb.onWebglLost(true);
   };
 
   private handleContextRestored = () => {
+    this.contextLost = false;
+    if (this.renderer && !this.disposed) {
+      try {
+        this.envMapTexture?.dispose();
+        const pmrem = new THREE.PMREMGenerator(this.renderer);
+        const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+        this.scene.environment = envTex;
+        this.scene.environmentIntensity = 0.42;
+        this.envMapTexture = envTex;
+        pmrem.dispose();
+      } catch {
+        // Keep rendering cleanly even if PMREM regeneration is skipped
+      }
+      this.renderPipeline?.rebuildAfterContextRestore(this.qualityBudget);
+      this.handleResize();
+      this.lastTs = performance.now();
+      this.tick();
+    }
     this.cb.onWebglLost(false);
   };
 
@@ -671,86 +562,280 @@ export class UnifiedWorldController {
     this.ghostCircuitRing.visible = false;
   }
 
-  public spawnConfetti(x: number, y: number, z: number, count = 32) {
-    const budget = getGraphicsQualityBudget(this.lowGraphics);
-    const effectiveCount = scaleParticleCount(count, budget.confettiScale, 4);
-    const palette = [0x34d399, 0xfbbf24, 0x38bdf8, 0xf472b6, 0xa78bfa];
-    for (let i = 0; i < effectiveCount; i++) {
-      const sp = this.sparks[this.sparkCursor];
-      this.sparkCursor = (this.sparkCursor + 1) % this.sparks.length;
-      sp.active = true;
-      sp.x = x + (Math.random() - 0.5) * 0.6;
-      sp.y = y + Math.random() * 0.4;
-      sp.z = z + (Math.random() - 0.5) * 0.6;
-      const a = (i / Math.max(1, effectiveCount)) * Math.PI * 2 + Math.random() * 0.5;
-      const spd = 2.4 + Math.random() * 3.8;
-      sp.vx = Math.cos(a) * spd;
-      sp.vy = 2.6 + Math.random() * 3.8;
-      sp.vz = Math.sin(a) * spd;
-      sp.life = 0;
-      sp.maxLife = 0.75 + Math.random() * 0.45;
-      sp.color = palette[i % palette.length];
+  public setLivePathPreview(preview: LivePathPreview | null, enabled = true) {
+    const modelChanged = this.pathPreviewModel !== preview;
+    const gfxChanged = this.pathPreviewBuiltLowGfx !== this.lowGraphics;
+    this.pathPreviewEnabled = Boolean(enabled);
+    this.pathPreviewModel = preview;
+    if (modelChanged || gfxChanged) {
+      this.rebuildPathPreview3D();
     }
+  }
+
+  public setHoveredCodeBlock(blockId: string | null) {
+    this.pathHoveredBlockId = blockId || null;
+  }
+
+  private clearPathPreview3D() {
+    clearAndDisposeGroup(this.pathPreviewGroup, this.sharedTextures);
+    this.pathSegmentVisuals = [];
+    this.pathScanVisuals = [];
+    this.pathPulseDots = [];
+    this.pathEndpointBeacon = null;
+    this.pathEndpointHazardGlyph = null;
+  }
+
+  private rebuildPathPreview3D() {
+    this.clearPathPreview3D();
+    this.pathPreviewBuiltLowGfx = this.lowGraphics;
+
+    const model = this.pathPreviewModel;
+    const track = this.level?.track;
+    if (!model || !track || model.segments.length === 0) {
+      return;
+    }
+
+    const tubularSegs = this.lowGraphics ? 10 : 18;
+    const radialSegs = this.lowGraphics ? 6 : 8;
+    const sampleSteps = this.lowGraphics ? 8 : 14;
+
+    for (const seg of model.segments) {
+      const segGroup = new THREE.Group();
+      const materials: THREE.MeshBasicMaterial[] = [];
+      const baseOpacities: number[] = [];
+
+      const hexColor =
+        seg.status !== 'ok'
+          ? 0xfb7185
+          : seg.action === 'JUMP'
+            ? 0xa78bfa
+            : seg.action === 'BOOST'
+              ? 0xfbbf24
+              : 0x38bdf8;
+
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i <= sampleSteps; i++) {
+        const p = samplePathSegmentPoint(track, seg, i / sampleSteps);
+        pts.push(new THREE.Vector3(p.x, p.y, p.z));
+      }
+      // Guard against identical endpoints (e.g. blocked on gate tile)
+      if (pts.length >= 2 && pts[0].distanceToSquared(pts[pts.length - 1]) < 0.002) {
+        pts[pts.length - 1].z -= 0.45;
+      }
+
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const radius = seg.action === 'BOOST' ? 0.085 : seg.action === 'MOVE' ? 0.068 : 0.075;
+
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: hexColor,
+        transparent: true,
+        opacity: 0.78,
+        depthWrite: false
+      });
+      const coreMesh = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, tubularSegs, radius, radialSegs, false),
+        coreMat
+      );
+      segGroup.add(coreMesh);
+      materials.push(coreMat);
+      baseOpacities.push(0.78);
+
+      if (!this.lowGraphics) {
+        const auraMat = new THREE.MeshBasicMaterial({
+          color: hexColor,
+          transparent: true,
+          opacity: 0.22,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+        const auraMesh = new THREE.Mesh(
+          new THREE.TubeGeometry(curve, tubularSegs, radius * 1.75, radialSegs, false),
+          auraMat
+        );
+        segGroup.add(auraMesh);
+        materials.push(auraMat);
+        baseOpacities.push(0.22);
+      }
+
+      if (seg.status === 'ok') {
+        const endSurf = sampleTrackSurfaceAtZ(track, seg.toZ);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: hexColor,
+          transparent: true,
+          opacity: 0.56,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        const ringMesh = new THREE.Mesh(
+          new THREE.RingGeometry(0.3, 0.43, this.lowGraphics ? 14 : 24),
+          ringMat
+        );
+        ringMesh.rotation.x = -Math.PI / 2;
+        ringMesh.position.set(0, endSurf.y + 0.055, seg.toZ);
+        segGroup.add(ringMesh);
+        materials.push(ringMat);
+        baseOpacities.push(0.56);
+      }
+
+      if (seg.action === 'BOOST') {
+        const midPt = samplePathSegmentPoint(track, seg, 0.5);
+        const chevMat = new THREE.MeshBasicMaterial({
+          color: 0xfde68a,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false
+        });
+        const chev = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.34, 4), chevMat);
+        chev.rotation.x = -Math.PI / 2;
+        chev.position.set(0, midPt.y + 0.02, midPt.z);
+        segGroup.add(chev);
+        materials.push(chevMat);
+        baseOpacities.push(0.85);
+      }
+
+      for (const cIdx of seg.newCrystals) {
+        const cz = getTrackBotStopZ(track, cIdx);
+        const cTile = track[cIdx];
+        const cy = cTile?.type === 'ramp' ? 1.34 : 1.0;
+        const cHaloMat = new THREE.MeshBasicMaterial({
+          color: 0x67e8f9,
+          transparent: true,
+          opacity: 0.82,
+          depthWrite: false
+        });
+        const cHalo = new THREE.Mesh(
+          new THREE.TorusGeometry(0.56, 0.036, 6, this.lowGraphics ? 14 : 22),
+          cHaloMat
+        );
+        cHalo.rotation.x = Math.PI / 2;
+        cHalo.position.set(0, cy, cz);
+        segGroup.add(cHalo);
+        materials.push(cHaloMat);
+        baseOpacities.push(0.82);
+      }
+
+      this.pathPreviewGroup.add(segGroup);
+      this.pathSegmentVisuals.push({
+        segment: seg,
+        group: segGroup,
+        materials,
+        baseOpacities
+      });
+    }
+
+    for (const scan of model.scans) {
+      const scanSurf = sampleTrackSurfaceAtZ(track, scan.scanZ);
+      const baseY = scanSurf.y + 1.05;
+      const scanColor = scan.matched ? 0x34d399 : 0x94a3b8;
+      const baseOpacity = scan.matched ? 0.86 : 0.45;
+      const scanMat = new THREE.MeshBasicMaterial({
+        color: scanColor,
+        transparent: true,
+        opacity: baseOpacity,
+        depthWrite: false
+      });
+      const scanMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.21, 0), scanMat);
+      scanMesh.position.set(0, baseY, scan.scanZ);
+      this.pathPreviewGroup.add(scanMesh);
+      this.pathScanVisuals.push({
+        blockId: scan.blockId,
+        ancestorBlockIds: scan.ancestorBlockIds,
+        mesh: scanMesh,
+        material: scanMat,
+        baseOpacity,
+        baseY
+      });
+    }
+
+    if (model.endpoint.status !== 'empty') {
+      const epSurf = sampleTrackSurfaceAtZ(track, model.endpoint.z);
+      const beacon = new THREE.Group();
+      beacon.position.set(0, epSurf.y + 0.06, model.endpoint.z);
+
+      if (model.endpoint.status === 'win') {
+        const winMat = new THREE.MeshBasicMaterial({
+          color: 0x10b981,
+          transparent: true,
+          opacity: 0.88,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        const outer = new THREE.Mesh(new THREE.RingGeometry(0.68, 0.86, 28), winMat);
+        outer.rotation.x = -Math.PI / 2;
+        const inner = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.54, 24), winMat.clone());
+        inner.rotation.x = -Math.PI / 2;
+        beacon.add(outer, inner);
+      } else if (model.endpoint.status === 'short') {
+        const shortMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.78,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.56, 0.74, 24), shortMat);
+        ring.rotation.x = -Math.PI / 2;
+        beacon.add(ring);
+      } else {
+        const hazMat = new THREE.MeshBasicMaterial({
+          color: 0xfb7185,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        const octRing = new THREE.Mesh(new THREE.RingGeometry(0.64, 0.86, 8), hazMat);
+        octRing.rotation.x = -Math.PI / 2;
+        const glyph = new THREE.Mesh(new THREE.OctahedronGeometry(0.26, 0), hazMat.clone());
+        glyph.position.y = 0.74;
+        beacon.add(octRing, glyph);
+        this.pathEndpointHazardGlyph = glyph;
+      }
+
+      this.pathPreviewGroup.add(beacon);
+      this.pathEndpointBeacon = beacon;
+    }
+
+    if (!this.lowGraphics && !this.pathReducedMotion) {
+      const pulseCount = Math.min(4, Math.max(2, Math.ceil(model.segments.length / 2)));
+      for (let i = 0; i < pulseCount; i++) {
+        const pMat = new THREE.MeshBasicMaterial({
+          color: 0xe0f2fe,
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+        const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.115, 8, 8), pMat);
+        this.pathPreviewGroup.add(pMesh);
+        this.pathPulseDots.push({
+          mesh: pMesh,
+          material: pMat,
+          phaseOffset: i / pulseCount
+        });
+      }
+    }
+  }
+
+  public spawnConfetti(x: number, y: number, z: number, count = 32) {
+    this.vfx.emitConfetti(x, y, z, this.qualityBudget, count);
   }
 
   public spawnSparks(x: number, y: number, z: number, colorHex: number, count = 16) {
-    const budget = getGraphicsQualityBudget(this.lowGraphics);
-    const effectiveCount = scaleParticleCount(count, budget.sparkScale, 2);
-    for (let i = 0; i < effectiveCount; i++) {
-      const sp = this.sparks[this.sparkCursor];
-      this.sparkCursor = (this.sparkCursor + 1) % this.sparks.length;
-      sp.active = true;
-      sp.x = x;
-      sp.y = y;
-      sp.z = z;
-      const a = (i / Math.max(1, effectiveCount)) * Math.PI * 2 + Math.random() * 0.4;
-      const spd = 2.2 + Math.random() * 3.4;
-      sp.vx = Math.cos(a) * spd;
-      sp.vy = 1.6 + Math.random() * 3.2;
-      sp.vz = Math.sin(a) * spd;
-      sp.life = 0;
-      sp.maxLife = 0.45 + Math.random() * 0.3;
-      sp.color = colorHex;
-    }
+    this.vfx.emitSparks(x, y, z, colorHex, count, this.qualityBudget);
   }
 
   public spawnPartPlacementEffects(x: number, y: number, z: number, part: PartId) {
-    const specs = createPartPlacement3DBurst(part, ++this.placementBurstSeq, this.lowGraphics);
-    for (const spec of specs) {
-      if (spec.kind === 'puff') {
-        const pf = this.puffs[this.puffCursor];
-        this.puffCursor = (this.puffCursor + 1) % this.puffs.length;
-        pf.active = true;
-        pf.x = x + spec.ox;
-        pf.y = y + spec.oy;
-        pf.z = z + spec.oz;
-        pf.vx = spec.vx;
-        pf.vy = spec.vy;
-        pf.vz = spec.vz;
-        pf.life = 0;
-        pf.maxLife = spec.maxLife;
-        pf.baseScale = spec.baseScale;
-        pf.color = spec.colorHex;
-      } else {
-        const sp = this.sparks[this.sparkCursor];
-        this.sparkCursor = (this.sparkCursor + 1) % this.sparks.length;
-        sp.active = true;
-        sp.x = x + spec.ox;
-        sp.y = y + spec.oy;
-        sp.z = z + spec.oz;
-        sp.vx = spec.vx;
-        sp.vy = spec.vy;
-        sp.vz = spec.vz;
-        sp.life = 0;
-        sp.maxLife = spec.maxLife;
-        sp.color = spec.colorHex;
-      }
-    }
+    this.vfx.emitPartPlacementBurst(part, x, y, z, this.qualityBudget);
+    this.vfx.emitShockwaveRing(x, y, z, 0x38bdf8, 0.32, 1.5, 0.36);
   }
 
   public setLevel(level: LevelDef) {
     this.level = level;
     this.clearGhostPreview();
+    this.pathPreviewModel = null;
+    this.pathHoveredBlockId = null;
+    this.clearPathPreview3D();
     this.rebuildTrack(level);
     this.circuitGrid = level.circuit.map((row) => row.map((c) => ({ ...c })));
     this.rebuildCircuit3D();
@@ -758,7 +843,7 @@ export class UnifiedWorldController {
   }
 
   private rebuildTrack(level: LevelDef) {
-    this.trackGroup.clear();
+    clearAndDisposeGroup(this.trackGroup, this.sharedTextures);
     this.crystalMeshes.clear();
     this.gateLeftDoor = null;
     this.gateRightDoor = null;
@@ -794,7 +879,7 @@ export class UnifiedWorldController {
     const crystalMat = new THREE.MeshPhysicalMaterial({
       color: 0x67e8f9,
       emissive: 0x06b6d4,
-      emissiveIntensity: 0.9,
+      emissiveIntensity: 0.55,
       roughness: 0.08,
       metalness: 0.1,
       clearcoat: 1.0
@@ -802,7 +887,7 @@ export class UnifiedWorldController {
     const railMat = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
       emissive: 0x0284c7,
-      emissiveIntensity: 1.1
+      emissiveIntensity: 0.42
     });
 
     const pylonMat = new THREE.MeshStandardMaterial({
@@ -853,16 +938,19 @@ export class UnifiedWorldController {
         wedge.receiveShadow = true;
         this.trackGroup.add(base, wedge);
       } else {
+        const isGateTile = tile.type === 'gate';
+        const deckW = isGateTile ? GATE_DECK_WIDTH : 3.2;
         const deck = new THREE.Mesh(
-          new RoundedBoxGeometry(3.2, 0.38, TILE_SPACING - 0.16, 2, 0.06),
+          new RoundedBoxGeometry(deckW, 0.38, TILE_SPACING - 0.16, 2, 0.06),
           tile.type === 'start' ? startMat : normalMat
         );
         deck.position.set(0, -0.19, tz);
         deck.receiveShadow = true;
         this.trackGroup.add(deck);
 
-        // Glowing side rails
-        [-1.55, 1.55].forEach((rx) => {
+        // Glowing side rails framing the runway or wider Gate Landing Bay
+        const railOffsetX = deckW * 0.5 - 0.06;
+        [-railOffsetX, railOffsetX].forEach((rx) => {
           const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, TILE_SPACING - 0.3), railMat);
           rail.position.set(rx, 0.04, tz);
           this.trackGroup.add(rail);
@@ -889,17 +977,29 @@ export class UnifiedWorldController {
       }
 
       if (tile.type === 'gate') {
-        const gateZ = tz - 0.4;
+        const gateZ = tz + GATE_WALL_Z_OFFSET;
         const pillarMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.7 });
-        [-2.2, 2.2].forEach((gx) => {
-          const pillar = new THREE.Mesh(new RoundedBoxGeometry(0.65, 4.4, 0.85, 2, 0.08), pillarMat);
-          pillar.position.set(gx, 2.1, gateZ);
+        [-2.25, 2.25].forEach((gx) => {
+          const pillar = new THREE.Mesh(new RoundedBoxGeometry(0.65, 5.1, 0.85, 2, 0.08), pillarMat);
+          pillar.position.set(gx, 2.45, gateZ);
           pillar.castShadow = !this.isSoftwareGl;
           this.trackGroup.add(pillar);
         });
-        const lintel = new THREE.Mesh(new RoundedBoxGeometry(5.2, 0.65, 0.9, 2, 0.08), pillarMat);
-        lintel.position.set(0, 4.3, gateZ);
+        const lintel = new THREE.Mesh(new RoundedBoxGeometry(5.3, 0.65, 0.9, 2, 0.08), pillarMat);
+        lintel.position.set(0, 5.15, gateZ);
         this.trackGroup.add(lintel);
+
+        // Glowing emerald stop-line bar on the Gate Landing Bay in front of the closed doors
+        const stopLineMat = new THREE.MeshStandardMaterial({
+          color: 0x34d399,
+          emissive: 0x10b981,
+          emissiveIntensity: 0.95,
+          roughness: 0.25,
+          metalness: 0.2
+        });
+        const stopLine = new THREE.Mesh(new THREE.BoxGeometry(GATE_DECK_WIDTH - 0.5, 0.025, 0.16), stopLineMat);
+        stopLine.position.set(0, 0.015, tz + GATE_BOT_STOP_Z_OFFSET - 0.78);
+        this.trackGroup.add(stopLine);
 
         const doorMat = new THREE.MeshStandardMaterial({
           color: 0x1e293b,
@@ -907,14 +1007,14 @@ export class UnifiedWorldController {
           roughness: 0.4,
           metalness: 0.65
         });
-        this.gateLeftDoor = new THREE.Mesh(new THREE.BoxGeometry(1.9, 3.8, 0.35), doorMat);
-        this.gateLeftDoor.position.set(-0.95, 1.9, gateZ);
-        this.gateRightDoor = new THREE.Mesh(new THREE.BoxGeometry(1.9, 3.8, 0.35), doorMat);
-        this.gateRightDoor.position.set(0.95, 1.9, gateZ);
+        this.gateLeftDoor = new THREE.Mesh(new THREE.BoxGeometry(1.95, 4.6, 0.35), doorMat);
+        this.gateLeftDoor.position.set(-0.975, 2.3, gateZ);
+        this.gateRightDoor = new THREE.Mesh(new THREE.BoxGeometry(1.95, 4.6, 0.35), doorMat);
+        this.gateRightDoor.position.set(0.975, 2.3, gateZ);
         this.trackGroup.add(this.gateLeftDoor, this.gateRightDoor);
 
-        // Position 3D Circuit Board clearly above track on the Gate
-        this.circuitGroup.position.set(0, 2.5, gateZ + 0.95);
+        // Mount 3D Circuit Board elevated cleanly on the front face of the closed Gate doors
+        this.circuitGroup.position.set(0, CIRCUIT_BOARD_Y, gateZ + CIRCUIT_BOARD_Z_OFFSET);
         // Position Action Runner continuation seamlessly beyond the Gate
         this.runnerBaseZ = gateZ - 4.0;
       }
@@ -927,12 +1027,15 @@ export class UnifiedWorldController {
   }
 
   private rebuildCircuit3D() {
-    // Preserve circuitBeamGroup inside circuitGroup
-    while (this.circuitGroup.children.length > 0) {
-      const ch = this.circuitGroup.children[0];
-      this.circuitGroup.remove(ch);
+    // Preserve reusable circuitBeamGroup and ghostCircuitRing while disposing previous tile meshes/materials
+    clearAndDisposeGroup(
+      this.circuitGroup,
+      this.sharedTextures,
+      new Set<THREE.Object3D>([this.circuitBeamGroup, this.ghostCircuitRing])
+    );
+    if (this.circuitBeamGroup.parent !== this.circuitGroup) {
+      this.circuitGroup.add(this.circuitBeamGroup);
     }
-    this.circuitGroup.add(this.circuitBeamGroup);
     this.circuitCellMeshes = [];
     this.circuitInteractables = [];
 
@@ -1020,8 +1123,8 @@ export class UnifiedWorldController {
       this.circuitCellMeshes.push(rowArr);
     }
 
-    // Build 3D Laser Beam Segments
-    this.circuitBeamGroup.clear();
+    // Build 3D Laser Beam Segments (disposing previous beam cylinders/materials first)
+    clearAndDisposeGroup(this.circuitBeamGroup, this.sharedTextures);
     const beamMat = new THREE.MeshBasicMaterial({ color: trace.solved ? 0x34d399 : 0x22d3ee });
     const glowMat = new THREE.MeshBasicMaterial({
       color: trace.solved ? 0x6ee7b7 : 0x67e8f9,
@@ -1175,7 +1278,8 @@ export class UnifiedWorldController {
     this.runnerJumpY = 0;
     this.runnerJumpVy = 0;
     this.clearActionTrails();
-    this.camera.position.set(0, 3.6, startZ + 6.8);
+    this.camBasePos.set(0, 3.6, startZ + 6.8);
+    this.camera.position.copy(this.camBasePos);
     _curLook.set(0, 1.2, startZ - 7.5);
 
     this.runnerGroup.position.set(0, 0, 0);
@@ -1195,139 +1299,7 @@ export class UnifiedWorldController {
   }
 
   private clearActionTrails() {
-    this.trailEmitAccum = 0;
-    this.ribbonSampleTimer = 0;
-    for (let i = 0; i < this.trailParticles.length; i++) {
-      this.trailParticles[i].active = false;
-      _dummy.position.set(0, -50, 0);
-      _dummy.scale.setScalar(0.001);
-      _dummy.updateMatrix();
-      this.trailInst.setMatrixAt(i, _dummy.matrix);
-    }
-    this.trailInst.instanceMatrix.needsUpdate = true;
-    for (const rb of this.trailRibbons) {
-      rb.count = 0;
-      rb.mesh.visible = false;
-    }
-  }
-
-  private updateActionRibbons(
-    dt: number,
-    anchors: ReadonlyArray<{ offsetX: number; offsetY: number; offsetZ: number }>,
-    palette: readonly number[],
-    baseHalfWidth: number,
-    roll: number
-  ) {
-    this.ribbonSampleTimer += dt;
-    const shouldShift = this.ribbonSampleTimer >= 0.014;
-    if (shouldShift) this.ribbonSampleTimer = 0;
-
-    // Pick 3 representative emitters: left wheel/thruster, right wheel/thruster, and center/booster
-    const chosenAnchors = [
-      anchors[0],
-      anchors[1] ?? anchors[0],
-      anchors[anchors.length - 1] ?? anchors[0]
-    ];
-    const maxRibbons = getGraphicsQualityBudget(this.lowGraphics).maxRibbonCount;
-
-    for (let rIdx = 0; rIdx < this.trailRibbons.length; rIdx++) {
-      const rb = this.trailRibbons[rIdx];
-      if (rIdx >= maxRibbons) {
-        rb.count = 0;
-        rb.mesh.visible = false;
-        continue;
-      }
-      const anc = maxRibbons === 1 ? chosenAnchors[2] : chosenAnchors[rIdx];
-      const hx = this.runnerBotX + anc.offsetX;
-      const hy = this.runnerBotY + anc.offsetY;
-      const hz = this.botTrackZ + anc.offsetZ;
-      const col = palette[rIdx % palette.length];
-      const hw = rIdx === 2 ? baseHalfWidth * 1.15 : baseHalfWidth;
-
-      if (rb.count === 0) {
-        for (let i = 0; i < rb.history.length; i++) {
-          const pt = rb.history[i];
-          pt.x = hx;
-          pt.y = hy;
-          pt.z = hz + i * 0.04;
-          pt.roll = roll;
-          pt.color = col;
-          pt.halfWidth = hw;
-        }
-        rb.count = rb.history.length;
-      } else {
-        if (shouldShift) {
-          for (let i = rb.history.length - 1; i > 0; i--) {
-            const dst = rb.history[i];
-            const src = rb.history[i - 1];
-            dst.x = src.x;
-            dst.y = src.y;
-            dst.z = src.z;
-            dst.roll = src.roll;
-            dst.color = src.color;
-            dst.halfWidth = src.halfWidth;
-          }
-        }
-        const head = rb.history[0];
-        head.x = hx;
-        head.y = hy;
-        head.z = hz;
-        head.roll = roll;
-        head.color = col;
-        head.halfWidth = hw;
-      }
-
-      const posAttr = rb.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-      const colAttr = rb.mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
-      const len = rb.history.length;
-      for (let i = 0; i < len; i++) {
-        const pt = rb.history[i];
-        const t = i / (len - 1);
-        const seg = computeRibbonSegmentSample(t, pt.halfWidth, pt.color);
-        const cosR = Math.cos(pt.roll);
-        const sinR = Math.sin(pt.roll);
-        // Ribbon width perpendicular to robot up-axis (rotates flat along walls when wall-running!)
-        const rx = cosR * seg.halfWidth;
-        const ry = sinR * seg.halfWidth;
-
-        const vIdx = i * 6;
-        rb.positions[vIdx] = pt.x - rx;
-        rb.positions[vIdx + 1] = pt.y - ry;
-        rb.positions[vIdx + 2] = pt.z;
-        rb.positions[vIdx + 3] = pt.x + rx;
-        rb.positions[vIdx + 4] = pt.y + ry;
-        rb.positions[vIdx + 5] = pt.z;
-
-        rb.colors[vIdx] = seg.r;
-        rb.colors[vIdx + 1] = seg.g;
-        rb.colors[vIdx + 2] = seg.b;
-        rb.colors[vIdx + 3] = seg.r;
-        rb.colors[vIdx + 4] = seg.g;
-        rb.colors[vIdx + 5] = seg.b;
-      }
-      posAttr.needsUpdate = true;
-      colAttr.needsUpdate = true;
-      rb.mesh.visible = true;
-    }
-  }
-
-  private spawnActionTrailParticle(init: ActionTrailParticleInit, roll: number) {
-    const tr = this.trailParticles[this.trailCursor];
-    this.trailCursor = (this.trailCursor + 1) % this.trailParticles.length;
-    tr.active = true;
-    tr.x = init.x;
-    tr.y = init.y;
-    tr.z = init.z;
-    tr.vx = init.vx;
-    tr.vy = init.vy;
-    tr.vz = init.vz;
-    tr.life = 0;
-    tr.maxLife = init.maxLife;
-    tr.baseWidth = init.baseWidth;
-    tr.streakLength = init.streakLength;
-    tr.color = init.color;
-    tr.spin = init.spin;
-    tr.roll = roll;
+    this.vfx.resetActionTrails();
   }
 
   private spawnActionTrailBurst(count: number, speedBoost = 1.25) {
@@ -1336,40 +1308,26 @@ export class UnifiedWorldController {
     const info = computeChassisInfo(this.chassis);
     const boostMult = m.turboTimer > 0 ? 1.45 : 1;
     const effSpeed = this.runnerSpeed * boostMult * speedBoost;
-    const budget = getGraphicsQualityBudget(this.lowGraphics);
-    const effectiveCount = scaleParticleCount(count, budget.trailBurstScale, 2);
-    const cfg = computeActionTrailEmitConfig({
-      speed: effSpeed,
-      surface: m.surface,
-      isAirborne: this.runnerJumpY > 0.15,
-      turboActive: m.turboTimer > 0,
-      hasBooster: info.hasBooster,
-      hasMagnet: info.hasMagnet,
-      lowGraphics: this.lowGraphics
-    });
-    const anchors = computeTrailEmitterOffsets(
-      this.runnerBotRoll,
-      info.hasThrusters,
-      info.hasBooster
-    );
-    for (let i = 0; i < effectiveCount; i++) {
-      const anchor = anchors[i % anchors.length];
-      const sample = createActionTrailSpawnSample({
+    this.vfx.spawnActionTrailBurst(
+      {
+        speed: effSpeed,
+        surface: m.surface,
+        isAirborne: this.runnerJumpY > 0.15,
+        turboActive: m.turboTimer > 0,
+        hasThrusters: info.hasThrusters,
+        hasBooster: info.hasBooster,
+        hasMagnet: info.hasMagnet,
         botX: this.runnerBotX,
         botY: this.runnerBotY,
         botZ: this.botTrackZ,
         botVx: (Math.random() - 0.5) * 4.5,
         botVy: (Math.random() - 0.3) * 3.0,
-        speed: effSpeed,
-        anchor,
-        config: cfg,
-        jitterX: Math.random() * 2 - 1,
-        jitterY: Math.random() * 2 - 1,
-        colorIdx: this.trailColorSeq++,
-        lifeJitter: Math.random()
-      });
-      this.spawnActionTrailParticle(sample, this.runnerBotRoll);
-    }
+        botRoll: this.runnerBotRoll
+      },
+      this.qualityBudget,
+      undefined,
+      count
+    );
   }
 
   private respawnEntity(ent: RunnerEntity, zPos: number) {
@@ -1404,7 +1362,10 @@ export class UnifiedWorldController {
     );
     if (next.surface !== this.runnerMetrics.surface || next.lane !== this.runnerMetrics.lane) {
       SFX.magAttach();
-      this.spawnActionTrailBurst(next.surface !== this.runnerMetrics.surface ? 12 : 8, 1.25);
+      const wallSwitch = next.surface !== this.runnerMetrics.surface;
+      this.spawnActionTrailBurst(wallSwitch ? 12 : 8, 1.25);
+      this.rig.injectImpact(wallSwitch ? 0.35 : 0.18, 0, dir * 0.65);
+      this.cameraJuice.addImpulse(dir * (wallSwitch ? 1.1 : 0.45), 0.2, 0, 0);
     }
     this.runnerMetrics.surface = next.surface;
     this.runnerMetrics.lane = next.lane;
@@ -1416,6 +1377,17 @@ export class UnifiedWorldController {
       this.runnerJumpVy = 11.2;
       SFX.jump();
       this.spawnActionTrailBurst(12, 1.35);
+      this.rig.injectImpact(-0.65, -0.4, 0);
+      this.cameraJuice.addImpulse(0, 0.8, 0, 1.5);
+      this.vfx.emitShockwaveRing(
+        this.runnerBotX,
+        this.runnerBotY + 0.04,
+        this.botTrackZ,
+        0x38bdf8,
+        0.38,
+        1.85,
+        0.34
+      );
     }
   }
 
@@ -1461,7 +1433,8 @@ export class UnifiedWorldController {
     this.rig.root.position.set(this.planetBotX, this.planetBotY, this.planetBotZ);
     this.rig.root.rotation.set(0, this.planetBotYaw, 0);
 
-    this.camera.position.set(this.planetBotX, this.planetBotY + 5.2, this.planetBotZ + 8.6);
+    this.camBasePos.set(this.planetBotX, this.planetBotY + 5.2, this.planetBotZ + 8.6);
+    this.camera.position.copy(this.camBasePos);
     _curLook.set(this.planetBotX, this.planetBotY + 1.1, this.planetBotZ - 2.6);
 
     this.setMood('happy', 1.2);
@@ -1485,6 +1458,17 @@ export class UnifiedWorldController {
       this.planetBotVy = caps.hasThrusters ? 12.2 : 8.6;
       this.planetJumpsUsed = 1;
       SFX.jump();
+      this.rig.injectImpact(-0.6, -0.35, 0);
+      this.cameraJuice.addImpulse(0, 0.7, 0, 1.2);
+      this.vfx.emitShockwaveRing(
+        this.planetBotX,
+        this.planetBotY + 0.05,
+        this.planetBotZ,
+        caps.hasThrusters ? 0x38bdf8 : 0xfbbf24,
+        0.38,
+        1.75,
+        0.36
+      );
       this.spawnSparks(
         this.planetBotX,
         this.planetBotY + 0.25,
@@ -1497,6 +1481,17 @@ export class UnifiedWorldController {
       this.planetJumpsUsed = 2;
       this.planetMetrics.doubleJumpReady = false;
       SFX.boost();
+      this.rig.injectImpact(-0.75, -0.45, 0);
+      this.cameraJuice.addImpulse(0, 0.9, 0, 2.0);
+      this.vfx.emitShockwaveRing(
+        this.planetBotX,
+        this.planetBotY + 0.15,
+        this.planetBotZ,
+        0x22d3ee,
+        0.45,
+        2.2,
+        0.4
+      );
       this.spawnSparks(this.planetBotX, this.planetBotY + 0.35, this.planetBotZ, 0x22d3ee, 16);
       this.cb.onPlanetMetrics?.({ ...this.planetMetrics });
     }
@@ -1512,6 +1507,17 @@ export class UnifiedWorldController {
     this.planetMetrics.boostCooldown = 4.2;
     this.setMood('boost', 1.6);
     SFX.boost();
+    this.rig.injectImpact(-0.55, -0.5, 0);
+    this.cameraJuice.addImpulse(0, 0.2, 1.4, 3.2);
+    this.vfx.emitShockwaveRing(
+      this.planetBotX,
+      this.planetBotY + 0.25,
+      this.planetBotZ,
+      0xf472b6,
+      0.5,
+      2.4,
+      0.42
+    );
     this.spawnSparks(this.planetBotX, this.planetBotY + 0.65, this.planetBotZ, 0xf472b6, 18);
     this.cb.onPlanetMetrics?.({ ...this.planetMetrics });
   }
@@ -1530,6 +1536,8 @@ export class UnifiedWorldController {
     this.planetMetrics.laserCooldown = 0.65;
     this.planetLaserFlashTimer = 0.22;
     SFX.laserSolved();
+    this.rig.injectImpact(0.35, 0.45, 0);
+    this.cameraJuice.addImpulse(0, 0.1, 0.9, 0);
 
     const { fx, fz } = getBotForwardXZ(this.planetBotYaw);
     const beam = this.planetWorld.laserBeamMesh;
@@ -1554,6 +1562,8 @@ export class UnifiedWorldController {
         handle.group.visible = false;
         this.planetMetrics.crystalsShattered += 1;
         this.planetMetrics.boltsCollected += 2;
+        this.cameraJuice.addImpulse(1.2, 0.9, 0.5, 1.8);
+        this.vfx.emitShockwaveRing(handle.x, handle.y + 0.5, handle.z, 0xe879f9, 0.55, 2.8, 0.45);
         this.spawnSparks(handle.x, handle.y + 0.85, handle.z, 0xe879f9, 22);
         this.spawnSparks(handle.x, handle.y + 0.85, handle.z, 0x22d3ee, 14);
         SFX.compactCrunch();
@@ -1613,7 +1623,8 @@ export class UnifiedWorldController {
       this.rig.applyChassis(this.chassis, null);
     } else if (mode === 'CIRCUIT_3D') {
       const gateIdx = Math.max(1, (this.level?.track.length ?? 6) - 1);
-      this.botTrackZ = TRACK_START_Z - (gateIdx - 0.85) * TILE_SPACING;
+      // Keep the bot planted solidly on the Gate Landing Bay stop pad (never floating over a preceding gap!)
+      this.botTrackZ = getTrackBotStopZ(this.level?.track, gateIdx);
       this.botTrackY = 0;
     }
   }
@@ -1673,12 +1684,16 @@ export class UnifiedWorldController {
     this.gentleSpeed = gentle;
   }
 
-  public setLowGraphics(enabled: boolean) {
-    this.lowGraphics = Boolean(enabled);
-    const budget = getGraphicsQualityBudget(this.lowGraphics);
-    this.env.ambientMotes.visible = budget.ambientMotesVisible;
+  private applyQualityBudget(budget: GraphicsQualityBudget) {
+    this.qualityBudget = budget;
+    this.lowGraphics = budget.lowGraphics;
+    this.env.setQualityBudget(budget);
+    this.rig.setQualityBudget(budget);
+    this.vfx.trimRibbonsToBudget(budget);
 
-    if (this.renderer) {
+    if (this.renderPipeline) {
+      this.renderPipeline.applyBudget(budget);
+    } else if (this.renderer) {
       const targetDpr = this.isSoftwareGl
         ? 1
         : Math.min(window.devicePixelRatio || 1, budget.maxPixelRatio);
@@ -1691,12 +1706,18 @@ export class UnifiedWorldController {
       }
     }
 
-    if (this.lowGraphics) {
-      for (let i = budget.maxRibbonCount; i < this.trailRibbons.length; i++) {
-        this.trailRibbons[i].count = 0;
-        this.trailRibbons[i].mesh.visible = false;
-      }
+    if (this.pathPreviewModel && this.pathPreviewBuiltLowGfx !== this.lowGraphics) {
+      this.rebuildPathPreview3D();
     }
+  }
+
+  public setGraphicsQualityMode(mode: GraphicsQualityMode) {
+    const { budget } = this.qualityMonitor.setMode(mode);
+    this.applyQualityBudget(budget);
+  }
+
+  public setLowGraphics(enabled: boolean) {
+    this.setGraphicsQualityMode(enabled ? 'eco' : 'auto');
   }
 
   public updateChassis(
@@ -1710,6 +1731,8 @@ export class UnifiedWorldController {
     this.rig.applyChassis(this.chassis, hoverSlot);
     if (weldedSlot && weldedPart) {
       this.rig.triggerPartPop(weldedPart);
+      this.rig.injectImpact(0.65, 0.2, 0);
+      this.cameraJuice.addImpulse(0, -0.35, 0.45, 0);
       this.buildTargetSlot = weldedSlot;
       this.buildTimer = 0.92;
       this.celebrateTimer = 0;
@@ -1743,6 +1766,7 @@ export class UnifiedWorldController {
     this.codeFeedbackTimer = feedback.duration;
     this.codeFeedbackDuration = feedback.duration;
     this.setMood(feedback.mood, feedback.duration, false);
+    this.rig.injectImpact(-0.32, 0, 0);
 
     const bx = this.rig.root.position.x;
     const by = this.rig.root.position.y + 1.35;
@@ -1752,25 +1776,7 @@ export class UnifiedWorldController {
       this.spawnSparks(bx, by, bz, feedback.sparkColorHex, feedback.sparkCount);
     }
     if (feedback.puffCount > 0) {
-      const budget = getGraphicsQualityBudget(this.lowGraphics);
-      const effectivePuffs = scaleParticleCount(feedback.puffCount, budget.puffScale, 1);
-      for (let i = 0; i < effectivePuffs; i++) {
-        const pf = this.puffs[this.puffCursor];
-        this.puffCursor = (this.puffCursor + 1) % this.puffs.length;
-        const a = (i / Math.max(1, effectivePuffs)) * Math.PI * 2 + Math.random() * 0.4;
-        const spd = 0.55 + Math.random() * 0.55;
-        pf.active = true;
-        pf.x = bx + Math.cos(a) * 0.2;
-        pf.y = by - 0.1 + Math.random() * 0.2;
-        pf.z = bz + Math.sin(a) * 0.2;
-        pf.vx = Math.cos(a) * spd;
-        pf.vy = 0.75 + Math.random() * 0.55;
-        pf.vz = Math.sin(a) * spd;
-        pf.life = 0;
-        pf.maxLife = 0.62 + Math.random() * 0.24;
-        pf.baseScale = 0.75 + Math.random() * 0.35;
-        pf.color = i % 2 === 0 ? feedback.puffColorHex : feedback.sparkColorHex;
-      }
+      this.vfx.emitPuffs(bx, by - 0.1, bz, feedback.puffColorHex, feedback.puffCount, this.qualityBudget, 0.85);
     }
   }
 
@@ -1898,8 +1904,8 @@ export class UnifiedWorldController {
       // Currently animating: snap current instruction to its landed pose and advance immediately
       const curStep = this.simQueue[this.simIndex];
       if (curStep && curStep.ev.action !== 'SCAN') {
-        this.botTrackZ = this.simToZ;
-        const landedSurface = sampleTrackSurfaceAtZ(this.level?.track, this.simToZ);
+        this.botTrackZ = clampTrackBotZBeforeClosedGate(this.level?.track, this.simToZ, false);
+        const landedSurface = sampleTrackSurfaceAtZ(this.level?.track, this.botTrackZ);
         this.botTrackY = curStep.ev.status === 'fall' ? -3.5 : landedSurface.y;
         this.botTrackPitchX = curStep.ev.status === 'fall' ? 0 : landedSurface.pitchX;
       }
@@ -1935,8 +1941,8 @@ export class UnifiedWorldController {
     const step = this.simQueue[this.simIndex];
     if (!step) return;
     const ev = step.ev;
-    this.simFromZ = ev.fromPos === 0 ? 0 : TRACK_START_Z - ev.fromPos * TILE_SPACING;
-    this.simToZ = ev.toPos === 0 ? 0 : TRACK_START_Z - ev.toPos * TILE_SPACING;
+    this.simFromZ = getTrackBotStopZ(this.level?.track, ev.fromPos);
+    this.simToZ = getTrackBotStopZ(this.level?.track, ev.toPos);
     this.simScanMatch = ev.scanMatch ?? null;
 
     this.cb.onSimProgress(this.simIndex, ev);
@@ -1998,7 +2004,11 @@ export class UnifiedWorldController {
     this.height = Math.max(240, this.container.clientHeight || window.innerHeight);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(this.width, this.height);
+    if (this.renderPipeline) {
+      this.renderPipeline.resize(this.width, this.height);
+    } else {
+      this.renderer.setSize(this.width, this.height);
+    }
   };
 
   private handlePointerMove = (e: PointerEvent) => {
@@ -2188,10 +2198,17 @@ export class UnifiedWorldController {
   private tick = () => {
     if (this.disposed) return;
     const now = performance.now();
-    const rawDt = Math.min(0.25, Math.max(0.001, (now - this.lastTs) / 1000));
+    const frameMs = now - this.lastTs;
+    const rawDt = Math.min(0.25, Math.max(0.001, frameMs / 1000));
     const dt = Math.min(0.05, rawDt);
     this.lastTs = now;
     this.totalTime += rawDt;
+
+    const frameSec = frameMs / 1000;
+    const adaptiveBudget = this.qualityMonitor.recordFrame(frameSec);
+    if (adaptiveBudget) {
+      this.applyQualityBudget(adaptiveBudget);
+    }
 
     // Spin windmills, solar horizon ring, ambient dust motes & crystals
     for (let i = 0; i < this.env.windmills.length; i++) {
@@ -2200,14 +2217,24 @@ export class UnifiedWorldController {
     this.env.solarRing.rotation.z = -0.1 + Math.sin(this.totalTime * 0.14) * 0.04;
     this.env.turntableOuterRing.rotation.z -= dt * 0.22;
 
-    if (this.env.ambientMotes.visible) {
+    const inWorkshopMode =
+      this.mode === 'TITLE' || this.mode === 'BUILD_3D' || this.mode === 'PAINT_BOOTH';
+    const isActivelyInstalling = Boolean(
+      this.installSeq && !this.installSeq.celebrated && this.buildTargetSlot
+    );
+    this.renderPipeline?.setBloomSuppressed(inWorkshopMode && !isActivelyInstalling);
+
+    // Hide twinkling ambient motes inside the workshop so kids' eyes stay completely relaxed
+    const showMotes = this.qualityBudget.ambientMotesVisible && !inWorkshopMode;
+    this.env.ambientMotes.visible = showMotes;
+    if (showMotes) {
       for (let i = 0; i < this.env.moteSeeds.length; i++) {
         const m = this.env.moteSeeds[i];
-        const bobY = m.y + Math.sin(this.totalTime * m.speed + m.phase) * 0.32;
-        const driftX = m.x + Math.cos(this.totalTime * m.speed * 0.5 + m.phase) * 0.22;
+        const bobY = m.y + Math.sin(this.totalTime * m.speed + m.phase) * 0.24;
+        const driftX = m.x + Math.cos(this.totalTime * m.speed * 0.5 + m.phase) * 0.18;
         _dummy.position.set(driftX, bobY, m.z);
-        _dummy.rotation.set(this.totalTime * 0.6 + m.phase, this.totalTime * 0.9 + m.phase, 0);
-        _dummy.scale.setScalar(m.scale * (0.78 + Math.sin(this.totalTime * 2.2 + m.phase) * 0.22));
+        _dummy.rotation.set(this.totalTime * 0.4 + m.phase, this.totalTime * 0.6 + m.phase, 0);
+        _dummy.scale.setScalar(m.scale);
         _dummy.updateMatrix();
         this.env.ambientMotes.setMatrixAt(i, _dummy.matrix);
       }
@@ -2226,8 +2253,8 @@ export class UnifiedWorldController {
     const targetOpen = this.mode === 'ACTION_RUN_3D' || this.mode === 'VICTORY' ? 1.85 : 0;
     this.gateOpenAmt = THREE.MathUtils.damp(this.gateOpenAmt, targetOpen, 7, dt);
     if (this.gateLeftDoor && this.gateRightDoor) {
-      this.gateLeftDoor.position.x = -0.95 - this.gateOpenAmt;
-      this.gateRightDoor.position.x = 0.95 + this.gateOpenAmt;
+      this.gateLeftDoor.position.x = -0.975 - this.gateOpenAmt;
+      this.gateRightDoor.position.x = 0.975 + this.gateOpenAmt;
     }
 
     // 2-Phase Mechanic Installation Work -> Joyful Celebration Sequence
@@ -2263,48 +2290,48 @@ export class UnifiedWorldController {
       }
     }
 
-    // Turntable glow & tactile lab props animation
+    // Turntable glow & tactile lab props animation (steady & glare-free; active shimmer ONLY during equipment install)
     const ringMat = this.env.turntableRing.material as THREE.MeshStandardMaterial;
-    if (this.celebrateTimer > 0) {
-      this.env.turntableRing.rotation.z += dt * 2.4;
-      ringMat.color.setHex(0x34d399);
-      ringMat.emissive.setHex(0x10b981);
-      ringMat.emissiveIntensity = 2.0 + Math.sin(this.totalTime * 14) * 0.45;
-    } else if (this.buildTimer > 0) {
-      this.env.turntableRing.rotation.z += dt * 1.6;
+    if (this.buildTimer > 0) {
+      this.env.turntableRing.rotation.z += dt * 1.4;
       ringMat.color.setHex(0xfbbf24);
       ringMat.emissive.setHex(0xf59e0b);
-      ringMat.emissiveIntensity = 1.9;
+      ringMat.emissiveIntensity = 0.68;
+    } else if (this.celebrateTimer > 0) {
+      this.env.turntableRing.rotation.z += dt * 1.2;
+      ringMat.color.setHex(0x34d399);
+      ringMat.emissive.setHex(0x10b981);
+      ringMat.emissiveIntensity = 0.6;
     } else if (this.mode === 'PAINT_BOOTH') {
-      this.env.turntableRing.rotation.z += dt * 0.9;
+      this.env.turntableRing.rotation.z += dt * 0.5;
       ringMat.color.setHex(0xe879f9);
       ringMat.emissive.setHex(0xc026d3);
-      ringMat.emissiveIntensity = 1.8 + Math.sin(this.totalTime * 4) * 0.3;
+      ringMat.emissiveIntensity = 0.52;
     } else {
-      this.env.turntableRing.rotation.z += dt * 0.4;
+      this.env.turntableRing.rotation.z += dt * 0.28;
       ringMat.color.setHex(0x38bdf8);
       ringMat.emissive.setHex(0x0ea5e9);
-      ringMat.emissiveIntensity = 1.5;
+      ringMat.emissiveIntensity = 0.42;
     }
 
-    const gearMult = this.buildTimer > 0 ? 3.5 : this.celebrateTimer > 0 ? 2.2 : 1;
-    this.env.gearLarge.rotation.z += dt * 0.9 * gearMult;
-    this.env.gearSmall.rotation.z -= dt * 1.35 * gearMult;
+    const gearMult = this.buildTimer > 0 ? 3.2 : this.celebrateTimer > 0 ? 1.8 : 0.7;
+    this.env.gearLarge.rotation.z += dt * 0.8 * gearMult;
+    this.env.gearSmall.rotation.z -= dt * 1.2 * gearMult;
 
-    // Helper Drone: swoops in to weld during Phase 1 of installation, cheers above in Phase 2!
-    const installing = Boolean(this.installSeq && !this.installSeq.celebrated && this.buildTargetSlot);
+    // Helper Drone: swoops in to weld ONLY during Phase 1 of equipment installation, calm hover otherwise
+    const installing = isActivelyInstalling;
     if (installing && this.buildTargetSlot) {
       const wPos = this.rig.getSlotWorldPosition(this.buildTargetSlot[0], this.buildTargetSlot[1], _weldEnd);
       _droneGoal.set(
-        wPos.x + (wPos.x >= 0 ? 0.92 : -0.92) + Math.cos(this.totalTime * 7) * 0.14,
-        Math.max(1.2, wPos.y + 0.58 + Math.sin(this.totalTime * 10) * 0.08),
+        wPos.x + (wPos.x >= 0 ? 0.92 : -0.92) + Math.cos(this.totalTime * 5) * 0.1,
+        Math.max(1.2, wPos.y + 0.58 + Math.sin(this.totalTime * 6) * 0.06),
         wPos.z + (wPos.z >= 0 ? 0.85 : -0.85)
       );
       this.env.helperDrone.position.x = THREE.MathUtils.damp(this.env.helperDrone.position.x, _droneGoal.x, 9, dt);
       this.env.helperDrone.position.y = THREE.MathUtils.damp(this.env.helperDrone.position.y, _droneGoal.y, 9, dt);
       this.env.helperDrone.position.z = THREE.MathUtils.damp(this.env.helperDrone.position.z, _droneGoal.z, 9, dt);
       this.env.helperDrone.lookAt(wPos);
-      this.env.droneRotor.rotation.y += dt * 28;
+      this.env.droneRotor.rotation.y += dt * 20;
 
       this.env.droneWeldBeam.visible = true;
       _weldStart.copy(this.env.helperDrone.position);
@@ -2316,18 +2343,16 @@ export class UnifiedWorldController {
         _quat.setFromUnitVectors(_beamUp, _weldDiff);
         this.env.droneWeldBeam.position.copy(_beamMid);
         this.env.droneWeldBeam.quaternion.copy(_quat);
-        const flicker = 0.8 + Math.sin(this.totalTime * 42) * 0.35;
-        this.env.droneWeldBeam.scale.set(flicker, len, flicker);
-        (this.env.droneWeldBeam.material as THREE.MeshBasicMaterial).color.setHex(
-          Math.sin(this.totalTime * 35) > 0 ? 0x38bdf8 : 0xfde047
-        );
+        const gentleShimmer = 0.92 + Math.sin(this.totalTime * 10) * 0.08;
+        this.env.droneWeldBeam.scale.set(gentleShimmer, len, gentleShimmer);
+        (this.env.droneWeldBeam.material as THREE.MeshBasicMaterial).color.setHex(0x7dd3fc);
       }
     } else {
       this.env.droneWeldBeam.visible = false;
       const cheerY =
         this.celebrateTimer > 0
-          ? 2.55 + Math.abs(Math.sin(this.totalTime * 10)) * 0.3
-          : 2.25 + Math.sin(this.totalTime * 2.1) * 0.12;
+          ? 2.48 + Math.abs(Math.sin(this.totalTime * 6)) * 0.2
+          : 2.25 + Math.sin(this.totalTime * 1.4) * 0.08;
       this.env.helperDrone.position.x = THREE.MathUtils.damp(this.env.helperDrone.position.x, -1.95, 5.5, dt);
       this.env.helperDrone.position.y = THREE.MathUtils.damp(this.env.helperDrone.position.y, cheerY, 6, dt);
       this.env.helperDrone.position.z = THREE.MathUtils.damp(this.env.helperDrone.position.z, -0.25, 5.5, dt);
@@ -2335,17 +2360,23 @@ export class UnifiedWorldController {
       this.env.helperDrone.rotation.z = THREE.MathUtils.damp(this.env.helperDrone.rotation.z, 0, 6, dt);
       this.env.helperDrone.rotation.y = THREE.MathUtils.damp(
         this.env.helperDrone.rotation.y,
-        this.celebrateTimer > 0 ? this.env.helperDrone.rotation.y + dt * 6 : 0.45 + this.lookX * 0.35,
+        this.celebrateTimer > 0 ? this.env.helperDrone.rotation.y + dt * 4 : 0.45 + this.lookX * 0.35,
         5,
         dt
       );
-      this.env.droneRotor.rotation.y += dt * (this.celebrateTimer > 0 ? 26 : 18);
+      this.env.droneRotor.rotation.y += dt * (this.celebrateTimer > 0 ? 10 : 3.5);
     }
     for (let i = 0; i < this.env.conduitOrbs.length; i++) {
       const orb = this.env.conduitOrbs[i];
-      const phase = (((this.totalTime * 0.55 + (orb.userData.phaseOffset as number)) % 1) + 1) % 1;
-      orb.position.z = THREE.MathUtils.lerp(-1.95, -4.15, phase);
-      orb.scale.setScalar(0.75 + Math.sin(phase * Math.PI) * 0.45);
+      const baseOffset = (orb.userData.phaseOffset as number) || 0;
+      if (this.buildTimer > 0) {
+        const phase = (((this.totalTime * 0.55 + baseOffset) % 1) + 1) % 1;
+        orb.position.z = THREE.MathUtils.lerp(-1.95, -4.15, phase);
+        orb.scale.setScalar(0.75 + Math.sin(phase * Math.PI) * 0.25);
+      } else {
+        orb.position.z = THREE.MathUtils.lerp(-2.15, -3.95, baseOffset);
+        orb.scale.setScalar(0.65);
+      }
     }
 
     // Playable 3D Holographic Ghost Preview Update
@@ -2397,9 +2428,13 @@ export class UnifiedWorldController {
         const localT = rawIdx - idx;
         const ev = evs[idx];
         if (ev) {
-          const fZ = ev.fromPos === 0 ? 0 : TRACK_START_Z - ev.fromPos * TILE_SPACING;
-          const tZ = ev.toPos === 0 ? 0 : TRACK_START_Z - ev.toPos * TILE_SPACING;
-          const gz = THREE.MathUtils.lerp(fZ, tZ, localT);
+          const fZ = getTrackBotStopZ(this.level?.track, ev.fromPos);
+          const tZ = getTrackBotStopZ(this.level?.track, ev.toPos);
+          const gz = clampTrackBotZBeforeClosedGate(
+            this.level?.track,
+            THREE.MathUtils.lerp(fZ, tZ, localT),
+            false
+          );
           const gSurf = sampleTrackSurfaceAtZ(this.level?.track, gz);
           const fSurf = sampleTrackSurfaceAtZ(this.level?.track, fZ);
           const tSurf = sampleTrackSurfaceAtZ(this.level?.track, tZ);
@@ -2454,6 +2489,71 @@ export class UnifiedWorldController {
       this.ghostCircuitRing.visible = false;
     }
 
+    // Live 3D Holographic Path Preview (CODE_3D only, hides automatically during playback or Ghost Demo)
+    const showLivePath =
+      this.mode === 'CODE_3D' &&
+      this.pathPreviewEnabled &&
+      !this.ghostPlan &&
+      Boolean(this.pathPreviewModel && this.pathPreviewModel.segments.length > 0);
+    this.pathPreviewGroup.visible = showLivePath;
+    if (showLivePath && this.pathPreviewModel) {
+      const hoveredId = this.pathHoveredBlockId;
+      const hasHover = Boolean(hoveredId);
+
+      for (let i = 0; i < this.pathSegmentVisuals.length; i++) {
+        const item = this.pathSegmentVisuals[i];
+        const highlighted = isPreviewItemHighlighted(item.segment, hoveredId);
+        const opacityMult = !hasHover ? 1 : highlighted ? 1.32 : 0.22;
+        const targetScaleY = !hasHover ? 1 : highlighted ? 1.05 : 0.96;
+        item.group.scale.y = THREE.MathUtils.damp(item.group.scale.y, targetScaleY, 14, dt);
+        for (let j = 0; j < item.materials.length; j++) {
+          const goalOp = Math.min(1, item.baseOpacities[j] * opacityMult);
+          item.materials[j].opacity = THREE.MathUtils.damp(item.materials[j].opacity, goalOp, 14, dt);
+        }
+      }
+
+      for (let i = 0; i < this.pathScanVisuals.length; i++) {
+        const scanVis = this.pathScanVisuals[i];
+        const highlighted = isPreviewItemHighlighted(scanVis, hoveredId);
+        const opacityMult = !hasHover ? 1 : highlighted ? 1.25 : 0.25;
+        const goalOp = Math.min(1, scanVis.baseOpacity * opacityMult);
+        scanVis.material.opacity = THREE.MathUtils.damp(scanVis.material.opacity, goalOp, 14, dt);
+        const targetScale = highlighted ? 1.35 : 1;
+        const nextScale = THREE.MathUtils.damp(scanVis.mesh.scale.x, targetScale, 14, dt);
+        scanVis.mesh.scale.setScalar(nextScale);
+        if (!this.pathReducedMotion) {
+          scanVis.mesh.rotation.y += dt * 1.4;
+          scanVis.mesh.position.y = scanVis.baseY + Math.sin(this.totalTime * 2.8 + i) * 0.07;
+        }
+      }
+
+      if (this.pathEndpointBeacon && !this.pathReducedMotion) {
+        this.pathEndpointBeacon.rotation.y += dt * 0.85;
+        if (this.pathEndpointHazardGlyph) {
+          this.pathEndpointHazardGlyph.rotation.y += dt * 2.2;
+          this.pathEndpointHazardGlyph.position.y = 0.74 + Math.sin(this.totalTime * 3.8) * 0.08;
+        }
+      }
+
+      const segs = this.pathPreviewModel.segments;
+      const segCount = segs.length;
+      if (this.pathPulseDots.length > 0 && segCount > 0) {
+        for (let i = 0; i < this.pathPulseDots.length; i++) {
+          const dot = this.pathPulseDots[i];
+          const normProgress = (this.totalTime * 0.38 + dot.phaseOffset) % 1;
+          const scaled = normProgress * segCount;
+          const segIdx = Math.min(segCount - 1, Math.floor(scaled));
+          const localT = scaled - segIdx;
+          const seg = segs[segIdx];
+          samplePathSegmentPointInto(this.level?.track, seg, localT, _arcPos);
+          dot.mesh.position.copy(_arcPos);
+          const dotGoalOp =
+            !hasHover || isPreviewItemHighlighted(seg, hoveredId) ? 0.92 : 0.2;
+          dot.material.opacity = THREE.MathUtils.damp(dot.material.opacity, dotGoalOp, 14, dt);
+        }
+      }
+    }
+
     // Mood / Build / Celebration / Touch timers
     if (this.buildTimer > 0) {
       this.buildTimer = Math.max(0, this.buildTimer - dt);
@@ -2496,7 +2596,11 @@ export class UnifiedWorldController {
         if (step.ev.action !== 'SCAN') {
           isMoving = !this.simPaused;
           speed = this.simPaused ? 0 : step.ev.action === 'BOOST' ? 14 : 7;
-          this.botTrackZ = THREE.MathUtils.lerp(this.simFromZ, this.simToZ, eased);
+          this.botTrackZ = clampTrackBotZBeforeClosedGate(
+            this.level?.track,
+            THREE.MathUtils.lerp(this.simFromZ, this.simToZ, eased),
+            false
+          );
           const fromSurf = sampleTrackSurfaceAtZ(this.level?.track, this.simFromZ);
           const toSurf = sampleTrackSurfaceAtZ(this.level?.track, this.simToZ);
           const curSurf = sampleTrackSurfaceAtZ(this.level?.track, this.botTrackZ);
@@ -2552,6 +2656,17 @@ export class UnifiedWorldController {
           if (this.runnerJumpY <= 0) {
             this.runnerJumpY = 0;
             this.runnerJumpVy = 0;
+            this.rig.injectImpact(0.75, 0.25, 0);
+            this.cameraJuice.addImpulse(0, -0.75, 0, 0);
+            this.vfx.emitShockwaveRing(
+              this.runnerBotX,
+              0.04,
+              this.botTrackZ,
+              0x38bdf8,
+              0.38,
+              1.7,
+              0.32
+            );
           }
         }
         isAirborne = this.runnerJumpY > 0.15;
@@ -2586,50 +2701,25 @@ export class UnifiedWorldController {
         this.prevRunnerBotX = this.runnerBotX;
         this.prevRunnerBotY = this.runnerBotY;
 
-        const trailCfg = computeActionTrailEmitConfig({
-          speed,
-          surface: m.surface,
-          isAirborne,
-          turboActive: m.turboTimer > 0,
-          hasBooster: info.hasBooster,
-          hasMagnet: info.hasMagnet,
-          lowGraphics: this.lowGraphics
-        });
-        const trailAnchors = computeTrailEmitterOffsets(
-          this.runnerBotRoll,
-          info.hasThrusters,
-          info.hasBooster
-        );
-        const ribbonHalfWidth =
-          trailCfg.state === 'turbo' ? 0.165 : trailCfg.state === 'wallrun' ? 0.13 : 0.105;
-        this.updateActionRibbons(
+        this.vfx.updateActionRunnerTrails(
           dt,
-          trailAnchors,
-          trailCfg.palette,
-          ribbonHalfWidth,
-          this.runnerBotRoll
-        );
-        this.trailEmitAccum = Math.min(12, this.trailEmitAccum + trailCfg.spawnRatePerSec * dt);
-        while (this.trailEmitAccum >= 1) {
-          this.trailEmitAccum -= 1;
-          const anchor = trailAnchors[this.trailAnchorIdx % trailAnchors.length];
-          this.trailAnchorIdx += 1;
-          const sample = createActionTrailSpawnSample({
+          {
+            speed,
+            surface: m.surface,
+            isAirborne,
+            turboActive: m.turboTimer > 0,
+            hasThrusters: info.hasThrusters,
+            hasBooster: info.hasBooster,
+            hasMagnet: info.hasMagnet,
             botX: this.runnerBotX,
             botY: this.runnerBotY,
             botZ: this.botTrackZ,
             botVx,
             botVy,
-            speed,
-            anchor,
-            config: trailCfg,
-            jitterX: Math.random() * 2 - 1,
-            jitterY: Math.random() * 2 - 1,
-            colorIdx: this.trailColorSeq++,
-            lifeJitter: Math.random()
-          });
-          this.spawnActionTrailParticle(sample, this.runnerBotRoll);
-        }
+            botRoll: this.runnerBotRoll
+          },
+          this.qualityBudget
+        );
 
         // Recycle runner tunnel segments ahead of robot
         const segHalf = 16;
@@ -2670,12 +2760,17 @@ export class UnifiedWorldController {
             if (m.shieldActive || m.turboTimer > 0) {
               m.shieldActive = false;
               this.spawnSparks(ent.group.position.x, 0.8, ent.z, 0x38bdf8, 16);
+              this.vfx.emitShockwaveRing(ent.group.position.x, 0.5, ent.z, 0x38bdf8, 0.45, 2.3, 0.38);
+              this.rig.injectImpact(0.55, -0.35, 0);
+              this.cameraJuice.addImpulse(1.1, 0.7, 0.9, 1.2);
               SFX.compactCrunch();
               this.respawnEntity(ent, this.botTrackZ - 55 - Math.random() * 40);
               continue;
             } else if (!this.runnerEndless) {
               // Gentle kid-friendly bounce slowdown rather than harsh instant death
               this.runnerJumpVy = 5.5;
+              this.rig.injectImpact(0.85, 0.5, 0);
+              this.cameraJuice.addImpulse(1.2, -0.9, 0.6, 0);
               this.setMood('sad', 0.9);
               SFX.chirpSad();
               this.respawnEntity(ent, this.botTrackZ - 55 - Math.random() * 40);
@@ -2683,6 +2778,8 @@ export class UnifiedWorldController {
             } else {
               m.finished = true;
               m.crashed = true;
+              this.rig.injectImpact(1.05, 0.6, 0);
+              this.cameraJuice.addImpulse(1.6, -1.1, 1.2, 0);
               this.setMood('sad', 2.0);
               SFX.chirpSad();
               this.cb.onActionFinish({ ...m });
@@ -2790,6 +2887,7 @@ export class UnifiedWorldController {
         // Vertical gravity + ground landing
         const groundNow = getPlanetGroundY(this.planetBotX, this.planetBotZ);
         if (this.planetBotY > groundNow || this.planetBotVy !== 0) {
+          const prevVy = this.planetBotVy;
           this.planetBotY += this.planetBotVy * dt;
           this.planetBotVy -= 26 * dt;
           if (this.planetBotY <= groundNow) {
@@ -2797,6 +2895,20 @@ export class UnifiedWorldController {
             this.planetBotVy = 0;
             this.planetJumpsUsed = 0;
             m.doubleJumpReady = caps.hasThrusters;
+            if (prevVy < -3.2) {
+              const strength = Math.min(1, Math.abs(prevVy) / 14);
+              this.rig.injectImpact(0.8 * strength, 0.25 * strength, 0);
+              this.cameraJuice.addImpulse(0, -0.75 * strength, 0, 0);
+              this.vfx.emitPuffs(
+                this.planetBotX,
+                this.planetBotY + 0.06,
+                this.planetBotZ,
+                0xa5f3fc,
+                4,
+                this.qualityBudget,
+                1.1
+              );
+            }
           }
         } else {
           this.planetBotY = groundNow;
@@ -2933,6 +3045,11 @@ export class UnifiedWorldController {
       }
     }
 
+    // Enforce closed-gate stop barrier on mission track so robot never enters the end wall
+    if (this.mode === 'SIMULATING' || this.mode === 'CODE_3D' || this.mode === 'CIRCUIT_3D') {
+      this.botTrackZ = clampTrackBotZBeforeClosedGate(this.level?.track, this.botTrackZ, false);
+    }
+
     // Align robot height & slope pitch to track surface (ramps & mud) when on mission track
     const trackSurface =
       this.mode === 'SIMULATING' || this.mode === 'CODE_3D' || this.mode === 'CIRCUIT_3D'
@@ -2951,14 +3068,16 @@ export class UnifiedWorldController {
         : 0;
     this.botTrackPitchX = THREE.MathUtils.damp(this.botTrackPitchX, targetTrackPitchX, 14, dt);
 
-    // Apply Robot World Transform (step slightly left in CIRCUIT_3D so 5x5 board is unobstructed)
-    const circuitOffsetX = this.mode === 'CIRCUIT_3D' ? -1.45 : 0;
-    this.rig.root.position.set(
+    // Apply Robot World Transform (step neatly onto the left bay of the wide Gate platform in CIRCUIT_3D)
+    const targetTrackX = this.mode === 'CIRCUIT_3D' ? CIRCUIT_BOT_X : 0;
+    const smoothTrackX =
       this.mode === 'ACTION_RUN_3D'
         ? this.runnerBotX
         : this.mode === 'PLANET_ADVENTURE_3D'
           ? this.planetBotX
-          : circuitOffsetX,
+          : THREE.MathUtils.damp(this.rig.root.position.x, targetTrackX, 10, dt);
+    this.rig.root.position.set(
+      smoothTrackX,
       this.mode === 'PLANET_ADVENTURE_3D' ? this.planetBotY : this.botTrackY,
       this.mode === 'PLANET_ADVENTURE_3D' ? this.planetBotZ : this.botTrackZ
     );
@@ -2990,16 +3109,13 @@ export class UnifiedWorldController {
       this.rig.root.rotation.y = THREE.MathUtils.damp(this.rig.root.rotation.y, 0, 8, dt);
     }
 
-    // Contact shadow height adjustment
+    // Contact shadow height offset (fed directly into articulated RobotRig)
     const shadowHeightOffset =
       this.mode === 'PLANET_ADVENTURE_3D'
         ? Math.max(0, this.planetBotY - getPlanetGroundY(this.planetBotX, this.planetBotZ))
         : Math.max(0, this.botTrackY - (trackSurface?.y ?? 0));
-    this.rig.contactShadow.position.y = Math.max(0.02, 0.02 - shadowHeightOffset * 0.8);
-    const shScale = THREE.MathUtils.clamp(1 - shadowHeightOffset * 0.18, 0.4, 1);
-    this.rig.contactShadow.scale.setScalar(shScale);
 
-    // Update Robot Articulated Animation Rig
+    // Update Robot Articulated Animation Rig (spring kinematics, wheel suspension, plasma shaders)
     this.rig.update({
       dt,
       time: this.totalTime,
@@ -3007,6 +3123,7 @@ export class UnifiedWorldController {
       speed,
       isMoving,
       isAirborne,
+      heightAboveGround: shadowHeightOffset,
       tiltPitch,
       tiltRoll: this.mode === 'ACTION_RUN_3D' ? (this.runnerMetrics?.lane === 0 ? 0.1 : -0.1) * 0.3 : 0,
       lookX: this.lookX,
@@ -3026,106 +3143,8 @@ export class UnifiedWorldController {
       )
     });
 
-    // Update Particle Sparks
-    for (let i = 0; i < this.sparks.length; i++) {
-      const sp = this.sparks[i];
-      if (!sp.active) continue;
-      sp.life += dt;
-      if (sp.life >= sp.maxLife) {
-        sp.active = false;
-        _dummy.position.set(0, -50, 0);
-        _dummy.scale.setScalar(0.001);
-        _dummy.updateMatrix();
-        this.sparkInst.setMatrixAt(i, _dummy.matrix);
-        continue;
-      }
-      sp.vy -= 9.8 * dt;
-      sp.x += sp.vx * dt;
-      sp.y += sp.vy * dt;
-      sp.z += sp.vz * dt;
-      const s = Math.max(0.05, 1 - sp.life / sp.maxLife);
-      _dummy.position.set(sp.x, sp.y, sp.z);
-      _dummy.scale.setScalar(s);
-      _dummy.rotation.y += dt * 8;
-      _dummy.updateMatrix();
-      this.sparkInst.setMatrixAt(i, _dummy.matrix);
-      _color.setHex(sp.color);
-      this.sparkInst.setColorAt(i, _color);
-    }
-    this.sparkInst.instanceMatrix.needsUpdate = true;
-    if (this.sparkInst.instanceColor) this.sparkInst.instanceColor.needsUpdate = true;
-
-    // Update Soft 3D Pastel Puffs (buoyant rise + air drag + pillowy pop scale)
-    const puffDrag = Math.exp(-2.8 * dt);
-    for (let i = 0; i < this.puffs.length; i++) {
-      const pf = this.puffs[i];
-      if (!pf.active) continue;
-      pf.life += dt;
-      if (pf.life >= pf.maxLife) {
-        pf.active = false;
-        _dummy.position.set(0, -50, 0);
-        _dummy.scale.setScalar(0.001);
-        _dummy.updateMatrix();
-        this.puffInst.setMatrixAt(i, _dummy.matrix);
-        continue;
-      }
-      pf.vx *= puffDrag;
-      pf.vz *= puffDrag;
-      pf.vy = pf.vy * Math.exp(-1.5 * dt) + 0.35 * dt;
-      pf.x += pf.vx * dt;
-      pf.y += pf.vy * dt;
-      pf.z += pf.vz * dt;
-      const progress = pf.life / pf.maxLife;
-      const s = Math.max(0.02, evaluatePuffScale(progress) * pf.baseScale);
-      _dummy.position.set(pf.x, pf.y, pf.z);
-      _dummy.rotation.set(progress * 1.4, progress * 2.1, 0);
-      _dummy.scale.setScalar(s);
-      _dummy.updateMatrix();
-      this.puffInst.setMatrixAt(i, _dummy.matrix);
-      _color.setHex(pf.color);
-      this.puffInst.setColorAt(i, _color);
-    }
-    this.puffInst.instanceMatrix.needsUpdate = true;
-    if (this.puffInst.instanceColor) this.puffInst.instanceColor.needsUpdate = true;
-
-    // Update Action Dash High-Speed Trailing Particles (elongated luminous speed streaks)
-    let trailMatrixDirty = false;
-    let trailColorDirty = false;
-    const trailLateralDrag = Math.exp(-3.4 * dt);
-    for (let i = 0; i < this.trailParticles.length; i++) {
-      const tr = this.trailParticles[i];
-      if (!tr.active) continue;
-      tr.life += dt;
-      if (tr.life >= tr.maxLife) {
-        tr.active = false;
-        _dummy.position.set(0, -50, 0);
-        _dummy.scale.setScalar(0.001);
-        _dummy.updateMatrix();
-        this.trailInst.setMatrixAt(i, _dummy.matrix);
-        trailMatrixDirty = true;
-        continue;
-      }
-      tr.vx *= trailLateralDrag;
-      tr.vy *= trailLateralDrag;
-      tr.x += tr.vx * dt;
-      tr.y += tr.vy * dt;
-      tr.z += tr.vz * dt;
-      const progress = tr.life / tr.maxLife;
-      const xf = evaluateTrailParticleTransform(progress, tr.baseWidth, tr.streakLength);
-      _dummy.position.set(tr.x, tr.y, tr.z);
-      _dummy.rotation.set(0, 0, tr.roll + tr.life * tr.spin);
-      _dummy.scale.set(xf.scaleX * 0.48, xf.scaleY * 0.42, xf.scaleZ * 5.8);
-      _dummy.updateMatrix();
-      this.trailInst.setMatrixAt(i, _dummy.matrix);
-      _color.setHex(tr.color).multiplyScalar(xf.brightness);
-      this.trailInst.setColorAt(i, _color);
-      trailMatrixDirty = true;
-      trailColorDirty = true;
-    }
-    if (trailMatrixDirty) this.trailInst.instanceMatrix.needsUpdate = true;
-    if (trailColorDirty && this.trailInst.instanceColor) {
-      this.trailInst.instanceColor.needsUpdate = true;
-    }
+    // Update Unified Zero-GC 3D VFX Pools (sparks, pastel puffs, plasma trails, shockwave rings)
+    this.vfx.update(dt);
 
     // Responsive 4-Preset Damped Camera Rig + Interactive 360° Orbit in BUILD_3D & PAINT_BOOTH
     const framing = computeResponsiveCameraFraming(this.mode, this.width, this.height);
@@ -3170,8 +3189,8 @@ export class UnifiedWorldController {
       _lookGoal.set(0, 0.9 + framing.lookYOffset, this.botTrackZ - 3.5);
     } else if (this.mode === 'CIRCUIT_3D') {
       const cz = this.circuitGroup.position.z;
-      _camGoal.set(0, 2.55, cz + 5.8 * framing.distanceScale);
-      _lookGoal.set(0, 2.45 + framing.lookYOffset, cz);
+      _camGoal.set(0, CIRCUIT_BOARD_Y - 0.05, cz + 6.2 * framing.distanceScale);
+      _lookGoal.set(0, CIRCUIT_BOARD_Y - 0.25 + framing.lookYOffset, cz);
     } else if (this.mode === 'ACTION_RUN_3D') {
       _camGoal.set(
         this.runnerBotX * 0.35,
@@ -3206,24 +3225,31 @@ export class UnifiedWorldController {
         : this.mode === 'PLANET_ADVENTURE_3D'
           ? 7.2
           : 5.5;
-    this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, _camGoal.x, camLambda, dt);
-    this.camera.position.y = THREE.MathUtils.damp(this.camera.position.y, _camGoal.y, camLambda, dt);
-    this.camera.position.z = THREE.MathUtils.damp(this.camera.position.z, _camGoal.z, camLambda, dt);
+    this.camBasePos.x = THREE.MathUtils.damp(this.camBasePos.x, _camGoal.x, camLambda, dt);
+    this.camBasePos.y = THREE.MathUtils.damp(this.camBasePos.y, _camGoal.y, camLambda, dt);
+    this.camBasePos.z = THREE.MathUtils.damp(this.camBasePos.z, _camGoal.z, camLambda, dt);
     _curLook.x = THREE.MathUtils.damp(_curLook.x, _lookGoal.x, 7.5, dt);
     _curLook.y = THREE.MathUtils.damp(_curLook.y, _lookGoal.y, 7.5, dt);
     _curLook.z = THREE.MathUtils.damp(_curLook.z, _lookGoal.z, 7.5, dt);
-    this.camera.lookAt(_curLook);
 
-    // Responsive base FOV + subtle speed-reactive FOV kick during Action Dash or Planet Boost
-    const targetFov =
+    const targetFovBoost =
       (this.mode === 'ACTION_RUN_3D' && this.runnerMetrics && this.runnerMetrics.turboTimer > 0) ||
       (this.mode === 'PLANET_ADVENTURE_3D' &&
         this.planetMetrics &&
         this.planetMetrics.boostActiveTimer > 0)
-        ? framing.baseFov + 4.5
-        : framing.baseFov;
+        ? 4.5
+        : 0;
+    const camJuice = this.cameraJuice.step(dt, targetFovBoost);
+    this.camera.position.set(
+      this.camBasePos.x + camJuice.offsetX,
+      this.camBasePos.y + camJuice.offsetY,
+      this.camBasePos.z + camJuice.offsetZ
+    );
+    this.camera.lookAt(_curLook);
+
+    const targetFov = framing.baseFov + camJuice.fovBoost;
     const prevFov = this.camera.fov;
-    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 5.5, dt);
+    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 7.5, dt);
     if (Math.abs(this.camera.fov - prevFov) > 0.015) {
       this.camera.updateProjectionMatrix();
     }
@@ -3242,8 +3268,12 @@ export class UnifiedWorldController {
       }
     }
 
-    if (this.renderer) {
-      this.renderer.render(this.scene, this.camera);
+    if (this.renderer && !this.contextLost) {
+      if (this.renderPipeline) {
+        this.renderPipeline.render();
+      } else {
+        this.renderer.render(this.scene, this.camera);
+      }
       this.pacer = scheduleAfterDraw(this.renderer, this.isSoftwareGl, this.tick);
     }
   };
@@ -3251,6 +3281,7 @@ export class UnifiedWorldController {
   public dispose() {
     this.disposed = true;
     this.pacer?.cancel();
+    this.pacer = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     window.removeEventListener('resize', this.handleResize);
@@ -3261,23 +3292,20 @@ export class UnifiedWorldController {
     this.renderer?.domElement.removeEventListener('wheel', this.handleCanvasWheel);
     this.renderer?.domElement.removeEventListener('webglcontextlost', this.handleContextLost);
     this.renderer?.domElement.removeEventListener('webglcontextrestored', this.handleContextRestored);
+    this.renderPipeline?.dispose();
+    this.renderPipeline = null;
     this.env.dispose();
     this.planetWorld?.dispose();
-    this.sparkInst.geometry.dispose();
-    (this.sparkInst.material as THREE.Material).dispose();
-    this.puffInst.geometry.dispose();
-    (this.puffInst.material as THREE.Material).dispose();
-    this.trailInst.geometry.dispose();
-    (this.trailInst.material as THREE.Material).dispose();
-    const disposedRibbonMats = new Set<THREE.Material>();
-    for (const rb of this.trailRibbons) {
-      rb.mesh.geometry.dispose();
-      const mat = rb.mesh.material as THREE.Material;
-      if (!disposedRibbonMats.has(mat)) {
-        mat.dispose();
-        disposedRibbonMats.add(mat);
-      }
-    }
+    this.rig.dispose();
+    clearAndDisposeGroup(this.trackGroup, this.sharedTextures);
+    clearAndDisposeGroup(this.pathPreviewGroup, this.sharedTextures);
+    clearAndDisposeGroup(this.circuitBeamGroup, this.sharedTextures);
+    clearAndDisposeGroup(this.circuitGroup, this.sharedTextures);
+    clearAndDisposeGroup(this.runnerGroup, this.sharedTextures);
+    disposeObject3D(this.ghostGroup, this.sharedTextures);
+    this.envMapTexture?.dispose();
+    this.envMapTexture = null;
+    this.vfx.dispose();
     this.tex.dispose();
     this.renderer?.dispose();
     SFX.setGlide(false);

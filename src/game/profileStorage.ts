@@ -17,6 +17,7 @@ import {
   type SaveProfile
 } from './engine';
 import { normalizeBestTimes } from './challengeTimer';
+import { normalizeGraphicsQualityMode } from './graphicsConfig';
 import {
   normalizeLearningTelemetry,
   normalizeStreakShields
@@ -86,12 +87,18 @@ export function normalizeSaveProfileData(parsed: Partial<SaveProfile> | null | u
   if (!parsed || typeof parsed !== 'object') return base;
   const botTheme = normalizeBotTheme(parsed.botTheme);
   const botCharacter = normalizeBotCharacter(parsed.botCharacter);
+  const resolvedQuality =
+    parsed.lowGraphics === true &&
+    (parsed.graphicsQuality === undefined || parsed.graphicsQuality === 'auto')
+      ? 'eco'
+      : normalizeGraphicsQualityMode(parsed.graphicsQuality, Boolean(parsed.lowGraphics));
   return {
     ...base,
     ...parsed,
     profileName: normalizeProfileName(parsed.profileName),
     audio: normalizeAudioSettings(parsed.audio),
-    lowGraphics: Boolean(parsed.lowGraphics),
+    lowGraphics: resolvedQuality === 'eco',
+    graphicsQuality: resolvedQuality,
     challengeTimerEnabled: Boolean(parsed.challengeTimerEnabled),
     readAloudEnabled: Boolean(parsed.readAloudEnabled),
     hapticsEnabled: parsed.hapticsEnabled === undefined ? true : Boolean(parsed.hapticsEnabled),

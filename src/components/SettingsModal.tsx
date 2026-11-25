@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Bot,
+  Compass,
   Gauge,
   Lightbulb,
   Lock,
@@ -17,6 +18,7 @@ import {
   X
 } from 'lucide-react';
 import type { AudioSettings } from '../game/audioConfig';
+import type { GraphicsQualityMode } from '../game/graphicsConfig';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsModalProps {
@@ -25,6 +27,7 @@ interface SettingsModalProps {
   audio: AudioSettings;
   gentleSpeed: boolean;
   lowGraphics: boolean;
+  graphicsQuality?: GraphicsQualityMode;
   challengeTimerEnabled: boolean;
   adaptiveHintsEnabled?: boolean;
   readAloudEnabled?: boolean;
@@ -36,13 +39,26 @@ interface SettingsModalProps {
   onTestVoice: () => void;
   onToggleSpeed: () => void;
   onToggleLowGraphics: () => void;
+  onChangeGraphicsQuality?: (mode: GraphicsQualityMode) => void;
   onToggleChallengeTimer: () => void;
   onToggleAdaptiveHints?: () => void;
   onToggleReadAloud?: () => void;
   onToggleHaptics?: () => void;
+  onReplayTutorial?: () => void;
   onOpenParentView?: () => void;
   onClose: () => void;
 }
+
+const QUALITY_OPTIONS: ReadonlyArray<{
+  mode: GraphicsQualityMode;
+  label: string;
+  caption: string;
+}> = [
+  { mode: 'auto', label: 'Auto', caption: 'Adapts studio bloom, shadows & particles for smooth FPS' },
+  { mode: 'ultra', label: 'Ultra', caption: 'Full studio glow, softbox reflections & crisp 2K shadows' },
+  { mode: 'balanced', label: 'Balanced', caption: 'Crisp studio bloom with mobile-friendly shadow budget' },
+  { mode: 'eco', label: 'Eco', caption: 'Battery-saver mode with minimal particles & fast rendering' }
+];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   visible,
@@ -50,6 +66,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   audio,
   gentleSpeed,
   lowGraphics,
+  graphicsQuality,
   challengeTimerEnabled,
   adaptiveHintsEnabled = true,
   readAloudEnabled = false,
@@ -61,10 +78,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onTestVoice,
   onToggleSpeed,
   onToggleLowGraphics,
+  onChangeGraphicsQuality,
   onToggleChallengeTimer,
   onToggleAdaptiveHints,
   onToggleReadAloud,
   onToggleHaptics,
+  onReplayTutorial,
   onOpenParentView,
   onClose
 }) => {
@@ -297,46 +316,76 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Low-Graphics Performance Mode Row */}
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/65 px-4 py-2.5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
-                lowGraphics
-                  ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-200'
-                  : 'border-slate-700 bg-slate-900 text-slate-300'
-              }`}
-            >
-              <Gauge className="h-4 w-4" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-extrabold uppercase tracking-wider text-slate-100">
-                Low-Graphics Mode
+        {/* Graphics Quality Mode Selector */}
+        {(() => {
+          const activeMode: GraphicsQualityMode = graphicsQuality ?? (lowGraphics ? 'eco' : 'auto');
+          const activeMeta =
+            QUALITY_OPTIONS.find((opt) => opt.mode === activeMode) ?? QUALITY_OPTIONS[0];
+          const selectMode = (mode: GraphicsQualityMode) => {
+            if (onChangeGraphicsQuality) {
+              onChangeGraphicsQuality(mode);
+            } else if ((mode === 'eco') !== lowGraphics) {
+              onToggleLowGraphics();
+            }
+          };
+          return (
+            <div className="flex flex-col gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/65 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                    activeMode === 'eco'
+                      ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-200'
+                      : activeMode === 'ultra'
+                        ? 'border-amber-400/70 bg-amber-500/20 text-amber-200'
+                        : 'border-sky-400/60 bg-sky-500/15 text-sky-200'
+                  }`}
+                >
+                  <Gauge className="h-4 w-4" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-extrabold uppercase tracking-wider text-slate-100">
+                    Graphics Quality
+                  </div>
+                  <div className="text-[11px] font-medium leading-tight text-slate-400">
+                    {activeMeta.caption}
+                  </div>
+                </div>
               </div>
-              <div className="text-[11px] font-medium leading-tight text-slate-400">
-                {lowGraphics
-                  ? 'Reduced sparks, puffs & 3D effects'
-                  : 'Full sparks, puffs & 3D effects'}
-              </div>
-            </div>
-          </div>
 
-          <button
-            id="lowGraphicsToggle"
-            type="button"
-            role="switch"
-            aria-checked={lowGraphics}
-            aria-label="Low-Graphics Mode"
-            onClick={onToggleLowGraphics}
-            className={`flex h-9 min-w-[74px] shrink-0 items-center justify-center rounded-xl border-2 px-3 text-xs font-black uppercase tracking-wide transition-transform active:scale-95 ${
-              lowGraphics
-                ? 'border-cyan-300 bg-cyan-500/25 text-cyan-100'
-                : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-sky-400'
-            }`}
-          >
-            {lowGraphics ? 'On' : 'Off'}
-          </button>
-        </div>
+              <div
+                id="graphicsQualityGroup"
+                role="radiogroup"
+                aria-label="Graphics Quality"
+                className="grid grid-cols-4 gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 p-1"
+              >
+                {QUALITY_OPTIONS.map((opt) => {
+                  const selected = activeMode === opt.mode;
+                  return (
+                    <button
+                      key={opt.mode}
+                      id={opt.mode === 'eco' ? 'lowGraphicsToggle' : `graphicsQuality-${opt.mode}`}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => selectMode(opt.mode)}
+                      className={`h-9 whitespace-nowrap rounded-lg px-2 text-xs font-black tracking-wide transition-all active:scale-95 ${
+                        selected
+                          ? opt.mode === 'eco'
+                            ? 'border border-cyan-300/80 bg-cyan-500/25 text-cyan-100 shadow-sm'
+                            : opt.mode === 'ultra'
+                              ? 'border border-amber-300/80 bg-amber-500/25 text-amber-100 shadow-sm'
+                              : 'border border-sky-300/80 bg-sky-500/25 text-sky-100 shadow-sm'
+                          : 'border border-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Optional Speed-Run Challenge Timer Row */}
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/65 px-4 py-2.5">
@@ -510,6 +559,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Install Android / Mobile App Row */}
         <PWAInstallButton variant="settings" />
+
+        {/* Replay Guided First Mission Tutorial */}
+        {onReplayTutorial && (
+          <button
+            id="settingsReplayTutorialBtn"
+            type="button"
+            onClick={() => {
+              onClose();
+              onReplayTutorial();
+            }}
+            className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-amber-400/45 bg-amber-500/10 px-4 text-left transition-colors hover:border-amber-300 hover:bg-amber-500/18 active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-2.5">
+              <Compass className="h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+              <div>
+                <div className="text-xs font-black text-white">Guided Build & Code Tutorial</div>
+                <div className="text-[11px] text-slate-400">
+                  Replay the interactive Mission 1 walkthrough
+                </div>
+              </div>
+            </div>
+            <span className="shrink-0 text-xs font-black text-amber-300">Start</span>
+          </button>
+        )}
 
         {/* Grown-Ups Progress View Entry */}
         {onOpenParentView && (

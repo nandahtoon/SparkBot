@@ -1,0 +1,14 @@
+{
+	"appId": "com.sparkbot.academy",
+	"appName": "SparkBot: Engineering Academy",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	},
+	"android": {
+		"backgroundColor": "#0b1222",
+		"allowMixedContent": false,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": false
+	}
+}

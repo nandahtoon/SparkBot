@@ -11,6 +11,22 @@ export const RAMP_WEDGE_ROT_X = 0.24;
 export const MUD_TOP_SURFACE_Y = 0.04;
 export const MUD_SURFACE_HALF_LEN = (TRACK_TILE_SPACING - 0.42) * 0.5;
 
+/**
+ * End-of-track Gate & Circuit Board geometry relative to the final gate tile center `tz`.
+ * - Gate steel doors sit near the rear edge of the final tile (`tz - 1.15`).
+ * - 3D Circuit Board mounts flush on the front face of the closed doors (`gateZ + 0.36 = tz - 0.79`).
+ * - Robot stops squarely on the front half of the gate pad (`tz + 1.05`), keeping its
+ *   front bumper & laser (~0.88m forward) cleanly clear of both the circuit board and doors.
+ */
+export const GATE_WALL_Z_OFFSET = -1.15;
+export const CIRCUIT_BOARD_Z_OFFSET = 0.36;
+export const CIRCUIT_BOARD_Y = 3.0;
+export const GATE_BOT_STOP_Z_OFFSET = 1.05;
+export const GATE_DECK_WIDTH = 4.8;
+export const CIRCUIT_BOT_X = -1.62;
+export const BOT_FRONT_EXTENT_Z = 0.88;
+export const BOT_HALF_WIDTH_X = 0.62;
+
 export interface TrackSurfaceSample {
   y: number;
   pitchX: number;
@@ -29,6 +45,63 @@ const RAMP_CLEARANCE_Y = 0.015;
 
 export function getTrackTileCenterZ(tileIndex: number): number {
   return tileIndex === 0 ? 0 : TRACK_START_Z - tileIndex * TRACK_TILE_SPACING;
+}
+
+export function getGateTileIndex(track: ReadonlyArray<TrackTile> | null | undefined): number {
+  if (!track || track.length === 0) return -1;
+  for (let i = track.length - 1; i >= 0; i--) {
+    if (track[i].type === 'gate') return i;
+  }
+  return track.length - 1;
+}
+
+export function getGateWallZ(track: ReadonlyArray<TrackTile> | null | undefined): number {
+  const gateIdx = getGateTileIndex(track);
+  if (gateIdx < 0) return TRACK_START_Z;
+  return getTrackTileCenterZ(gateIdx) + GATE_WALL_Z_OFFSET;
+}
+
+export function getCircuitBoardZ(track: ReadonlyArray<TrackTile> | null | undefined): number {
+  return getGateWallZ(track) + CIRCUIT_BOARD_Z_OFFSET;
+}
+
+/**
+ * Computes the world Z coordinate where the 3D robot should stand for a given track tile.
+ * On the final `gate` tile, stops cleanly in front of the closed gate doors & circuit board
+ * so the robot never penetrates the end wall.
+ */
+export function getTrackBotStopZ(
+  track: ReadonlyArray<TrackTile> | null | undefined,
+  tileIndex: number
+): number {
+  if (tileIndex <= 0) return 0;
+  if (!track || track.length === 0) {
+    return getTrackTileCenterZ(tileIndex);
+  }
+  const gateIdx = getGateTileIndex(track);
+  const clampedIdx = Math.min(tileIndex, track.length - 1);
+  const tz = getTrackTileCenterZ(clampedIdx);
+  if (clampedIdx === gateIdx || track[clampedIdx]?.type === 'gate') {
+    return tz + GATE_BOT_STOP_Z_OFFSET;
+  }
+  return tz;
+}
+
+/**
+ * Safety barrier clamp along the mission track (-Z is forward).
+ * While the gate wall is closed, prevents the robot's Z position from ever crossing
+ * past the gate stop line into the circuit board or closed steel doors.
+ */
+export function clampTrackBotZBeforeClosedGate(
+  track: ReadonlyArray<TrackTile> | null | undefined,
+  z: number,
+  gateOpen: boolean
+): number {
+  if (gateOpen || !track || track.length === 0) return z;
+  const gateIdx = getGateTileIndex(track);
+  if (gateIdx < 0) return z;
+  const minSafeZ = getTrackTileCenterZ(gateIdx) + GATE_BOT_STOP_Z_OFFSET;
+  return Math.max(z, minSafeZ);
 }
 
 /**

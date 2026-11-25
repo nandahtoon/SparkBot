@@ -11,18 +11,15 @@ import {
   Paintbrush,
   Palette,
   Smile,
-  UserRound,
   X,
   Zap
 } from 'lucide-react';
 import {
-  BOT_CHARACTERS,
   BOT_THEME_ORDER,
   BOT_THEMES,
   canPlacePartInSlot,
   computeChassisInfo,
   PARTS,
-  type BotCharacterId,
   type BotThemeId,
   type ChassisGrid,
   type LevelDef,
@@ -48,7 +45,6 @@ interface BuildDockProps {
   slotPoints: SlotScreenPoint[];
   selectedPart: PartId | null;
   botTheme: BotThemeId;
-  activeCharacter: BotCharacterId;
   tutorialStep: TutorialStep | null;
   ghostHelp: boolean;
   camera: WorkshopCameraControls;
@@ -57,6 +53,7 @@ interface BuildDockProps {
   installPhase?: 'idle' | 'working' | 'celebrating';
   lastPlacement?: { id: number; part: PartId; r: number; c: number } | null;
   hintBanner?: React.ReactNode;
+  suppressInlineGuide?: boolean;
   onSelectPart: (part: PartId | null) => void;
   onChangeBotTheme: (theme: BotThemeId) => void;
   onHoverSlot: (hover: { r: number; c: number; valid: boolean; part: PartId } | null) => void;
@@ -64,7 +61,6 @@ interface BuildDockProps {
   onRemoveSlot: (r: number, c: number) => void;
   onProceedToCode: () => void;
   onOpenPaintBooth: () => void;
-  onOpenProfile: () => void;
   onToggleInspect: () => void;
   onTalkToBot: () => void;
   onOpenDemo?: (topic: DemoTopic) => void;
@@ -87,7 +83,6 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   slotPoints,
   selectedPart,
   botTheme,
-  activeCharacter,
   tutorialStep,
   ghostHelp,
   camera,
@@ -96,6 +91,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   installPhase = 'idle',
   lastPlacement = null,
   hintBanner = null,
+  suppressInlineGuide = false,
   onSelectPart,
   onChangeBotTheme,
   onHoverSlot,
@@ -103,7 +99,6 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   onRemoveSlot,
   onProceedToCode,
   onOpenPaintBooth,
-  onOpenProfile,
   onToggleInspect,
   onTalkToBot,
   onOpenDemo,
@@ -543,45 +538,14 @@ export const BuildDock: React.FC<BuildDockProps> = ({
               </div>
             </div>
 
-            <div
-              id="botPainterBar"
-              role="group"
-              aria-label="Bot Painter"
-              className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-800/90 px-1.5 py-1"
-            >
-              <Palette className="hidden h-3 w-3 shrink-0 text-slate-300 sm:block" aria-hidden="true" />
-              {BOT_THEME_ORDER.map((themeId) => {
-                const theme = BOT_THEMES[themeId];
-                const active = botTheme === themeId;
-                return (
-                  <button
-                    key={themeId}
-                    type="button"
-                    data-bot-theme={themeId}
-                    data-active={active ? 'true' : 'false'}
-                    aria-pressed={active}
-                    aria-label={`Paint Robot ${theme.label}`}
-                    onClick={() => onChangeBotTheme(themeId)}
-                    className={`flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full border-2 transition-transform active:scale-90 sm:h-6 sm:w-6 ${SWATCH_BG[themeId]} ${
-                      active
-                        ? 'scale-105 border-white ring-1 ring-white/60 shadow-sm'
-                        : 'border-slate-950/70 opacity-85 hover:opacity-100'
-                    }`}
-                  >
-                    {active && <Check className="h-3 w-3 stroke-[3] text-slate-950" aria-hidden="true" />}
-                  </button>
-                );
-              })}
-            </div>
-
             {/* Compact Workshop Quick Actions */}
             <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 aria-expanded={showViewTools}
                 onClick={() => setShowViewTools((v) => !v)}
-                aria-label="Toggle 3D Camera & View Tools"
-                title="3D Camera & View Tools"
+                aria-label="Toggle 3D Camera & Look Tools"
+                title="3D Camera & Look Tools"
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors active:scale-95 ${
                   showViewTools || inspectMode || camera.autoSpin
                     ? 'border-sky-400 bg-sky-500/20 text-sky-200'
@@ -600,8 +564,24 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                 className="flex h-8 items-center gap-1 rounded-lg border border-fuchsia-400/70 bg-fuchsia-500/15 px-2 text-[11px] font-black text-fuchsia-200 transition-transform hover:bg-fuchsia-500/25 active:scale-95"
               >
                 <Paintbrush className="h-3.5 w-3.5 shrink-0" />
-                <span className="hidden md:inline">Paint</span>
+                <span className="hidden sm:inline">Paint</span>
               </button>
+
+              {onOpenDemo && (
+                <button
+                  type="button"
+                  data-demo-part={selectedPart || 'wheels'}
+                  onClick={() => {
+                    setHoveredPart(null);
+                    onOpenDemo(selectedPart || guide.nextStep?.part || 'wheels');
+                  }}
+                  aria-label="Robot Parts Visual Guide"
+                  title="Parts Visual Guide"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sky-400/70 bg-sky-500/15 text-sky-200 transition-colors hover:border-sky-300 hover:bg-sky-500/25 active:scale-95"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                </button>
+              )}
 
               <button
                 id="toggleBuildGuideBtn"
@@ -648,7 +628,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
             </div>
           </div>
 
-          {/* Expandable 3D Camera & Fun Bar (Collapsed by default so 3D stage stays clear) */}
+          {/* Expandable 3D Camera, Quick Swatches & Fun Bar (Collapsed by default so 3D stage stays clear) */}
           {showViewTools && (
             <div
               id="workshopViewBar"
@@ -658,17 +638,37 @@ export const BuildDock: React.FC<BuildDockProps> = ({
             >
               <WorkshopOrbitStrip {...camera} autoSpinButtonId="autoSpinBtn" />
 
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  id="workshopProfileBtn"
-                  type="button"
-                  onClick={onOpenProfile}
-                  aria-label="Change Bot Character"
-                  className="flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-sky-400/65 bg-sky-500/15 px-2 text-[10px] font-black text-sky-200 transition-transform hover:bg-sky-500/25 active:scale-95 sm:h-8 sm:text-[11px]"
+              <div className="flex shrink-0 items-center gap-1.5">
+                <div
+                  id="botPainterBar"
+                  role="group"
+                  aria-label="Quick Bot Color Presets"
+                  className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-700/80 bg-slate-800/90 px-1.5 py-0.5"
                 >
-                  <UserRound className="h-3 w-3" />
-                  <span className="hidden sm:inline">{BOT_CHARACTERS[activeCharacter].name}</span>
-                </button>
+                  <Palette className="h-3 w-3 shrink-0 text-slate-300" aria-hidden="true" />
+                  {BOT_THEME_ORDER.map((themeId) => {
+                    const theme = BOT_THEMES[themeId];
+                    const active = botTheme === themeId;
+                    return (
+                      <button
+                        key={themeId}
+                        type="button"
+                        data-bot-theme={themeId}
+                        data-active={active ? 'true' : 'false'}
+                        aria-pressed={active}
+                        aria-label={`Paint Robot ${theme.label}`}
+                        onClick={() => onChangeBotTheme(themeId)}
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-transform active:scale-90 sm:h-5.5 sm:w-5.5 ${SWATCH_BG[themeId]} ${
+                          active
+                            ? 'scale-105 border-white ring-1 ring-white/60 shadow-sm'
+                            : 'border-slate-950/70 opacity-85 hover:opacity-100'
+                        }`}
+                      >
+                        {active && <Check className="h-2.5 w-2.5 stroke-[3] text-slate-950" aria-hidden="true" />}
+                      </button>
+                    );
+                  })}
+                </div>
 
                 <button
                   id="inspect3DBtn"
@@ -701,7 +701,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
           )}
 
           {/* Ultra-Slim Single-Line Equipment Guide Strip */}
-          {!collapsed && guideActive && (
+          {!collapsed && guideActive && !suppressInlineGuide && (
             <div
               data-testid="build-equipment-hint"
               data-next-part={guide.nextStep?.part || 'ready'}
@@ -816,22 +816,6 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                         {def.cost}
                       </span>
                     </button>
-                    {onOpenDemo && (
-                      <button
-                        type="button"
-                        data-demo-part={pid}
-                        aria-label={`${def.name} Visual Demo`}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setHoveredPart(null);
-                          onOpenDemo(pid);
-                        }}
-                        className="absolute -right-1 top-0 flex h-4.5 w-4.5 items-center justify-center rounded-full border border-sky-400/80 bg-slate-900 text-sky-300 shadow hover:bg-sky-500 hover:text-slate-950 active:scale-90"
-                      >
-                        <BookOpen className="h-2.5 w-2.5" />
-                      </button>
-                    )}
                   </div>
                 );
               })}

@@ -308,20 +308,23 @@ export const TopHud: React.FC<TopHudProps> = ({
           )}
         </div>
 
-        {/* Top-Right: Ghost Help, Reset (sm+), Sound, Settings (sm+), Pause */}
+        {/* Top-Right: 3D Ghost Preview (when applicable), Reset (sm+), Sound, Settings (sm+), Pause */}
         <div className="pointer-events-auto order-2 flex shrink-0 items-center gap-1 sm:gap-1.5 md:order-3">
-          <button
-            type="button"
-            onClick={onToggleGhost}
-            aria-label="Visual Ghost Help"
-            className={`flex h-8 w-8 items-center justify-center rounded-xl border shadow-md backdrop-blur-sm transition-transform active:scale-95 sm:h-9 sm:w-9 ${
-              ghostHelp
-                ? 'border-amber-300 bg-amber-400 text-slate-950'
-                : 'border-slate-600/80 bg-slate-900/90 text-amber-300 hover:border-amber-300'
-            }`}
-          >
-            <HelpCircle className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-          </button>
+          {(mode === 'BUILD_3D' || mode === 'CODE_3D' || mode === 'CIRCUIT_3D') && (
+            <button
+              type="button"
+              onClick={onToggleGhost}
+              aria-label={ghostHelp ? 'Hide 3D Ghost Preview' : 'Show 3D Ghost Preview'}
+              title="3D Ghost Preview"
+              className={`flex h-8 w-8 items-center justify-center rounded-xl border shadow-md backdrop-blur-sm transition-transform active:scale-95 sm:h-9 sm:w-9 ${
+                ghostHelp
+                  ? 'border-cyan-300 bg-cyan-400 text-slate-950'
+                  : 'border-slate-600/80 bg-slate-900/90 text-cyan-300 hover:border-cyan-300'
+              }`}
+            >
+              <Ghost className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={onReset}

@@ -10,10 +10,14 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "android:add": "npx cap add android",
-    "android:sync": "npm run build && npx cap sync android",
+    "android:sync": "SKIP_ANDROID_ZIP_COPY=1 npm run build && npx cap sync android",
+    "android:pack": "SKIP_ANDROID_ZIP_COPY=1 npm run build && npx cap sync android && python3 scripts/pack-android.py",
     "android:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/three": "^0.187.0",

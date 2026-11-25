@@ -12,7 +12,43 @@ export interface DemoRequest {
 
 interface ConceptDemoPopoverProps {
   demo: DemoRequest | null;
+  onSelectDemo?: (next: DemoRequest) => void;
   onClose: () => void;
+}
+
+const PART_TOPICS: DemoRequest[] = [
+  { topic: 'wheels' },
+  { topic: 'treads' },
+  { topic: 'thrusters' },
+  { topic: 'booster' },
+  { topic: 'laser' },
+  { topic: 'magnet' }
+];
+
+const CODE_TOPICS: DemoRequest[] = [
+  { topic: 'MOVE' },
+  { topic: 'JUMP' },
+  { topic: 'BOOST' },
+  { topic: 'LOOP' },
+  { topic: 'IF', condition: 'GAP' },
+  { topic: 'IF', condition: 'MUD' },
+  { topic: 'IF', condition: 'RAMP' }
+];
+
+const CIRCUIT_TOPICS: DemoRequest[] = [
+  { topic: 'CIRCUIT_MIRROR' },
+  { topic: 'CIRCUIT_SPLITTER' }
+];
+
+function getTopicLabel(req: DemoRequest): string {
+  if (req.topic === 'CIRCUIT_MIRROR') return 'Mirror';
+  if (req.topic === 'CIRCUIT_SPLITTER') return 'Splitter';
+  if (req.topic === 'IF') return `If ${req.condition || 'GAP'}`;
+  if (req.topic === 'MOVE') return 'Move';
+  if (req.topic === 'JUMP') return 'Jump';
+  if (req.topic === 'BOOST') return 'Boost';
+  if (req.topic === 'LOOP') return 'Loop';
+  return PARTS[req.topic].name;
 }
 
 const DemoHeaderEmblem: React.FC<{ demo: DemoRequest }> = ({ demo }) => {
@@ -344,7 +380,11 @@ function getDemoExplanation(demo: DemoRequest): { title: string; why: string } {
   };
 }
 
-export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({ demo, onClose }) => {
+export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({
+  demo,
+  onSelectDemo,
+  onClose
+}) => {
   useEffect(() => {
     if (!demo) return;
     const onKey = (e: KeyboardEvent) => {
@@ -410,6 +450,47 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({ demo, on
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {/* Category Topic Switcher (replaces per-block/per-part overlapping mini book badges) */}
+        {onSelectDemo && (
+          <div
+            role="tablist"
+            aria-label="Visual Guide Topics"
+            className="no-scrollbar touch-pan-x flex items-center gap-1.5 overflow-x-auto pb-0.5"
+          >
+            {(demo.topic === 'CIRCUIT_MIRROR' || demo.topic === 'CIRCUIT_SPLITTER'
+              ? CIRCUIT_TOPICS
+              : demo.topic === 'MOVE' ||
+                  demo.topic === 'JUMP' ||
+                  demo.topic === 'BOOST' ||
+                  demo.topic === 'LOOP' ||
+                  demo.topic === 'IF'
+                ? CODE_TOPICS
+                : PART_TOPICS
+            ).map((item) => {
+              const active =
+                item.topic === demo.topic &&
+                (item.topic !== 'IF' || (item.condition || 'GAP') === (demo.condition || 'GAP'));
+              const key = `${item.topic}_${item.condition || ''}`;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => onSelectDemo(item)}
+                  className={`flex h-8 shrink-0 items-center whitespace-nowrap rounded-xl border px-2.5 text-[11px] font-black transition-colors active:scale-95 ${
+                    active
+                      ? 'border-sky-300 bg-sky-500/25 text-white'
+                      : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:border-sky-400/70 hover:text-white'
+                  }`}
+                >
+                  {getTopicLabel(item)}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Wrong vs Right Side-by-Side Visual Comparison Cards */}
         <div className="grid grid-cols-2 gap-3">

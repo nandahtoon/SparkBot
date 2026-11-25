@@ -23,6 +23,8 @@ import * as PlanetAdv from './planetAdventure';
 import * as ResponsiveCamera from '../three/responsiveCamera';
 import * as AndroidApp from './androidApp';
 import * as TrackSurface from './trackSurface';
+import * as THREE from 'three';
+import { clearAndDisposeGroup, disposeObject3D } from '../three/disposeUtils';
 
 test('magnet part attaches cleanly to chassis and lowers Action Dash bolt-per-cube threshold', () => {
   const chassis = E.createEmptyChassis();
@@ -1324,3 +1326,811 @@ test('trackSurface keeps robot flush on top of inclined pink ramps, mud basins, 
   assert.equal(mudSurf.pitchX, 0);
 });
 
+test('disposeUtils recursively disposes geometries, materials, and non-shared textures while preserving shared atlases and preserved children', () => {
+  const sharedTex = new THREE.Texture();
+  let sharedDisposed = false;
+  sharedTex.dispose = () => {
+    sharedDisposed = true;
+  };
+
+  const ownedTex = new THREE.Texture();
+  let ownedDisposed = false;
+  ownedTex.dispose = () => {
+    ownedDisposed = true;
+  };
+
+  const group = new THREE.Group();
+  const preserved = new THREE.Group();
+  const matShared = new THREE.MeshStandardMaterial({ map: sharedTex });
+  const matOwned = new THREE.MeshStandardMaterial({ map: ownedTex });
+  const meshA = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), matShared);
+  const meshB = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), matOwned);
+  const keptMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial());
+  preserved.add(keptMesh);
+  group.add(meshA, meshB, preserved);
+
+  const stats = clearAndDisposeGroup(
+    group,
+    new Set([sharedTex]),
+    new Set<THREE.Object3D>([preserved])
+  );
+
+  assert.equal(stats.geometries, 2);
+  assert.equal(stats.materials, 2);
+  assert.equal(stats.textures, 1);
+  assert.equal(sharedDisposed, false, 'Shared atlas texture must not be disposed');
+  assert.equal(ownedDisposed, true, 'Non-shared texture must be disposed');
+  assert.equal(group.children.length, 1);
+  assert.equal(group.children[0], preserved);
+
+  const keptStats = disposeObject3D(preserved);
+  assert.equal(keptStats.geometries, 1);
+  assert.equal(keptStats.materials, 1);
+});
+
+test('responsiveCamera adapts seamlessly for Android tablets in both landscape (1280x800) and portrait (800x1280)', () => {
+  assert.equal(ResponsiveCamera.classifyViewport(1280, 800, true), 'tablet');
+  assert.equal(ResponsiveCamera.classifyViewport(1024, 768, true), 'tablet');
+  assert.equal(ResponsiveCamera.classifyViewport(800, 1280, true), 'tablet');
+  assert.equal(ResponsiveCamera.classifyViewport(1440, 900, false), 'desktop');
+
+  const tabLand = ResponsiveCamera.computeResponsiveCameraFraming('BUILD_3D', 1280, 800, true);
+  const tabPort = ResponsiveCamera.computeResponsiveCameraFraming('BUILD_3D', 800, 1280, true);
+  assert.equal(tabLand.formFactor, 'tablet');
+  assert.equal(tabLand.orientation, 'landscape');
+  assert.equal(tabPort.formFactor, 'tablet');
+  assert.equal(tabPort.orientation, 'portrait');
+  assert.ok(tabPort.distanceScale > tabLand.distanceScale);
+  assert.ok(tabLand.lookYOffset < 0 && tabPort.lookYOffset < tabLand.lookYOffset);
+});
+
+test('native Capacitor Android tablet project and PWA manifest are configured for full-frame adaptive rotation', () => {
+  const manifestXml = fs.readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
+  assert.ok(manifestXml.includes('android:screenOrientation="fullUser"'), 'Manifest should enable adaptive fullUser rotation');
+  assert.ok(manifestXml.includes('android:resizeableActivity="true"'), 'Manifest should enable resizeableActivity for tablets');
+  assert.ok(manifestXml.includes('android:largeScreens="true"'), 'Manifest should declare largeScreens support');
+  assert.ok(manifestXml.includes('android:xlargeScreens="true"'), 'Manifest should declare xlargeScreens support');
+  assert.ok(manifestXml.includes('android.permission.VIBRATE'), 'Manifest should include VIBRATE permission');
+
+  const mainActivity = fs.readFileSync(
+    'android/app/src/main/java/com/sparkbot/academy/MainActivity.java',
+    'utf8'
+  );
+  assert.ok(mainActivity.includes('setDecorFitsSystemWindows'), 'MainActivity should configure edge-to-edge window');
+  assert.ok(
+    mainActivity.includes('BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE'),
+    'MainActivity should enable sticky immersive full-frame mode'
+  );
+  assert.ok(mainActivity.includes('FLAG_KEEP_SCREEN_ON'), 'MainActivity should keep tablet screen awake');
+
+  const viteCfg = fs.readFileSync('vite.config.ts', 'utf8');
+  assert.ok(viteCfg.includes("display: 'fullscreen'"), 'PWA manifest should use fullscreen display');
+  assert.ok(viteCfg.includes("orientation: 'any'"), 'PWA manifest should support adaptive orientation');
+});
+
+test('CodeDock tiered complexity system classifies T1/T2/T3 paths and drives optimal vs. sub-optimal drop-zone feedback', async () => {
+  const CF = await import('./codeFeedback');
+
+  // 1. Individual block tier classification (Tier 1 Linear -> Tier 2 Structured -> Tier 3 Nested)
+  assert.equal(CF.classifyBlockComplexityTier('MOVE', 0).tierRank, 1);
+  assert.equal(CF.classifyBlockComplexityTier('MOVE', 0).complexityTier, 'tier1_linear');
+  assert.equal(CF.classifyBlockComplexityTier('JUMP', 0).tierRank, 1);
+  assert.equal(CF.classifyBlockComplexityTier('LOOP', 0).tierRank, 2);
+  assert.equal(CF.classifyBlockComplexityTier('IF', 0).complexityTier, 'tier2_structured');
+  assert.equal(CF.classifyBlockComplexityTier('MOVE', 1).tierRank, 2);
+  assert.equal(CF.classifyBlockComplexityTier('IF', 1).tierRank, 3);
+  assert.equal(CF.classifyBlockComplexityTier('IF', 1).complexityTier, 'tier3_nested');
+  assert.equal(CF.classifyBlockComplexityTier('JUMP', 2).tierRank, 3);
+
+  // 2. Empty program -> idle Tier 1
+  const emptyEval = CF.evaluateProgramLogicTiers([], {
+    parBlocks: 3,
+    loopUnlocked: true,
+    ifUnlocked: true
+  });
+  assert.equal(emptyEval.tierRank, 1);
+  assert.equal(emptyEval.optimality, 'idle');
+  assert.equal(emptyEval.reason, 'empty');
+  assert.equal(emptyEval.zoneStates.ROOT.optimality, 'idle');
+
+  // 3. Clean linear path within par -> Tier 1 optimal
+  const linearProg: E.CodeBlock[] = [
+    { id: 'm1', type: 'MOVE' },
+    { id: 'j1', type: 'JUMP' }
+  ];
+  const linearEval = CF.evaluateProgramLogicTiers(linearProg, {
+    parBlocks: 2,
+    loopUnlocked: false,
+    ifUnlocked: false
+  });
+  assert.equal(linearEval.tierRank, 1);
+  assert.equal(linearEval.optimality, 'optimal');
+  assert.equal(linearEval.reason, 'within_par_clean');
+  assert.equal(linearEval.zoneStates.ROOT.optimality, 'optimal');
+
+  // 4. Structured LOOP with child within par -> Tier 2 optimal on both ROOT and LOOP drop zones
+  const loopProg: E.CodeBlock[] = [
+    { id: 'loop1', type: 'LOOP', count: 3, children: [{ id: 'm1', type: 'MOVE' }] }
+  ];
+  const loopEval = CF.evaluateProgramLogicTiers(loopProg, {
+    parBlocks: 2,
+    loopUnlocked: true,
+    ifUnlocked: true
+  });
+  assert.equal(loopEval.tierRank, 2);
+  assert.equal(loopEval.optimality, 'optimal');
+  assert.equal(loopEval.reason, 'within_par_structured');
+  assert.equal(loopEval.zoneStates.ROOT.optimality, 'optimal');
+  assert.equal(loopEval.zoneStates.loop1.optimality, 'optimal');
+
+  // 5. Nested LOOP -> IF -> JUMP within par -> Tier 3 optimal
+  const nestedProg: E.CodeBlock[] = [
+    {
+      id: 'loop1',
+      type: 'LOOP',
+      count: 3,
+      children: [
+        { id: 'if1', type: 'IF', condition: 'GAP', children: [{ id: 'j1', type: 'JUMP' }] }
+      ]
+    }
+  ];
+  const nestedEval = CF.evaluateProgramLogicTiers(nestedProg, {
+    parBlocks: 3,
+    loopUnlocked: true,
+    ifUnlocked: true
+  });
+  assert.equal(nestedEval.tierRank, 3);
+  assert.equal(nestedEval.optimality, 'optimal');
+  assert.equal(nestedEval.zoneStates.loop1.tierRank, 3);
+  assert.equal(nestedEval.zoneStates.if1.optimality, 'optimal');
+
+  // 6. Empty container -> suboptimal (empty_container) on both container drop zone and ROOT
+  const emptyLoopProg: E.CodeBlock[] = [{ id: 'loopEmpty', type: 'LOOP', count: 2, children: [] }];
+  const emptyLoopEval = CF.evaluateProgramLogicTiers(emptyLoopProg, {
+    parBlocks: 2,
+    loopUnlocked: true,
+    ifUnlocked: true
+  });
+  assert.equal(emptyLoopEval.optimality, 'suboptimal');
+  assert.equal(emptyLoopEval.reason, 'empty_container');
+  assert.equal(emptyLoopEval.zoneStates.loopEmpty.optimality, 'suboptimal');
+  assert.equal(emptyLoopEval.zoneStates.loopEmpty.reason, 'empty_container');
+
+  // 7. 3+ repeated MOVE blocks when LOOP is unlocked -> suboptimal (redundant_sequence)
+  const unrolledProg: E.CodeBlock[] = [
+    { id: 'm1', type: 'MOVE' },
+    { id: 'm2', type: 'MOVE' },
+    { id: 'm3', type: 'MOVE' }
+  ];
+  const unrolledEval = CF.evaluateProgramLogicTiers(unrolledProg, {
+    parBlocks: 4,
+    loopUnlocked: true,
+    ifUnlocked: false
+  });
+  assert.equal(unrolledEval.optimality, 'suboptimal');
+  assert.equal(unrolledEval.reason, 'redundant_sequence');
+
+  // 8. Duplicate nested IF [GAP] inside IF [GAP] -> suboptimal (redundant_nesting)
+  const dupIfProg: E.CodeBlock[] = [
+    {
+      id: 'ifOuter',
+      type: 'IF',
+      condition: 'GAP',
+      children: [
+        { id: 'ifInner', type: 'IF', condition: 'GAP', children: [{ id: 'j1', type: 'JUMP' }] }
+      ]
+    }
+  ];
+  const dupIfEval = CF.evaluateProgramLogicTiers(dupIfProg, {
+    parBlocks: 4,
+    loopUnlocked: true,
+    ifUnlocked: true
+  });
+  assert.equal(dupIfEval.optimality, 'suboptimal');
+  assert.equal(dupIfEval.reason, 'redundant_nesting');
+  assert.equal(dupIfEval.zoneStates.ifOuter.optimality, 'suboptimal');
+
+  // 9. Over-par program -> suboptimal (over_par)
+  const overParProg: E.CodeBlock[] = [
+    { id: 'l1', type: 'LOOP', count: 2, children: [{ id: 'm1', type: 'MOVE' }] },
+    { id: 'b1', type: 'BOOST' },
+    { id: 'j1', type: 'JUMP' },
+    { id: 'm2', type: 'MOVE' }
+  ];
+  const overParEval = CF.evaluateProgramLogicTiers(overParProg, {
+    parBlocks: 2,
+    loopUnlocked: true,
+    ifUnlocked: true
+  });
+  assert.equal(overParEval.optimality, 'suboptimal');
+  assert.equal(overParEval.reason, 'over_par');
+
+  // 10. Live drop-zone preview: dragging MOVE over empty LOOP predicts optimal; duplicate IF predicts suboptimal; TRASH returns null
+  const previewFillLoop = CF.previewDropTargetOptimality(
+    emptyLoopProg,
+    { parBlocks: 2, loopUnlocked: true, ifUnlocked: true },
+    { kind: 'new', type: 'MOVE', targetZoneId: 'loopEmpty' }
+  );
+  assert.ok(previewFillLoop);
+  assert.equal(previewFillLoop?.isPreview, true);
+  assert.equal(previewFillLoop?.optimality, 'optimal');
+
+  const baseIfProg: E.CodeBlock[] = [
+    { id: 'ifA', type: 'IF', condition: 'GAP', children: [{ id: 'j1', type: 'JUMP' }] }
+  ];
+  const previewDupIf = CF.previewDropTargetOptimality(
+    baseIfProg,
+    { parBlocks: 4, loopUnlocked: true, ifUnlocked: true },
+    { kind: 'new', type: 'IF', condition: 'GAP', targetZoneId: 'ifA' }
+  );
+  assert.ok(previewDupIf);
+  assert.equal(previewDupIf?.optimality, 'suboptimal');
+  assert.equal(previewDupIf?.reason, 'redundant_nesting');
+
+  const previewTrash = CF.previewDropTargetOptimality(
+    baseIfProg,
+    { parBlocks: 4, loopUnlocked: true, ifUnlocked: true },
+    { kind: 'existing', type: 'JUMP', blockId: 'j1', targetZoneId: 'TRASH' }
+  );
+  assert.equal(previewTrash, null);
+});
+
+test('CodeBlock magnetic snap pulls dragged blocks toward valid slots, scales up on engagement, and guards descendant drops', async () => {
+  const CF = await import('./codeFeedback');
+
+  const slotRect = { left: 100, top: 500, right: 360, bottom: 556, width: 260, height: 56 };
+  const lastBlockRect = { left: 110, top: 506, right: 154, bottom: 550, width: 44, height: 44 };
+
+  // Empty slot anchor centers inside the slot; populated slot trails last child clamped inside bounds
+  const emptyAnchor = CF.computeSlotAnchorPoint(slotRect, null);
+  assert.equal(emptyAnchor.x, 230);
+  assert.equal(emptyAnchor.y, 528);
+
+  const trailingAnchor = CF.computeSlotAnchorPoint(slotRect, lastBlockRect, 44);
+  assert.equal(trailingAnchor.x, 154 + 22 + 6);
+  assert.equal(trailingAnchor.y, 528);
+
+  // Far away pointer stays unengaged with zero pull and neutral 1.0 scale
+  const far = CF.computeMagneticDragPosition(10, 200, slotRect, null);
+  assert.equal(far.engaged, false);
+  assert.equal(far.x, 10);
+  assert.equal(far.y, 200);
+  assert.equal(far.pullFactor, 0);
+  assert.equal(far.scale, 1);
+
+  // Approaching within proximity margin engages subtle magnetic pull & gentle scale-up
+  const nearEdge = CF.computeMagneticDragPosition(230, 488, slotRect, null);
+  assert.equal(nearEdge.engaged, true);
+  assert.ok(nearEdge.y > 488, 'Magnetic pull should gently tug pointer downward toward slot center');
+  assert.ok(nearEdge.scale > 1 && nearEdge.scale <= 1.07);
+
+  // Directly inside the slot pulls toward trailing slot anchor with clamped offset and peak subtle scale-up
+  const inside = CF.computeMagneticDragPosition(260, 540, slotRect, lastBlockRect);
+  assert.equal(inside.engaged, true);
+  assert.ok(inside.x < 260, 'Should pull left toward trailing anchor inside slot');
+  assert.ok(inside.y < 540, 'Should pull upward toward vertical slot center');
+  assert.ok(Math.hypot(inside.x - 260, inside.y - 540) <= 24.01, 'Magnetic offset stays subtly bounded');
+  assert.equal(inside.scale, 1.07);
+
+  // Descendant guard prevents dropping a LOOP/IF container into itself or its nested children
+  const prog: E.CodeBlock[] = [
+    {
+      id: 'outerLoop',
+      type: 'LOOP',
+      count: 2,
+      children: [{ id: 'innerIf', type: 'IF', condition: 'GAP', children: [{ id: 'j1', type: 'JUMP' }] }]
+    },
+    { id: 'siblingLoop', type: 'LOOP', count: 2, children: [] }
+  ];
+  assert.equal(CF.isDescendantBlockId(prog, 'outerLoop', 'outerLoop'), true);
+  assert.equal(CF.isDescendantBlockId(prog, 'outerLoop', 'innerIf'), true);
+  assert.equal(CF.isDescendantBlockId(prog, 'outerLoop', 'j1'), true);
+  assert.equal(CF.isDescendantBlockId(prog, 'outerLoop', 'siblingLoop'), false);
+  assert.equal(CF.isDescendantBlockId(prog, 'outerLoop', 'ROOT'), false);
+});
+
+test('trackSurface stops robot cleanly in front of the closed gate wall and 3D circuit board at the end of the track', () => {
+  const track = E.LEVELS[0].track;
+  const gateIdx = track.length - 1;
+  const gateTileZ = TrackSurface.getTrackTileCenterZ(gateIdx);
+  const gateWallZ = TrackSurface.getGateWallZ(track);
+  const circuitBoardZ = TrackSurface.getCircuitBoardZ(track);
+  const botStopZ = TrackSurface.getTrackBotStopZ(track, gateIdx);
+
+  // Robot stands squarely on the gate deck slab (within +/- 1.67 of gateTileZ)
+  assert.ok(Math.abs(botStopZ - gateTileZ) < 1.5, 'Bot stop Z should remain on the gate tile deck');
+
+  // Robot front bumper/laser stays strictly in front (+Z) of both the circuit board front (+0.28) and steel doors (+0.175)
+  const botNoseZ = botStopZ - TrackSurface.BOT_FRONT_EXTENT_Z;
+  const circuitFrontZ = circuitBoardZ + 0.28;
+  const doorFrontZ = gateWallZ + 0.175;
+  assert.ok(botNoseZ > circuitFrontZ + 0.5, `Expected >0.5m clearance before circuit board (got ${botNoseZ - circuitFrontZ})`);
+  assert.ok(botNoseZ > doorFrontZ + 0.9, `Expected >0.9m clearance before closed gate doors (got ${botNoseZ - doorFrontZ})`);
+
+  // Overshooting tile index or raw Z coordinate is strictly clamped at the stop line while gate is closed
+  assert.equal(TrackSurface.getTrackBotStopZ(track, gateIdx + 4), botStopZ);
+  assert.equal(TrackSurface.clampTrackBotZBeforeClosedGate(track, gateWallZ - 5, false), botStopZ);
+
+  // Once the gate opens (Action Dash), Z is no longer clamped by the closed gate barrier
+  assert.equal(TrackSurface.clampTrackBotZBeforeClosedGate(track, gateWallZ - 5, true), gateWallZ - 5);
+
+  // In CIRCUIT_3D, the robot's wheels stay 100% supported on the widened Gate Landing Bay (never hanging over air or a preceding gap)
+  const deckHalfW = TrackSurface.GATE_DECK_WIDTH * 0.5;
+  assert.ok(
+    Math.abs(TrackSurface.CIRCUIT_BOT_X) + TrackSurface.BOT_HALF_WIDTH_X <= deckHalfW - 0.1,
+    'All robot wheels must remain supported inside the Gate Landing Bay width'
+  );
+  // Circuit board laser emitter sits cleanly above robot head height (~1.7m)
+  assert.ok(TrackSurface.CIRCUIT_BOARD_Y >= 2.9, 'Circuit board emitter should sit clearly above robot head');
+});
+
+test('First Mission guided interactive tutorial progresses cleanly through Build and Code phases with non-overlapping spotlight card placement', async () => {
+  const MT = await import('./missionTutorial');
+  const lvl1 = E.LEVELS[0];
+  const lvl2 = E.LEVELS[1];
+
+  // Activation gating: only shows on Mission 1 story level during BUILD_3D or CODE_3D when not done (or replayed)
+  assert.equal(
+    MT.shouldShowMissionTutorial({
+      level: lvl1,
+      mode: 'BUILD_3D',
+      tutorialDone: false,
+      tutorialForceActive: false,
+      tutorialDismissed: false,
+      hasBlockingOverlay: false
+    }),
+    true
+  );
+  assert.equal(
+    MT.shouldShowMissionTutorial({
+      level: lvl1,
+      mode: 'BUILD_3D',
+      tutorialDone: true,
+      tutorialForceActive: false,
+      tutorialDismissed: false,
+      hasBlockingOverlay: false
+    }),
+    false
+  );
+  assert.equal(
+    MT.shouldShowMissionTutorial({
+      level: lvl1,
+      mode: 'BUILD_3D',
+      tutorialDone: true,
+      tutorialForceActive: true,
+      tutorialDismissed: false,
+      hasBlockingOverlay: false
+    }),
+    true
+  );
+  assert.equal(
+    MT.shouldShowMissionTutorial({
+      level: lvl2,
+      mode: 'BUILD_3D',
+      tutorialDone: false,
+      tutorialForceActive: false,
+      tutorialDismissed: false,
+      hasBlockingOverlay: false
+    }),
+    false
+  );
+  assert.equal(
+    MT.shouldShowMissionTutorial({
+      level: lvl1,
+      mode: 'SIMULATING',
+      tutorialDone: false,
+      tutorialForceActive: false,
+      tutorialDismissed: false,
+      hasBlockingOverlay: false
+    }),
+    false
+  );
+
+  // Step 1: Energy budget spotlight on fresh empty Mission 1 chassis
+  const ack = new Set<import('./missionTutorial').MissionTutorialStepId>();
+  const chassis = E.createEmptyChassis();
+  const s1 = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'BUILD_3D',
+    chassis,
+    program: [],
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s1?.id, 'build_budget');
+  assert.equal(s1?.stepNumber, 1);
+  assert.equal(s1?.primarySelector, '[data-testid="dock-energy-meter"]');
+
+  // Step 2: Acknowledging budget highlights Wheels part + bottom slot; selecting Wheels shifts primary spotlight to slot 2,0
+  ack.add('build_budget');
+  const s2Part = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'BUILD_3D',
+    chassis,
+    program: [],
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s2Part?.id, 'build_wheels');
+  assert.equal(s2Part?.primarySelector, '[data-part="wheels"]');
+  assert.equal(s2Part?.secondarySelector, '[data-slot="2,0"]');
+
+  const s2Slot = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'BUILD_3D',
+    chassis,
+    program: [],
+    selectedPart: 'wheels',
+    acknowledgedSteps: ack
+  });
+  assert.equal(s2Slot?.id, 'build_wheels');
+  assert.equal(s2Slot?.primarySelector, '[data-slot="2,0"]');
+  assert.equal(s2Slot?.secondarySelector, undefined);
+
+  // Step 3: Equipping wheels advances automatically to Front Laser spotlight
+  chassis[2][0] = 'wheels';
+  const s3 = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'BUILD_3D',
+    chassis,
+    program: [],
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s3?.id, 'build_laser');
+  assert.equal(s3?.primarySelector, '[data-part="laser"]');
+  assert.equal(s3?.secondarySelector, '[data-slot="1,2"]');
+
+  // Step 4: Equipping front laser advances automatically to #toCodeBtn
+  chassis[1][2] = 'laser';
+  const s4 = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'BUILD_3D',
+    chassis,
+    program: [],
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s4?.id, 'build_next_phase');
+  assert.equal(s4?.primarySelector, '#toCodeBtn');
+
+  // Step 5: Entering CODE_3D highlights MOVE block + ROOT rail with live 0/5 -> 2/5 progress
+  const s5Empty = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'CODE_3D',
+    chassis,
+    program: [],
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s5Empty?.id, 'code_add_move');
+  assert.equal(s5Empty?.progress?.current, 0);
+  assert.equal(s5Empty?.progress?.target, 5);
+  assert.equal(s5Empty?.allowManualNext, false);
+
+  const partialProgram: E.CodeBlock[] = [
+    { id: 'm1', type: 'MOVE' },
+    { id: 'm2', type: 'MOVE' }
+  ];
+  const s5Partial = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'CODE_3D',
+    chassis,
+    program: partialProgram,
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s5Partial?.id, 'code_add_move');
+  assert.equal(s5Partial?.progress?.current, 2);
+  assert.equal(s5Partial?.allowManualNext, true);
+
+  // Step 6: Adding 5 MOVE blocks auto-advances to inspecting the program rail
+  const fullProgram: E.CodeBlock[] = [
+    { id: 'm1', type: 'MOVE' },
+    { id: 'm2', type: 'MOVE' },
+    { id: 'm3', type: 'MOVE' },
+    { id: 'm4', type: 'MOVE' },
+    { id: 'm5', type: 'MOVE' }
+  ];
+  const s6 = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'CODE_3D',
+    chassis,
+    program: fullProgram,
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s6?.id, 'code_rail_review');
+  assert.equal(s6?.primarySelector, '[data-drop-zone="ROOT"]');
+
+  // Step 7: Acknowledging rail review advances to final Run Program spotlight (#runCodeBtn)
+  ack.add('code_rail_review');
+  const s7 = MT.resolveMissionTutorialStep({
+    level: lvl1,
+    mode: 'CODE_3D',
+    chassis,
+    program: fullProgram,
+    selectedPart: null,
+    acknowledgedSteps: ack
+  });
+  assert.equal(s7?.id, 'code_run');
+  assert.equal(s7?.stepNumber, 7);
+  assert.equal(s7?.primarySelector, '#runCodeBtn');
+  assert.equal(s7?.secondarySelector, '#stepCodeBtn');
+
+  // Spotlight card placement clamps safely inside mobile portrait viewports and stays above bottom dock targets
+  const placedMobile = MT.computeSpotlightCardPosition({
+    viewportWidth: 360,
+    viewportHeight: 740,
+    primaryRect: { left: 28, top: 650, width: 64, height: 64 },
+    secondaryRect: { left: 140, top: 380, width: 48, height: 48 },
+    cardHeight: 170
+  });
+  assert.ok(placedMobile.left >= 12 && placedMobile.left + placedMobile.width <= 348);
+  assert.ok(placedMobile.top >= 96 && placedMobile.top + 170 <= 650);
+});
+
+test('buildLivePathPreview maps MOVE/JUMP/BOOST/LOOP/IF trajectories, gate-stop Z, hazards, and ancestor hover matching', async () => {
+  const PP = await import('./pathPreview');
+  const lvl2 = E.LEVELS[1]; // Level 2 has a gap tile
+  const chassis = E.createEmptyChassis();
+  chassis[2][0] = 'wheels';
+  chassis[1][0] = 'thrusters';
+  chassis[1][2] = 'laser';
+
+  // Empty program yields empty endpoint
+  const emptyPrev = PP.buildLivePathPreview(lvl2, chassis, []);
+  assert.equal(emptyPrev.endpoint.status, 'empty');
+  assert.equal(emptyPrev.segments.length, 0);
+
+  // Empty container yields empty status with helpful label
+  const emptyLoopPrev = PP.buildLivePathPreview(lvl2, chassis, [
+    { id: 'loop0', type: 'LOOP', count: 2, children: [] }
+  ]);
+  assert.equal(emptyLoopPrev.endpoint.status, 'empty');
+  assert.match(emptyLoopPrev.endpoint.summaryLabel, /Empty Loop/i);
+
+  // Short program stops cleanly at exact intermediate tile Z
+  const shortPrev = PP.buildLivePathPreview(lvl2, chassis, [{ id: 'm1', type: 'MOVE' }]);
+  assert.equal(shortPrev.endpoint.status, 'short');
+  assert.equal(shortPrev.endpoint.tileIndex, 1);
+  assert.equal(shortPrev.endpoint.z, TrackSurface.getTrackBotStopZ(lvl2.track, 1));
+
+  // Missing front laser at gate reports missing_part hazard at gateIndex
+  const noLaserChassis = E.cloneChassis(chassis);
+  noLaserChassis[1][2] = null;
+  const lvl1 = E.LEVELS[0];
+  const fiveMoves: E.CodeBlock[] = Array.from({ length: 5 }, (_, i) => ({
+    id: `m_${i}`,
+    type: 'MOVE' as const
+  }));
+  const noLaserPrev = PP.buildLivePathPreview(lvl1, noLaserChassis, fiveMoves);
+  assert.equal(noLaserPrev.endpoint.status, 'hazard');
+  assert.equal(noLaserPrev.endpoint.missingPart, 'laser');
+
+  // Complete Level 1 with full chassis reaches gate cleanly and collects all crystals
+  const winPrev = PP.buildLivePathPreview(lvl1, chassis, fiveMoves);
+  assert.equal(winPrev.endpoint.status, 'win');
+  assert.equal(winPrev.endpoint.tileIndex, lvl1.track.length - 1);
+  assert.equal(
+    winPrev.endpoint.z,
+    TrackSurface.getTrackBotStopZ(lvl1.track, lvl1.track.length - 1)
+  );
+  assert.equal(winPrev.endpoint.collectedCrystals, winPrev.endpoint.totalCrystals);
+
+  // LOOP + IF program produces repeated segments with ancestorBlockIds and SCAN markers
+  const loopIfProg: E.CodeBlock[] = [
+    {
+      id: 'loop_outer',
+      type: 'LOOP',
+      count: 3,
+      children: [
+        {
+          id: 'if_gap',
+          type: 'IF',
+          condition: 'GAP',
+          children: [{ id: 'jump_inner', type: 'JUMP' }]
+        },
+        { id: 'move_inner', type: 'MOVE' }
+      ]
+    }
+  ];
+  const loopPrev = PP.buildLivePathPreview(lvl2, chassis, loopIfProg);
+  assert.ok(loopPrev.scans.length >= 1, 'IF sensor scan markers recorded');
+  const jumpSeg = loopPrev.segments.find((s) => s.action === 'JUMP');
+  assert.ok(jumpSeg, 'IF [GAP] matched and generated a JUMP segment');
+  assert.deepEqual(jumpSeg.ancestorBlockIds, ['loop_outer', 'if_gap']);
+
+  // Ancestor hover highlights child JUMP & MOVE when hovering outer LOOP
+  assert.equal(PP.isPreviewItemHighlighted(jumpSeg, 'loop_outer'), true);
+  assert.equal(PP.isPreviewItemHighlighted(jumpSeg, 'if_gap'), true);
+  assert.equal(PP.isPreviewItemHighlighted(jumpSeg, 'jump_inner'), true);
+  assert.equal(PP.isPreviewItemHighlighted(jumpSeg, 'unrelated_id'), false);
+
+  // JUMP parabolic arc rises clearly above track surface at midpoint
+  const jumpMid = PP.samplePathSegmentPoint(lvl2.track, jumpSeg, 0.5);
+  assert.ok(jumpMid.y > 1.5, 'JUMP trajectory peak rises >1.5m above track deck');
+
+  // Stepping into a gap without jumping produces gap hazard beacon on the gap tile
+  const gapFailPrev = PP.buildLivePathPreview(lvl2, chassis, [
+    { id: 'm_a', type: 'MOVE' },
+    { id: 'm_b', type: 'MOVE' },
+    { id: 'm_c', type: 'MOVE' }
+  ]);
+  assert.equal(gapFailPrev.endpoint.status, 'hazard');
+  assert.equal(gapFailPrev.endpoint.failCode, 'gap');
+  assert.equal(gapFailPrev.segments[gapFailPrev.segments.length - 1].status, 'fall');
+});
+
+test('programHistory enforces structural dedupe, 30-step cap, undo/redo round-trips, and branch clearing', async () => {
+  const PH = await import('./programHistory');
+  let hist = PH.createEmptyProgramHistory();
+  let cur: E.CodeBlock[] = [];
+
+  // Structural equality ignores no-op updates
+  const noOpHist = PH.pushProgramHistory(hist, [], []);
+  assert.strictEqual(noOpHist, hist);
+
+  // Push 35 distinct steps -> bounded cleanly to MAX_PROGRAM_HISTORY (30)
+  for (let i = 1; i <= 35; i++) {
+    const next: E.CodeBlock[] = [...cur, { id: `b_${i}`, type: 'MOVE' }];
+    hist = PH.pushProgramHistory(hist, cur, next);
+    cur = next;
+  }
+  assert.equal(hist.past.length, PH.MAX_PROGRAM_HISTORY);
+  assert.equal(hist.future.length, 0);
+  assert.equal(cur.length, 35);
+
+  // Undo steps backward and restores deep-cloned previous states
+  const u1 = PH.undoProgramHistory(hist, cur);
+  assert.equal(u1.changed, true);
+  assert.equal(u1.program.length, 34);
+  assert.equal(u1.history.past.length, 29);
+  assert.equal(u1.history.future.length, 1);
+
+  // Redo restores undone state
+  const r1 = PH.redoProgramHistory(u1.history, u1.program);
+  assert.equal(r1.changed, true);
+  assert.equal(r1.program.length, 35);
+  assert.equal(r1.history.future.length, 0);
+
+  // Editing after undo clears redo stack
+  const u2 = PH.undoProgramHistory(r1.history, r1.program);
+  const branched: E.CodeBlock[] = [...u2.program, { id: 'branch_jump', type: 'JUMP' }];
+  const branchHist = PH.pushProgramHistory(u2.history, u2.program, branched);
+  assert.equal(branchHist.future.length, 0);
+  assert.equal(branchHist.past.length, 30);
+
+  // Undo on empty history is safe no-op
+  const emptyUndo = PH.undoProgramHistory(PH.createEmptyProgramHistory(), cur);
+  assert.equal(emptyUndo.changed, false);
+});
+
+test('springPhysics second-order dynamics, robot impact squash-and-stretch, large-dt stability, and CameraJuice reduced-motion attenuation', async () => {
+  const SP = await import('./springPhysics');
+
+  // Scalar spring converges smoothly toward target without NaN even under huge dt spikes
+  const scalar = { value: 0, velocity: 0 };
+  const cfg = { stiffness: 180, damping: 18 };
+  for (let i = 0; i < 120; i++) {
+    SP.stepSpringScalar(scalar, 1, cfg, 1 / 60);
+  }
+  assert.ok(Math.abs(scalar.value - 1) < 0.01, `Expected spring to settle near 1, got ${scalar.value}`);
+  SP.stepSpringScalar(scalar, 0, { stiffness: 220, damping: 14 }, 5.0); // huge tab-resume dt clamped internally
+  assert.ok(Number.isFinite(scalar.value) && Number.isFinite(scalar.velocity));
+
+  // RobotKinematicsController responds to landing impact with squash/suspension compression and settles back
+  const kin = new SP.RobotKinematicsController();
+  kin.injectImpact(0.95, 0.35, 0);
+  const impactSample = kin.step({
+    dt: 0.016,
+    targetSquash: 1,
+    speed: 0,
+    isAirborne: false,
+    targetPitch: 0,
+    targetRoll: 0
+  });
+  assert.ok(impactSample.squashY < 1.0, 'Positive impact compresses squashY');
+  assert.ok(impactSample.squashXZ > 1.0, 'Volume-preserving squash expands squashXZ');
+  assert.ok(impactSample.suspensionOffset < 0, 'Impact compresses wheel suspension struts');
+
+  let settled = impactSample;
+  for (let i = 0; i < 180; i++) {
+    settled = kin.step({
+      dt: 1 / 60,
+      targetSquash: 1,
+      speed: 0,
+      isAirborne: false,
+      targetPitch: 0,
+      targetRoll: 0
+    });
+  }
+  assert.ok(Math.abs(settled.squashY - 1) < 0.01);
+  assert.ok(Math.abs(settled.suspensionOffset) < 0.01);
+
+  // CameraJuiceController decays impulses and respects reduced-motion attenuation
+  const camFull = new SP.CameraJuiceController();
+  camFull.addImpulse(1.2, -0.9, 0.4, 3.0);
+  const fullPeak = camFull.step(0.016, 0);
+  assert.ok(Math.abs(fullPeak.offsetX) > 0.005 || Math.abs(fullPeak.offsetY) > 0.005);
+  assert.ok(fullPeak.fovBoost > 0.02);
+
+  const camReduced = new SP.CameraJuiceController();
+  camReduced.setReducedMotion(true);
+  camReduced.addImpulse(1.2, -0.9, 0.4, 3.0);
+  const reducedPeak = camReduced.step(0.016, 0);
+  assert.ok(Math.abs(reducedPeak.offsetX) < Math.abs(fullPeak.offsetX));
+  assert.ok(reducedPeak.fovBoost < fullPeak.fovBoost);
+});
+
+test('AdaptiveQualityMonitor enforces Software WebGL lock, hysteresis transitions, tab-spike immunity, and GraphicsQualityMode save migration', () => {
+  // Explicit tiers & Software WebGL protection
+  const ultraHw = GraphicsConfig.getQualityBudgetForTier('ultra', false);
+  const balancedHw = GraphicsConfig.getQualityBudgetForTier('balanced', false);
+  const ecoHw = GraphicsConfig.getQualityBudgetForTier('eco', false);
+  const ultraSw = GraphicsConfig.getQualityBudgetForTier('ultra', true);
+
+  assert.equal(ultraHw.bloomEnabled, true);
+  assert.equal(ultraHw.softboxEnabled, true);
+  assert.equal(ultraHw.shadowMapSize, 2048);
+  assert.equal(balancedHw.bloomEnabled, true);
+  assert.equal(balancedHw.shadowMapSize, 1024);
+  assert.equal(ecoHw.bloomEnabled, false);
+  assert.equal(ecoHw.shadowsEnabled, false);
+  assert.equal(ecoHw.lowGraphics, true);
+
+  // Software WebGL strictly disables bloom, shadows, softboxes, and locks DPR to 1
+  assert.equal(ultraSw.bloomEnabled, false);
+  assert.equal(ultraSw.shadowsEnabled, false);
+  assert.equal(ultraSw.softboxEnabled, false);
+  assert.equal(ultraSw.maxPixelRatio, 1);
+
+  // AdaptiveQualityMonitor ignores background tab resume spikes (> 0.25s)
+  const mon = new GraphicsConfig.AdaptiveQualityMonitor({ isSoftwareGl: false, initialMode: 'auto' });
+  assert.equal(mon.getTier(), 'ultra');
+  for (let i = 0; i < 40; i++) {
+    assert.equal(mon.recordFrame(0.6), null);
+  }
+  assert.equal(mon.getTier(), 'ultra');
+
+  // Sustained slow frames (~34ms -> 0.034s) step down ultra -> balanced
+  let steppedToBalanced = false;
+  for (let i = 0; i < 120; i++) {
+    const next = mon.recordFrame(0.034);
+    if (next && next.tier === 'balanced') {
+      steppedToBalanced = true;
+      break;
+    }
+  }
+  assert.equal(steppedToBalanced, true);
+  assert.equal(mon.getTier(), 'balanced');
+
+  // Sustained fast frames (~12ms -> 0.012s) step back up balanced -> ultra after cooldown + sustain window
+  let steppedBackToUltra = false;
+  for (let i = 0; i < 700; i++) {
+    const next = mon.recordFrame(0.012);
+    if (next && next.tier === 'ultra') {
+      steppedBackToUltra = true;
+      break;
+    }
+  }
+  assert.equal(steppedBackToUltra, true);
+  assert.equal(mon.getTier(), 'ultra');
+
+  // Legacy SaveProfile migration maps lowGraphics: true -> graphicsQuality: 'eco'
+  assert.equal(GraphicsConfig.normalizeGraphicsQualityMode(undefined, true), 'eco');
+  assert.equal(GraphicsConfig.normalizeGraphicsQualityMode(undefined, false), 'auto');
+  assert.equal(GraphicsConfig.normalizeGraphicsQualityMode('balanced', true), 'balanced');
+
+  const mem = new Map<string, string>();
+  const mockStorage = {
+    getItem: (k: string) => mem.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      mem.set(k, v);
+    }
+  };
+  mockStorage.setItem(E.SAVE_KEY, JSON.stringify({ unlockedLevel: 3, lowGraphics: true }));
+  const migratedEco = ProfileStorage.loadSaveProfile(mockStorage);
+  assert.equal(migratedEco.graphicsQuality, 'eco');
+  assert.equal(migratedEco.lowGraphics, true);
+});

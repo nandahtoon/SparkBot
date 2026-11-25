@@ -27,6 +27,8 @@ interface UseKeyboardShortcutsOptions {
   setWorkshopAutoSpin: (v: boolean) => void;
   setMode: (m: WorldMode) => void;
   setPaused: (updater: (prev: boolean) => boolean) => void;
+  onUndoCode?: () => void;
+  onRedoCode?: () => void;
 }
 
 export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOptions): void {
@@ -53,7 +55,9 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOptions): void {
     setShowMap,
     setWorkshopAutoSpin,
     setMode,
-    setPaused
+    setPaused,
+    onUndoCode,
+    onRedoCode
   } = opts;
 
   useEffect(() => {
@@ -110,6 +114,20 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOptions): void {
           setPaused((p) => !p);
         }
         return;
+      }
+
+      if (mode === 'CODE_3D' && !paused && !showMap && (e.ctrlKey || e.metaKey) && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          onUndoCode?.();
+          return;
+        }
+        if ((k === 'z' && e.shiftKey) || k === 'y') {
+          e.preventDefault();
+          onRedoCode?.();
+          return;
+        }
       }
 
       if (mode === 'ACTION_RUN_3D' && !paused) {
@@ -210,6 +228,8 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOptions): void {
     showProfile,
     showSandbox,
     showSettings,
-    worldRef
+    worldRef,
+    onUndoCode,
+    onRedoCode
   ]);
 }

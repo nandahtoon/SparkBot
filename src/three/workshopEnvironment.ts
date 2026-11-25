@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { ProceduralTextures } from './materials';
+import type { GraphicsQualityBudget } from '../game/graphicsConfig';
 
 export interface WorkshopEnvironmentHandles {
   workshopGroup: THREE.Group;
@@ -18,6 +19,7 @@ export interface WorkshopEnvironmentHandles {
   ambientMotes: THREE.InstancedMesh;
   moteSeeds: Array<{ x: number; y: number; z: number; phase: number; speed: number; scale: number }>;
   solarRing: THREE.Mesh;
+  setQualityBudget: (budget: GraphicsQualityBudget) => void;
   dispose: () => void;
 }
 
@@ -65,13 +67,13 @@ export function buildWorkshopEnvironment(
     return item;
   };
 
-  // 1. Studio 3-Point + Warm/Cool Skyport Lighting Rig
-  const hemi = new THREE.HemisphereLight(0xc7e0ff, 0x26344f, 0.96);
+  // 1. Studio 3-Point + Warm/Cool Skyport Lighting Rig (Glare-Free Pixar Ceramic Calibration)
+  const hemi = new THREE.HemisphereLight(0xcbe5ff, 0x24324d, 0.5);
   hemi.position.set(0, 32, 0);
   scene.add(hemi);
 
-  const key = new THREE.DirectionalLight(0xfff5e4, 1.95);
-  key.position.set(9, 15, 11);
+  const key = new THREE.DirectionalLight(0xfff5e6, 1.22);
+  key.position.set(8.5, 14.5, 10.5);
   key.castShadow = !isSoftwareGl;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
@@ -82,30 +84,38 @@ export function buildWorkshopEnvironment(
   key.shadow.camera.bottom = -18;
   key.shadow.bias = -0.0005;
   key.shadow.normalBias = 0.02;
+  key.shadow.radius = 3.2;
   scene.add(key);
 
-  // Soft cool-lavender front-left fill so rounded ceramic faces & paint stay luminous
-  const fill = new THREE.DirectionalLight(0xdbeafe, 0.78);
-  fill.position.set(-7, 6, 9);
+  // Soft cool-sky front-left fill so glossy ceramic faces stay luminous without washing out
+  const fill = new THREE.DirectionalLight(0xdbeafe, 0.36);
+  fill.position.set(-7.5, 6.2, 8.5);
   scene.add(fill);
 
-  // Crisp cyan-sky rim/backlight to carve glossy ceramic silhouettes & chrome edges
-  const rim = new THREE.DirectionalLight(0x7dd3fc, 1.25);
-  rim.position.set(-6, 8.5, -12);
+  // Crisp studio cyan-ice rim/backlight carving out glossy ceramic silhouettes & chrome bevels
+  const rim = new THREE.DirectionalLight(0x93e5ff, 0.75);
+  rim.position.set(-5.5, 8.2, -11.5);
   scene.add(rim);
 
-  // Subtle warm-amber kicker under workshop gantry for sculptural studio contrast
-  const warmAccent = new THREE.PointLight(0xfbbf24, 1.4, 11, 2);
-  warmAccent.position.set(2.4, 2.6, -1.2);
+  // Secondary warm golden rear-right kicker for dual-tone studio edge sheen
+  const warmAccent = new THREE.PointLight(0xfbbf24, 0.55, 12, 2);
+  warmAccent.position.set(2.6, 2.7, -1.6);
   scene.add(warmAccent);
 
-  // Hardware GPU Studio Softbox (skipped on software WebGL per Three.js skill)
+  // Hardware GPU Studio Softboxes (subtle glossy catchlights, skipped on software WebGL)
+  let softboxTop: THREE.RectAreaLight | null = null;
+  let softboxSide: THREE.RectAreaLight | null = null;
   if (!isSoftwareGl) {
     RectAreaLightUniformsLib.init();
-    const softbox = new THREE.RectAreaLight(0xe0f2fe, 2.4, 4.8, 1.6);
-    softbox.position.set(0, 4.4, 2.8);
-    softbox.lookAt(0, 1.1, 0);
-    scene.add(softbox);
+    softboxTop = new THREE.RectAreaLight(0xe0f2fe, 0.55, 5.2, 1.8);
+    softboxTop.position.set(0, 5.4, 3.0);
+    softboxTop.lookAt(0, 1.05, 0);
+    scene.add(softboxTop);
+
+    softboxSide = new THREE.RectAreaLight(0xfff1d6, 0.35, 2.2, 3.0);
+    softboxSide.position.set(3.8, 2.3, 1.6);
+    softboxSide.lookAt(0, 1.0, 0);
+    scene.add(softboxSide);
   }
 
   // 2. Seamless Procedural Twilight Skyport Dome (replaces flat solid background)
@@ -155,56 +165,97 @@ export function buildWorkshopEnvironment(
   solarRing.rotation.z = -0.1;
   skyportGroup.add(solarRing);
 
-  // Multi-tone Canyon Mesa Silhouettes + Subtle Architectural Beacons via InstancedMesh
-  const mesaGeo = trackDisposable(new THREE.CylinderGeometry(3.1, 6.6, 18, 8));
+  // Layered Architectural Skyport Towers + Illuminated Hangar Collar Bands + Beacons via InstancedMesh
+  const mesaGeo = trackDisposable(new THREE.CylinderGeometry(3.0, 5.8, 17, 6));
   const mesaMat = trackDisposable(
     new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.84,
-      metalness: 0.14
+      roughness: 0.78,
+      metalness: 0.24
+    })
+  );
+  const mesaCapGeo = trackDisposable(new THREE.CylinderGeometry(3.55, 3.2, 1.4, 6));
+  const mesaCapMat = trackDisposable(
+    new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.45,
+      metalness: 0.62
+    })
+  );
+  const mesaBandGeo = trackDisposable(new THREE.CylinderGeometry(3.68, 3.68, 0.28, 6));
+  const mesaBandMat = trackDisposable(
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      toneMapped: false
     })
   );
   const mesaCount = 18;
   const mesas = new THREE.InstancedMesh(mesaGeo, mesaMat, mesaCount);
   mesas.frustumCulled = false;
+  const mesaCaps = new THREE.InstancedMesh(mesaCapGeo, mesaCapMat, mesaCount);
+  mesaCaps.frustumCulled = false;
+  const mesaBands = new THREE.InstancedMesh(mesaBandGeo, mesaBandMat, mesaCount);
+  mesaBands.frustumCulled = false;
 
-  const beaconGeo = trackDisposable(new THREE.CylinderGeometry(0.18, 0.22, 0.9, 8));
+  const beaconGeo = trackDisposable(new THREE.CylinderGeometry(0.18, 0.24, 1.05, 8));
   const beaconMat = trackDisposable(
     new THREE.MeshBasicMaterial({
-      color: 0xffffff
+      color: 0xffffff,
+      toneMapped: false
     })
   );
   const beacons = new THREE.InstancedMesh(beaconGeo, beaconMat, mesaCount);
   beacons.frustumCulled = false;
 
-  const mesaPalette = [0x1c2b45, 0x223250, 0x18253d, 0x273858];
+  const mesaPalette = [0x1c2c4a, 0x223557, 0x182640, 0x273b5e];
   for (let i = 0; i < mesaCount; i++) {
     const side = i % 2 === 0 ? -1 : 1;
     const distX = 18 + (i % 4) * 9.5;
     const distZ = 8 - i * 10.5;
+    const scaleX = 0.92 + (i % 3) * 0.32;
     const scaleY = 0.78 + (i % 4) * 0.26;
+    const scaleZ = 0.92 + (i % 2) * 0.32;
     const baseY = -3.8 + (i % 3) * 1.3;
+    const topY = baseY + 8.5 * scaleY;
+
     _dummy.position.set(side * distX, baseY, distZ);
-    _dummy.scale.set(1 + (i % 3) * 0.38, scaleY, 1 + (i % 2) * 0.38);
+    _dummy.scale.set(scaleX, scaleY, scaleZ);
     _dummy.rotation.set(0, i * 0.8, 0);
     _dummy.updateMatrix();
     mesas.setMatrixAt(i, _dummy.matrix);
     _color.setHex(mesaPalette[i % mesaPalette.length]);
     mesas.setColorAt(i, _color);
 
-    // Subtle glowing tower beacon perched atop mesa plateau
-    _dummy.position.set(side * distX, baseY + 9 * scaleY + 0.35, distZ);
+    // Stepped architectural hangar deck crown
+    _dummy.position.set(side * distX, topY - 0.15, distZ);
+    _dummy.scale.set(scaleX, 1, scaleZ);
+    _dummy.updateMatrix();
+    mesaCaps.setMatrixAt(i, _dummy.matrix);
+
+    // Illuminated cyan/amber skyport observation strip around tower crown
+    _dummy.position.set(side * distX, topY + 0.12, distZ);
+    _dummy.scale.set(scaleX, 1, scaleZ);
+    _dummy.updateMatrix();
+    mesaBands.setMatrixAt(i, _dummy.matrix);
+    _color.setHex(i % 3 === 0 ? 0xfbbf24 : 0x38bdf8).multiplyScalar(0.65);
+    mesaBands.setColorAt(i, _color);
+
+    // Subtle glowing navigation spire perched atop tower plateau
+    _dummy.position.set(side * distX, topY + 0.95, distZ);
     _dummy.scale.setScalar(1);
     _dummy.updateMatrix();
     beacons.setMatrixAt(i, _dummy.matrix);
-    _color.setHex(i % 3 === 0 ? 0xfbbf24 : 0x38bdf8);
+    _color.setHex(i % 3 === 0 ? 0xfbbf24 : 0x38bdf8).multiplyScalar(0.85);
     beacons.setColorAt(i, _color);
   }
   mesas.instanceMatrix.needsUpdate = true;
   if (mesas.instanceColor) mesas.instanceColor.needsUpdate = true;
+  mesaCaps.instanceMatrix.needsUpdate = true;
+  mesaBands.instanceMatrix.needsUpdate = true;
+  if (mesaBands.instanceColor) mesaBands.instanceColor.needsUpdate = true;
   beacons.instanceMatrix.needsUpdate = true;
   if (beacons.instanceColor) beacons.instanceColor.needsUpdate = true;
-  skyportGroup.add(mesas, beacons);
+  skyportGroup.add(mesas, mesaCaps, mesaBands, beacons);
 
   // Rotating Skyport Windmills in background
   const windmills: THREE.Group[] = [];
@@ -294,7 +345,7 @@ export function buildWorkshopEnvironment(
     new THREE.MeshBasicMaterial({
       map: tex.turntableGlow,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.18,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       polygonOffset: true,
@@ -304,7 +355,7 @@ export function buildWorkshopEnvironment(
   );
   const stageGlow = new THREE.Mesh(stageGlowGeo, stageGlowMat);
   stageGlow.rotation.x = -Math.PI / 2;
-  stageGlow.position.y = 0.015;
+  stageGlow.position.y = 0.018;
   workshopGroup.add(stageGlow);
 
   // Inner luminous holographic turntable ring
@@ -313,14 +364,14 @@ export function buildWorkshopEnvironment(
     new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
       emissive: 0x0ea5e9,
-      emissiveIntensity: 1.55,
+      emissiveIntensity: 0.42,
       roughness: 0.18,
       metalness: 0.25
     })
   );
   const turntableRing = new THREE.Mesh(turntableRingGeo, turntableRingMat);
   turntableRing.rotation.x = Math.PI / 2;
-  turntableRing.position.y = 0.025;
+  turntableRing.position.y = 0.032;
   workshopGroup.add(turntableRing);
 
   // Outer precision chamfered metallic collar with segmented amber accents
@@ -353,7 +404,7 @@ export function buildWorkshopEnvironment(
     new THREE.MeshStandardMaterial({
       color: 0xfbbf24,
       emissive: 0xf59e0b,
-      emissiveIntensity: 1.25,
+      emissiveIntensity: 0.48,
       roughness: 0.18
     })
   );
@@ -361,7 +412,7 @@ export function buildWorkshopEnvironment(
     new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
       emissive: 0x0284c7,
-      emissiveIntensity: 1.15,
+      emissiveIntensity: 0.5,
       roughness: 0.2
     })
   );
@@ -477,7 +528,7 @@ export function buildWorkshopEnvironment(
   droneRing.rotation.x = Math.PI / 2;
   const droneRotor = new THREE.Group();
   droneRotor.position.y = 0.27;
-  const rotorBlade = new THREE.Mesh(trackDisposable(new THREE.BoxGeometry(0.56, 0.025, 0.07)), glowMat);
+  const rotorBlade = new THREE.Mesh(trackDisposable(new THREE.BoxGeometry(0.56, 0.025, 0.07)), archMat);
   droneRotor.add(rotorBlade);
   helperDrone.add(droneShell, droneVisor, droneEye, droneRing, droneRotor);
   workshopGroup.add(helperDrone);
@@ -526,7 +577,7 @@ export function buildWorkshopEnvironment(
     new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.28,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     })
@@ -558,6 +609,27 @@ export function buildWorkshopEnvironment(
   if (ambientMotes.instanceColor) ambientMotes.instanceColor.needsUpdate = true;
   scene.add(ambientMotes);
 
+  let currentShadowSize: number = isSoftwareGl ? 0 : 2048;
+
+  const setQualityBudget = (budget: GraphicsQualityBudget) => {
+    const allowShadows = !isSoftwareGl && budget.shadowsEnabled && budget.shadowMapSize > 0;
+    key.castShadow = allowShadows;
+    if (allowShadows && budget.shadowMapSize !== currentShadowSize) {
+      currentShadowSize = budget.shadowMapSize;
+      key.shadow.mapSize.set(budget.shadowMapSize, budget.shadowMapSize);
+      if (key.shadow.map) {
+        key.shadow.map.dispose();
+        key.shadow.map = null;
+      }
+      key.shadow.needsUpdate = true;
+    } else if (!allowShadows) {
+      currentShadowSize = 0;
+    }
+    if (softboxTop) softboxTop.visible = !isSoftwareGl && budget.softboxEnabled;
+    if (softboxSide) softboxSide.visible = !isSoftwareGl && budget.softboxEnabled;
+    ambientMotes.visible = budget.ambientMotesVisible;
+  };
+
   scene.add(workshopGroup);
 
   return {
@@ -575,6 +647,7 @@ export function buildWorkshopEnvironment(
     ambientMotes,
     moteSeeds,
     solarRing,
+    setQualityBudget,
     dispose: () => {
       for (const item of disposables) {
         item.dispose();

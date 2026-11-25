@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { DecalId } from '../game/customization';
+import { createChibiCraftTextures } from './botChibiCraft';
 
 export function detectSoftwareGl(): boolean {
   if (typeof document === 'undefined') return false;
@@ -107,6 +108,9 @@ export interface ProceduralTextures {
   floorBump: THREE.CanvasTexture;
   magWall: THREE.CanvasTexture;
   metalBump: THREE.CanvasTexture;
+  ceramicNormal: THREE.CanvasTexture;
+  ceramicRoughness: THREE.CanvasTexture;
+  brushedMetalNormal: THREE.CanvasTexture;
   chassisPanel: THREE.CanvasTexture;
   solarCells: THREE.CanvasTexture;
   mudTex: THREE.CanvasTexture;
@@ -114,8 +118,36 @@ export interface ProceduralTextures {
   shadowBlob: THREE.CanvasTexture;
   skyDome: THREE.CanvasTexture;
   turntableGlow: THREE.CanvasTexture;
+  chibiIris: THREE.CanvasTexture;
+  chestCore: THREE.CanvasTexture;
   decals: Record<DecalId, THREE.CanvasTexture>;
   dispose: () => void;
+}
+
+export function getSharedTextureSet(tex: ProceduralTextures): Set<THREE.Texture> {
+  const set = new Set<THREE.Texture>([
+    tex.hazard,
+    tex.floorDeck,
+    tex.floorBump,
+    tex.magWall,
+    tex.metalBump,
+    tex.ceramicNormal,
+    tex.ceramicRoughness,
+    tex.brushedMetalNormal,
+    tex.chassisPanel,
+    tex.solarCells,
+    tex.mudTex,
+    tex.rampTex,
+    tex.shadowBlob,
+    tex.skyDome,
+    tex.turntableGlow,
+    tex.chibiIris,
+    tex.chestCore
+  ]);
+  (Object.keys(tex.decals) as DecalId[]).forEach((k) => {
+    set.add(tex.decals[k]);
+  });
+  return set;
 }
 
 export function createProceduralTextures(maxAniso: number): ProceduralTextures {
@@ -300,6 +332,141 @@ export function createProceduralTextures(maxAniso: number): ProceduralTextures {
     1,
     1,
     false
+  );
+
+  // Tangent-space normal map converter from a 2D grayscale height canvas
+  const heightToNormalTexture = (
+    size: number,
+    drawHeight: (ctx: CanvasRenderingContext2D, s: number) => void,
+    strength: number
+  ): THREE.CanvasTexture => {
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = size;
+    srcCanvas.height = size;
+    const srcCtx = srcCanvas.getContext('2d')!;
+    drawHeight(srcCtx, size);
+    const srcData = srcCtx.getImageData(0, 0, size, size).data;
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = size;
+    outCanvas.height = size;
+    const outCtx = outCanvas.getContext('2d')!;
+    const outImg = outCtx.createImageData(size, size);
+    const dst = outImg.data;
+
+    const sampleH = (x: number, y: number): number => {
+      const wx = (x + size) % size;
+      const wy = (y + size) % size;
+      return srcData[(wy * size + wx) * 4] / 255;
+    };
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = (sampleH(x + 1, y) - sampleH(x - 1, y)) * strength;
+        const dy = (sampleH(x, y + 1) - sampleH(x, y - 1)) * strength;
+        const nx = -dx;
+        const ny = -dy;
+        const nz = 1.0;
+        const invLen = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+        const idx = (y * size + x) * 4;
+        dst[idx] = Math.round((nx * invLen * 0.5 + 0.5) * 255);
+        dst[idx + 1] = Math.round((ny * invLen * 0.5 + 0.5) * 255);
+        dst[idx + 2] = Math.round((nz * invLen * 0.5 + 0.5) * 255);
+        dst[idx + 3] = 255;
+      }
+    }
+    outCtx.putImageData(outImg, 0, 0);
+    const tex = new THREE.CanvasTexture(outCanvas);
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = maxAniso;
+    tex.needsUpdate = true;
+    return tex;
+  };
+
+  // Pixar toy-ceramic tangent-space normal map: smooth shell with recessed panel seams & flush bolt dimples
+  const ceramicNormal = heightToNormalTexture(
+    256,
+    (ctx, s) => {
+      ctx.fillStyle = '#c8c8c8';
+      ctx.fillRect(0, 0, s, s);
+      // Soft beveled outer seam channel
+      ctx.strokeStyle = '#686868';
+      ctx.lineWidth = 5;
+      ctx.strokeRect(12, 12, s - 24, s - 24);
+      ctx.strokeStyle = '#383838';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(12, 12, s - 24, s - 24);
+      // Subtle horizontal toy assembly split line
+      ctx.strokeStyle = '#888888';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(14, s * 0.5);
+      ctx.lineTo(s - 14, s * 0.5);
+      ctx.stroke();
+      // Recessed miniature corner fastener dimples
+      const pts: Array<[number, number]> = [
+        [24, 24],
+        [s - 24, 24],
+        [24, s - 24],
+        [s - 24, s - 24]
+      ];
+      for (const [px, py] of pts) {
+        const g = ctx.createRadialGradient(px, py, 1, px, py, 6);
+        g.addColorStop(0, '#505050');
+        g.addColorStop(0.65, '#8c8c8c');
+        g.addColorStop(1, '#c8c8c8');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(px, py, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    },
+    1.85
+  );
+
+  // Paired roughness map: silky glossy ceramic face with subtly more matte seam grooves
+  const ceramicRoughness = makeCanvasTexture(
+    256,
+    (ctx, s) => {
+      ctx.fillStyle = '#303030'; // ~0.19 roughness base
+      ctx.fillRect(0, 0, s, s);
+      ctx.strokeStyle = '#888888'; // ~0.53 roughness inside seam grooves
+      ctx.lineWidth = 4;
+      ctx.strokeRect(12, 12, s - 24, s - 24);
+      ctx.beginPath();
+      ctx.moveTo(14, s * 0.5);
+      ctx.lineTo(s - 14, s * 0.5);
+      ctx.stroke();
+      // Micro satin variation
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      for (let i = 0; i < 48; i++) {
+        ctx.fillRect(0, (i * 5) % s, s, 2);
+      }
+    },
+    maxAniso,
+    1,
+    1,
+    false
+  );
+
+  // Directional brushed machined metal normal map for titanium, gunmetal, and copper joints
+  const brushedMetalNormal = heightToNormalTexture(
+    256,
+    (ctx, s) => {
+      ctx.fillStyle = '#808080';
+      ctx.fillRect(0, 0, s, s);
+      for (let y = 0; y < s; y++) {
+        const tone = 112 + ((y * 37 + (y % 5) * 19) % 32);
+        ctx.fillStyle = `rgb(${tone},${tone},${tone})`;
+        ctx.fillRect(0, y, s, 1);
+      }
+      ctx.strokeStyle = '#585858';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(8, 8, s - 16, s - 16);
+    },
+    1.35
   );
 
   const chassisPanel = makeCanvasTexture(
@@ -662,12 +829,17 @@ export function createProceduralTextures(maxAniso: number): ProceduralTextures {
   turntableGlow.wrapS = THREE.ClampToEdgeWrapping;
   turntableGlow.wrapT = THREE.ClampToEdgeWrapping;
 
+  const chibiCraft = createChibiCraftTextures(maxAniso);
+
   return {
     hazard,
     floorDeck,
     floorBump,
     magWall,
     metalBump,
+    ceramicNormal,
+    ceramicRoughness,
+    brushedMetalNormal,
     chassisPanel,
     solarCells,
     mudTex,
@@ -675,6 +847,8 @@ export function createProceduralTextures(maxAniso: number): ProceduralTextures {
     shadowBlob,
     skyDome,
     turntableGlow,
+    chibiIris: chibiCraft.irisTex,
+    chestCore: chibiCraft.chestCoreTex,
     decals,
     dispose: () => {
       hazard.dispose();
@@ -682,6 +856,9 @@ export function createProceduralTextures(maxAniso: number): ProceduralTextures {
       floorBump.dispose();
       magWall.dispose();
       metalBump.dispose();
+      ceramicNormal.dispose();
+      ceramicRoughness.dispose();
+      brushedMetalNormal.dispose();
       chassisPanel.dispose();
       solarCells.dispose();
       mudTex.dispose();
@@ -689,6 +866,7 @@ export function createProceduralTextures(maxAniso: number): ProceduralTextures {
       shadowBlob.dispose();
       skyDome.dispose();
       turntableGlow.dispose();
+      chibiCraft.dispose();
       (Object.keys(decals) as DecalId[]).forEach((k) => {
         if (k !== 'none') decals[k].dispose();
       });

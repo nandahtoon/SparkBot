@@ -907,6 +907,7 @@ export function defaultSaveProfile(): SaveProfile {
     audio: { ...DEFAULT_AUDIO_SETTINGS },
     gentleSpeed: true,
     lowGraphics: false,
+    graphicsQuality: 'auto',
     challengeTimerEnabled: false,
     readAloudEnabled: false,
     hapticsEnabled: true,

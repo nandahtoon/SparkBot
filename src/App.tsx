@@ -72,6 +72,10 @@ import { SFX } from './game/audio';
 import { SPEECH } from './game/readAloud';
 import { getPartPlacementSoundProfile } from './game/partAudio';
 import {
+  normalizeGraphicsQualityMode,
+  type GraphicsQualityMode
+} from './game/graphicsConfig';
+import {
   pickCharacterSwitchResponse,
   pickCustomPaintResponse,
   pickInstallResponse,
@@ -86,6 +90,14 @@ import {
   classifyCodeBlockFeedback,
   type CodeComplexityTier
 } from './game/codeFeedback';
+import { buildLivePathPreview } from './game/pathPreview';
+import {
+  createEmptyProgramHistory,
+  pushProgramHistory,
+  redoProgramHistory,
+  undoProgramHistory,
+  type ProgramHistoryState
+} from './game/programHistory';
 import {
   evaluateSpeedRunBonus,
   getLevelTimeTargets,
@@ -115,9 +127,15 @@ import {
   type VictorySpeedRunSummary
 } from './components/Modals';
 import { GhostHand } from './components/GhostHand';
+import { GuidedTutorialOverlay } from './components/GuidedTutorialOverlay';
 import { ConceptDemoPopover, type DemoRequest } from './components/ConceptDemoPopover';
 import { SettingsModal } from './components/SettingsModal';
 import { RobotSpeechBubble } from './components/RobotSpeechBubble';
+import {
+  resolveMissionTutorialStep,
+  shouldShowMissionTutorial,
+  type MissionTutorialStepId
+} from './game/missionTutorial';
 import type { GameRoomRoundSummary } from './components/GameRoomModal';
 import { PlanetAdventureHud } from './components/PlanetAdventureHud';
 import { AdaptiveHintBanner } from './components/AdaptiveHintBanner';
@@ -254,10 +272,20 @@ export default function App() {
 
   const [chassis, setChassis] = useState<ChassisGrid>(() => createEmptyChassis());
   const [program, setProgram] = useState<CodeBlock[]>([]);
+  const [programHistory, setProgramHistory] = useState<ProgramHistoryState>(() =>
+    createEmptyProgramHistory()
+  );
+  const [showPathPreview, setShowPathPreview] = useState<boolean>(true);
+  const [hoveredCodeBlockId, setHoveredCodeBlockId] = useState<string | null>(null);
   const [circuitGrid, setCircuitGrid] = useState<CircuitGrid>(() => cloneCircuitGrid(LEVELS[0].circuit));
   const [slotPoints, setSlotPoints] = useState<SlotScreenPoint[]>([]);
   const [selectedPart, setSelectedPart] = useState<PartId | null>(null);
   const [ghostHelp, setGhostHelp] = useState<boolean>(false);
+  const [tutorialDismissed, setTutorialDismissed] = useState<boolean>(false);
+  const [tutorialForceActive, setTutorialForceActive] = useState<boolean>(false);
+  const [tutorialAckSteps, setTutorialAckSteps] = useState<Set<MissionTutorialStepId>>(
+    () => new Set()
+  );
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [activeSimResult, setActiveSimResult] = useState<SimResult | null>(null);
   const [activeSimStepIdx, setActiveSimStepIdx] = useState<number>(-1);
@@ -290,7 +318,11 @@ export default function App() {
     () => normalizeProfileName(save.profileName),
     [save.profileName]
   );
-  const lowGraphics = Boolean(save.lowGraphics);
+  const graphicsQuality = useMemo(
+    () => normalizeGraphicsQualityMode(save.graphicsQuality, save.lowGraphics),
+    [save.graphicsQuality, save.lowGraphics]
+  );
+  const lowGraphics = graphicsQuality === 'eco';
   const challengeTimerEnabled = Boolean(save.challengeTimerEnabled);
   const [circuitSolvedFreeze, setCircuitSolvedFreeze] = useState(false);
   const [lastVictorySpeedRun, setLastVictorySpeedRun] =
@@ -360,11 +392,12 @@ export default function App() {
     HAPTICS.setEnabled(save.hapticsEnabled !== false);
   }, [save.hapticsEnabled]);
 
-  // Sync low-graphics mode with 3D world & document attribute
+  // Sync adaptive graphics quality mode with 3D world & document attribute
   useEffect(() => {
-    worldRef.current?.setLowGraphics(lowGraphics);
+    worldRef.current?.setGraphicsQualityMode(graphicsQuality);
     document.body.dataset.lowGraphics = lowGraphics ? 'true' : 'false';
-  }, [lowGraphics]);
+    document.body.dataset.graphicsQuality = graphicsQuality;
+  }, [graphicsQuality, lowGraphics]);
 
   // Keep 3D bot character & Paint Booth materials declaratively synced with React state
   useEffect(() => {
@@ -476,6 +509,8 @@ export default function App() {
       const nextCircuit = cloneCircuitGrid(lvl.circuit);
       setChassis(nextChassis);
       setProgram([]);
+      setProgramHistory(createEmptyProgramHistory());
+      setHoveredCodeBlockId(null);
       setCircuitGrid(nextCircuit);
       setSelectedPart(null);
       setLastPlacement(null);
@@ -523,19 +558,91 @@ export default function App() {
       setPlanetMetrics(null);
       setPlanetSummary(null);
       setMode('BUILD_3D');
-      setGhostHelp(lvl.id === 1 && !save.tutorialDone);
+      setTutorialDismissed(false);
+      setTutorialAckSteps(new Set());
+      if (lvl.id !== 1 || lvl.isDaily || lvl.isBonus || lvl.isSandbox || lvl.isClassCode) {
+        setTutorialForceActive(false);
+      }
+      setGhostHelp(false);
       worldRef.current?.setLevel(lvl);
       worldRef.current?.setWorkshopAutoSpin(false);
       worldRef.current?.resetWorkshopView();
       worldRef.current?.updateChassis(nextChassis, null);
       worldRef.current?.setMode('BUILD_3D');
+      SFX.unlock();
+      SFX.speakWallE('greeting', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
     },
-    [chassis, resetTimer, save.tutorialDone]
+    [activeCharacter, chassis, resetTimer]
+  );
+
+  const livePathPreview = useMemo(
+    () => buildLivePathPreview(currentLevel, chassis, program),
+    [chassis, currentLevel, program]
   );
 
   // Refs for WebGL callbacks so canvas never unmounts
-  const stateRef = useRef({ mode, circuitGrid, currentLevel, chassis, program, save });
-  stateRef.current = { mode, circuitGrid, currentLevel, chassis, program, save };
+  const stateRef = useRef({
+    mode,
+    circuitGrid,
+    currentLevel,
+    chassis,
+    program,
+    save,
+    livePathPreview,
+    showPathPreview
+  });
+  stateRef.current = {
+    mode,
+    circuitGrid,
+    currentLevel,
+    chassis,
+    program,
+    save,
+    livePathPreview,
+    showPathPreview
+  };
+
+  const applyProgramChange = useCallback(
+    (nextProgram: CodeBlock[]) => {
+      setProgramHistory((prevHist) => pushProgramHistory(prevHist, program, nextProgram));
+      setProgram(nextProgram);
+      setMoodCue(null);
+      setFailingBlockId(null);
+    },
+    [program]
+  );
+
+  const handleUndoProgram = useCallback(() => {
+    const res = undoProgramHistory(programHistory, program);
+    if (!res.changed) return;
+    SFX.uiTick();
+    HAPTICS.trigger('tap');
+    setProgramHistory(res.history);
+    setProgram(res.program);
+    setHoveredCodeBlockId(null);
+    setMoodCue(null);
+    setFailingBlockId(null);
+  }, [program, programHistory]);
+
+  const handleRedoProgram = useCallback(() => {
+    const res = redoProgramHistory(programHistory, program);
+    if (!res.changed) return;
+    SFX.uiTick();
+    HAPTICS.trigger('tap');
+    setProgramHistory(res.history);
+    setProgram(res.program);
+    setHoveredCodeBlockId(null);
+    setMoodCue(null);
+    setFailingBlockId(null);
+  }, [program, programHistory]);
+
+  useEffect(() => {
+    worldRef.current?.setLivePathPreview(livePathPreview, showPathPreview);
+  }, [livePathPreview, showPathPreview]);
+
+  useEffect(() => {
+    worldRef.current?.setHoveredCodeBlock(mode === 'CODE_3D' ? hoveredCodeBlockId : null);
+  }, [hoveredCodeBlockId, mode]);
 
   const handleCircuitCellTap = useCallback((r: number, c: number) => {
     const cur = stateRef.current;
@@ -870,11 +977,14 @@ export default function App() {
         const initPaint = normalizePaintConfig(latest.save.paintBooth, initTheme, initChar);
         ctrl.setLevel(latest.currentLevel);
         ctrl.setGentleSpeed(latest.save.gentleSpeed);
-        ctrl.setLowGraphics(Boolean(latest.save.lowGraphics));
+        ctrl.setGraphicsQualityMode(
+          normalizeGraphicsQualityMode(latest.save.graphicsQuality, latest.save.lowGraphics)
+        );
         ctrl.setBotTheme(initTheme);
         ctrl.setBotCharacter(initChar, false);
         ctrl.setPaintConfig(initPaint, null);
         ctrl.updateChassis(latest.chassis, null);
+        ctrl.setLivePathPreview(latest.livePathPreview, latest.showPathPreview);
 
         const params = new URLSearchParams(window.location.search);
         if (latest.mode === 'TITLE' && params.get('launch') === 'planet') {
@@ -927,7 +1037,9 @@ export default function App() {
     setShowMap,
     setWorkshopAutoSpin,
     setMode,
-    setPaused
+    setPaused,
+    onUndoCode: handleUndoProgram,
+    onRedoCode: handleRedoProgram
   });
 
   const handleAndroidBackAction = useCallback(
@@ -1033,6 +1145,7 @@ export default function App() {
     setLastPlacement({ id: ++placementIdRef.current, part, r, c });
     setMoodCue(null);
     const soundProfile = getPartPlacementSoundProfile(part);
+    SFX.unlock();
     SFX.placePart(part);
     HAPTICS.trigger('snapPart');
     window.setTimeout(() => SFX.placePartFollowUp(part), soundProfile.followUpDelayMs);
@@ -1044,14 +1157,64 @@ export default function App() {
     const next = cloneChassis(chassis);
     next[r][c] = null;
     setChassis(next);
+    SFX.unlock();
     SFX.click();
+    SFX.chirpConfused();
     worldRef.current?.updateChassis(next, null);
   };
+
+  const completeMissionTutorial = useCallback(() => {
+    setTutorialForceActive(false);
+    setTutorialDismissed(true);
+    setSave((prev) => {
+      if (prev.tutorialDone) return prev;
+      const next: SaveProfile = { ...prev, tutorialDone: true };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  }, []);
+
+  const handleAcknowledgeTutorialStep = useCallback((stepId: MissionTutorialStepId) => {
+    SFX.uiTick();
+    setTutorialAckSteps((prev) => {
+      if (prev.has(stepId)) return prev;
+      const next = new Set(prev);
+      next.add(stepId);
+      return next;
+    });
+  }, []);
+
+  const handleSkipTutorial = useCallback(() => {
+    SFX.click();
+    setGhostHelp(false);
+    completeMissionTutorial();
+  }, [completeMissionTutorial]);
+
+  const handleReplayTutorial = useCallback(() => {
+    SFX.click();
+    beginLevel(LEVELS[0], false);
+    setTutorialDismissed(false);
+    setTutorialAckSteps(new Set());
+    setTutorialForceActive(true);
+  }, [beginLevel]);
 
   const handleRunProgram = () => {
     setMoodCue(null);
     setLastCodeFeedbackTier(null);
+    setHoveredCodeBlockId(null);
+    if (
+      currentLevel.id === 1 &&
+      !currentLevel.isDaily &&
+      !currentLevel.isBonus &&
+      !currentLevel.isSandbox &&
+      !currentLevel.isClassCode &&
+      (!save.tutorialDone || tutorialForceActive)
+    ) {
+      completeMissionTutorial();
+    }
     const sim = simulateProgram(currentLevel, chassis, program);
+    SFX.unlock();
+    SFX.speakWallE('excited', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
     setActiveSimResult(sim);
     setActiveSimStepIdx(sim.events.length > 0 ? 0 : -1);
     setSimPaused(false);
@@ -1064,6 +1227,17 @@ export default function App() {
     SFX.uiTick();
     setMoodCue(null);
     setLastCodeFeedbackTier(null);
+    setHoveredCodeBlockId(null);
+    if (
+      currentLevel.id === 1 &&
+      !currentLevel.isDaily &&
+      !currentLevel.isBonus &&
+      !currentLevel.isSandbox &&
+      !currentLevel.isClassCode &&
+      (!save.tutorialDone || tutorialForceActive)
+    ) {
+      completeMissionTutorial();
+    }
     setSave((prev) => {
       const tel = normalizeLearningTelemetry(prev.learningTelemetry);
       const next: SaveProfile = {
@@ -1108,15 +1282,6 @@ export default function App() {
     setSimPaused(false);
     setSimAwaitingStep(false);
     setMode('CODE_3D');
-  };
-
-  const handleStartEndlessDash = () => {
-    SFX.boost();
-    const dashChassis = ensureActionDashChassis(chassis);
-    setChassis(dashChassis);
-    worldRef.current?.updateChassis(dashChassis, null);
-    worldRef.current?.startActionDash(true, save.gentleSpeed);
-    setMode('ACTION_RUN_3D');
   };
 
   const handlePlayGateDash = () => {
@@ -1187,15 +1352,24 @@ export default function App() {
     });
   };
 
-  const handleToggleLowGraphics = () => {
+  const handleChangeGraphicsQuality = (mode: GraphicsQualityMode) => {
     SFX.uiTick();
     setSave((prev) => {
-      const nextLow = !Boolean(prev.lowGraphics);
-      const next: SaveProfile = { ...prev, lowGraphics: nextLow };
-      worldRef.current?.setLowGraphics(nextLow);
+      const normalized = normalizeGraphicsQualityMode(mode);
+      const nextLow = normalized === 'eco';
+      const next: SaveProfile = {
+        ...prev,
+        graphicsQuality: normalized,
+        lowGraphics: nextLow
+      };
+      worldRef.current?.setGraphicsQualityMode(normalized);
       saveActiveRosterProfile(next);
       return next;
     });
+  };
+
+  const handleToggleLowGraphics = () => {
+    handleChangeGraphicsQuality(lowGraphics ? 'auto' : 'eco');
   };
 
   const handleToggleAdaptiveHints = () => {
@@ -1619,12 +1793,13 @@ export default function App() {
     }
   }, [adaptiveHintTier, mode, triggerGhostPreview]);
 
-  const handleApplyParsons = useCallback((template: ParsonsStarterTemplate) => {
-    SFX.installComplete();
-    setProgram(template.blocks);
-    setFailingBlockId(null);
-    setMoodCue(null);
-  }, []);
+  const handleApplyParsons = useCallback(
+    (template: ParsonsStarterTemplate) => {
+      SFX.installComplete();
+      applyProgramChange(template.blocks);
+    },
+    [applyProgramChange]
+  );
 
   const handleEducationalMiniGameProgress = useCallback(
     (info: {
@@ -1761,6 +1936,40 @@ export default function App() {
     return getTutorialStep(currentLevel, phase, chassis, program, circuitGrid, selectedPart);
   }, [chassis, circuitGrid, currentLevel, mode, program, selectedPart]);
 
+  const hasBlockingTutorialOverlay =
+    paused ||
+    showMap ||
+    showTrophies ||
+    showSettings ||
+    showProfile ||
+    showGameRoom ||
+    showParentDashboard ||
+    showSandbox ||
+    showClassCode ||
+    Boolean(activeDemo) ||
+    inspect3D;
+
+  const missionTutorialVisible = shouldShowMissionTutorial({
+    level: currentLevel,
+    mode,
+    tutorialDone: Boolean(save.tutorialDone),
+    tutorialForceActive,
+    tutorialDismissed,
+    hasBlockingOverlay: hasBlockingTutorialOverlay
+  });
+
+  const activeMissionTutorialStep = useMemo(() => {
+    if (!missionTutorialVisible) return null;
+    return resolveMissionTutorialStep({
+      level: currentLevel,
+      mode,
+      chassis,
+      program,
+      selectedPart,
+      acknowledgedSteps: tutorialAckSteps
+    });
+  }, [chassis, currentLevel, missionTutorialVisible, mode, program, selectedPart, tutorialAckSteps]);
+
   const blockCount = useMemo(() => countBlocks(program), [program]);
   const victoryBonusInfo = useMemo(
     () =>
@@ -1856,7 +2065,6 @@ export default function App() {
           dailyStars={save.daily.dateKey === getDailyDateKey() ? save.daily.stars : 0}
           trophyTiers={trophyTiers}
           muted={save.muted}
-          gentleSpeed={save.gentleSpeed}
           onStartMission={() => {
             SFX.click();
             beginLevel(currentLevel);
@@ -1865,7 +2073,6 @@ export default function App() {
             SFX.click();
             beginLevel(generateDailyChallenge(getDailyDateKey()));
           }}
-          onStartActionDash={handleStartEndlessDash}
           onOpenGameRoom={() => {
             SFX.click();
             setShowGameRoom(true);
@@ -1873,14 +2080,6 @@ export default function App() {
           onOpenLevelMap={() => {
             SFX.click();
             setShowMap(true);
-          }}
-          onOpenSandbox={() => {
-            SFX.click();
-            setShowSandbox(true);
-          }}
-          onOpenClassCode={() => {
-            SFX.click();
-            setShowClassCode(true);
           }}
           onOpenTrophies={() => {
             SFX.click();
@@ -1895,7 +2094,6 @@ export default function App() {
             setShowProfile(true);
           }}
           onToggleMute={handleToggleMute}
-          onToggleSpeed={handleToggleSpeed}
         />
       )}
 
@@ -1990,7 +2188,6 @@ export default function App() {
           slotPoints={slotPoints}
           selectedPart={selectedPart}
           botTheme={normalizeBotTheme(save.botTheme)}
-          activeCharacter={activeCharacter}
           tutorialStep={tutorialStep}
           ghostHelp={ghostHelp}
           camera={workshopCameraControls}
@@ -1999,6 +2196,7 @@ export default function App() {
           installPhase={installPhase}
           lastPlacement={lastPlacement}
           hintBanner={mode === 'BUILD_3D' ? adaptiveHintElement : null}
+          suppressInlineGuide={Boolean(activeMissionTutorialStep)}
           onSelectPart={(p) => {
             SFX.click();
             setSelectedPart(p);
@@ -2019,10 +2217,6 @@ export default function App() {
             worldRef.current?.setMode('CODE_3D');
           }}
           onOpenPaintBooth={handleEnterPaintBooth}
-          onOpenProfile={() => {
-            SFX.click();
-            setShowProfile(true);
-          }}
           onToggleInspect={() => {
             SFX.uiTick();
             setInspect3D((v) => !v);
@@ -2054,10 +2248,6 @@ export default function App() {
           onApplySavedTheme={handleApplySavedTheme}
           onDeleteSavedTheme={handleDeleteSavedTheme}
           onResetPaint={handleResetPaintConfig}
-          onOpenProfile={() => {
-            SFX.click();
-            setShowProfile(true);
-          }}
           onExit={handleExitPaintBooth}
         />
       )}
@@ -2083,12 +2273,22 @@ export default function App() {
           lastFeedbackTier={lastCodeFeedbackTier}
           failingBlockId={failingBlockId}
           hintBanner={mode === 'CODE_3D' ? adaptiveHintElement : null}
+          canUndo={programHistory.past.length > 0}
+          canRedo={programHistory.future.length > 0}
+          showPathPreview={showPathPreview}
+          pathPreview={livePathPreview}
+          onUndo={handleUndoProgram}
+          onRedo={handleRedoProgram}
+          onTogglePathPreview={() => {
+            SFX.uiTick();
+            HAPTICS.trigger('tap');
+            setShowPathPreview((prev) => !prev);
+          }}
+          onHoverBlock={setHoveredCodeBlockId}
           onBlockPlaced={handleCodeBlockPlaced}
           onChangeProgram={(next) => {
             SFX.click();
-            setMoodCue(null);
-            setFailingBlockId(null);
-            setProgram(next);
+            applyProgramChange(next);
           }}
           onRunProgram={handleRunProgram}
           onStepProgram={handleStepProgram}
@@ -2167,10 +2367,11 @@ export default function App() {
         !showClassCode &&
         !paused && <RobotSpeechBubble speech={robotSpeech} moodCue={moodCue} headPoint={headPoint} />}
 
-      {/* Ghost Hand Visual Demo */}
+      {/* Ghost Hand Visual Demo (hidden while Mission 1 Guided Tutorial spotlight is active) */}
       <GhostHand
         visible={
           ghostHelp &&
+          !activeMissionTutorialStep &&
           !paused &&
           !showMap &&
           !showTrophies &&
@@ -2187,8 +2388,22 @@ export default function App() {
         step={tutorialStep}
       />
 
+      {/* First Mission Interactive Guided Spotlight Tutorial (Build & Code Phases) */}
+      <GuidedTutorialOverlay
+        step={activeMissionTutorialStep}
+        onAcknowledgeStep={handleAcknowledgeTutorialStep}
+        onSkip={handleSkipTutorial}
+      />
+
       {/* Interactive Visual Learning Demo Popover */}
-      <ConceptDemoPopover demo={activeDemo} onClose={() => setActiveDemo(null)} />
+      <ConceptDemoPopover
+        demo={activeDemo}
+        onSelectDemo={(next) => {
+          SFX.uiTick();
+          setActiveDemo(next);
+        }}
+        onClose={() => setActiveDemo(null)}
+      />
 
       {/* Bot Character Profile & Cadet Roster Selector Modal */}
       <BotProfileModal
@@ -2232,6 +2447,7 @@ export default function App() {
         audio={normalizedAudio}
         gentleSpeed={save.gentleSpeed}
         lowGraphics={lowGraphics}
+        graphicsQuality={graphicsQuality}
         challengeTimerEnabled={challengeTimerEnabled}
         adaptiveHintsEnabled={save.adaptiveHintsEnabled !== false}
         readAloudEnabled={Boolean(save.readAloudEnabled)}
@@ -2249,10 +2465,12 @@ export default function App() {
         }
         onToggleSpeed={handleToggleSpeed}
         onToggleLowGraphics={handleToggleLowGraphics}
+        onChangeGraphicsQuality={handleChangeGraphicsQuality}
         onToggleChallengeTimer={handleToggleChallengeTimer}
         onToggleAdaptiveHints={handleToggleAdaptiveHints}
         onToggleReadAloud={handleToggleReadAloud}
         onToggleHaptics={handleToggleHaptics}
+        onReplayTutorial={handleReplayTutorial}
         onOpenParentView={() => {
           SFX.click();
           setShowSettings(false);
@@ -2458,15 +2676,27 @@ export default function App() {
 
       {/* WebGL Context Lost Recovery */}
       {webglLost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-6">
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            aria-label="Reload 3D Scene"
-            className="flex h-24 w-24 items-center justify-center rounded-3xl border-2 border-sky-400 bg-slate-900 text-sky-300 shadow-2xl"
-          >
-            <RotateCcw className="h-10 w-10" />
-          </button>
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="3D graphics recovery"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 p-6 backdrop-blur-md"
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-sky-400/45 bg-slate-900/95 p-6 text-center shadow-2xl">
+            <h2 className="text-lg font-black text-white">3D Workshop Paused</h2>
+            <p className="mt-1.5 text-xs text-slate-300">
+              Graphics memory was paused by your device. Tap below to restore the 3D arena — all progress is saved.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              aria-label="Reload 3D Scene"
+              className="mx-auto mt-5 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-sky-400 px-6 text-sm font-black text-slate-950 shadow-lg transition-transform hover:bg-sky-300 active:scale-95"
+            >
+              <RotateCcw className="h-5 w-5" />
+              <span>Restore 3D View</span>
+            </button>
+          </div>
         </div>
       )}
       {/* Offline PWA Status Indicator */}
