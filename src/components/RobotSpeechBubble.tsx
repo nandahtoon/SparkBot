@@ -107,9 +107,9 @@ export const RobotSpeechBubble: React.FC<RobotSpeechBubbleProps> = ({
   const rawX = headPoint && headPoint.visible ? headPoint.x : vw * 0.5;
   const rawY = headPoint && headPoint.visible ? headPoint.y - (isCompact ? 24 : 30) : 112;
 
-  const padX = isCompact ? 92 : 110;
-  const minTop = isCompact ? 116 : 146;
-  const maxBottom = isCompact ? vh - 196 : vh - 235;
+  const padX = isCompact ? 80 : 104;
+  const minTop = isCompact ? 112 : 140;
+  const maxBottom = isCompact ? Math.min(Math.round(vh * 0.46), vh - 275) : vh - 255;
   const x = Math.max(padX, Math.min(vw - padX, rawX));
   const y = Math.max(minTop, Math.min(maxBottom, rawY));
 
@@ -181,34 +181,34 @@ export const RobotSpeechBubble: React.FC<RobotSpeechBubbleProps> = ({
           </span>
         )}
 
-        {/* Main Cute Non-Verbal Emote Capsule */}
+        {/* Main Slim Non-Verbal Emote Capsule */}
         <div
-          className={`anim-pop relative flex items-center gap-3 rounded-3xl border-2 bg-slate-900/95 px-3.5 py-2.5 ${style.accent}`}
+          className={`anim-pop relative flex items-center gap-2 rounded-2xl border-2 bg-slate-900/95 px-2.5 py-1.5 ${style.accent}`}
         >
           {/* Left Dynamic Robot Emoji Character */}
           <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${style.orb}`}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${style.orb}`}
           >
             <span
               data-testid="robot-mood-emoji"
               role="img"
               aria-label={moodEmoji.label}
-              className={`select-none text-2xl leading-none ${style.emojiAnim}`}
+              className={`select-none text-xl leading-none ${style.emojiAnim}`}
             >
               {moodEmoji.emoji}
             </span>
           </div>
 
           {/* Center Animated WALL-E Voice-Box Soundwave Equalizer */}
-          <div className="flex h-7 items-end gap-1 px-0.5" aria-hidden="true">
+          <div className="flex h-5 items-end gap-0.5 px-0.5" aria-hidden="true">
             {waveBars.map((h, idx) => (
               <span
                 key={idx}
-                className="anim-wave-bar w-1.5 rounded-full"
+                className="anim-wave-bar w-1 rounded-full"
                 style={{
-                  height: `${Math.round(h * 26)}px`,
+                  height: `${Math.round(h * 18)}px`,
                   backgroundColor: barColor,
-                  boxShadow: `0 0 8px ${barColor}99`,
+                  boxShadow: `0 0 6px ${barColor}99`,
                   animationDelay: `${idx * 85}ms`
                 }}
               />
@@ -218,31 +218,31 @@ export const RobotSpeechBubble: React.FC<RobotSpeechBubbleProps> = ({
           {/* Right Contextual Emblem */}
           <div className="flex shrink-0 items-center gap-1" aria-hidden="true">
             {partId ? (
-              <PartIcon id={partId} className="h-7 w-7 anim-happy" />
+              <PartIcon id={partId} className="h-6 w-6 anim-happy" />
             ) : hazard ? (
-              <HazardIcon cond={hazard} className="h-7 w-7 anim-stage-nudge" />
+              <HazardIcon cond={hazard} className="h-6 w-6 anim-stage-nudge" />
             ) : speech?.emote === 'paint' ? (
               <div
-                className="relative flex h-6 w-6 items-center justify-center rounded-full border-2 border-white/80 shadow-md"
+                className="relative flex h-5 w-5 items-center justify-center rounded-full border-2 border-white/80 shadow-md"
                 style={{ backgroundColor: barColor }}
               >
-                <Palette className="h-3 w-3 text-slate-950" />
+                <Palette className="h-2.5 w-2.5 text-slate-950" />
               </div>
             ) : speech?.emote === 'hearts' ? (
-              <Heart className="h-4 w-4 fill-pink-400 text-pink-300 anim-heart-cute" />
+              <Heart className="h-3.5 w-3.5 fill-pink-400 text-pink-300 anim-heart-cute" />
             ) : speech?.emote === 'stars' || speech?.emote === 'celebrate' ? (
-              <Star className="h-4 w-4 fill-amber-300 text-amber-200 anim-heart-cute" />
+              <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-200 anim-heart-cute" />
             ) : resolvedMood === 'sad' || resolvedMood === 'confused' || resolvedMood === 'curious' ? (
-              <HelpCircle className="h-4 w-4 text-violet-300 anim-bob" />
+              <HelpCircle className="h-3.5 w-3.5 text-violet-300 anim-bob" />
             ) : (
-              <Music2 className="h-4 w-4 text-emerald-300 anim-note-float" />
+              <Music2 className="h-3.5 w-3.5 text-emerald-300 anim-note-float" />
             )}
           </div>
 
           {/* Bubble Tail */}
           <span
             aria-hidden="true"
-            className="absolute -bottom-2 left-1/2 h-3.5 w-3.5 -translate-x-1/2 rotate-45 border-b-2 border-r-2 border-inherit bg-slate-900"
+            className="absolute -bottom-1.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-b-2 border-r-2 border-inherit bg-slate-900"
           />
         </div>
       </div>

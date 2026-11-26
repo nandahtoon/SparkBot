@@ -19,12 +19,14 @@ import {
   BOT_THEMES,
   computeChassisInfo,
   createActionDashMetrics,
+  evaluateAllHazardsAtTick,
   normalizeBotCharacter,
   normalizeBotTheme,
   normalizePaintConfig,
   stepActionSurfaceMove,
   traceCircuit,
-  type ActionDashMetrics
+  type ActionDashMetrics,
+  type DynamicHazardDef
 } from '../game/engine';
 import { SFX } from '../game/audio';
 import {
@@ -88,6 +90,14 @@ import {
 } from './workshopEnvironment';
 import { computeResponsiveCameraFraming } from './responsiveCamera';
 import {
+  clampCodeCameraState,
+  computeCodeCameraPreset,
+  computeTileFocusCameraState,
+  evaluateCodeCameraVectors,
+  type CodeCameraPreset,
+  type CodeCameraState
+} from './codeCamera';
+import {
   clampPlanetPosition,
   computePlanetObjectiveGuide,
   createInitialPlanetMetrics,
@@ -103,6 +113,14 @@ import {
   type PlanetAdventureMetrics
 } from '../game/planetAdventure';
 import { buildAlienPlanetWorld, type AlienPlanetWorldHandles } from './planetWorld';
+import { createCompanionDroneRig, type CompanionDroneRig } from './companionDrone';
+import {
+  createDefaultLoadout,
+  getTrailPalette,
+  normalizePlayerLoadout,
+  type PlayerLoadout
+} from '../game/shopAndQuests';
+import { BIOME_THEMES, getBiomeForLevel, type BiomeThemeDef } from '../game/biomes';
 
 export type WorldMode =
   | 'TITLE'
@@ -117,6 +135,7 @@ export type WorldMode =
 
 export interface WorldCallbacks {
   onBotTap: (zone: RobotTouchZone) => void;
+  onDroneTap?: () => void;
   onPaintPartPick?: (part: PaintPartKey) => void;
   onInstallCelebrate?: (part: PartId) => void;
   onInstallPhaseChange?: (phase: 'idle' | 'working' | 'celebrating') => void;
@@ -130,6 +149,7 @@ export interface WorldCallbacks {
   onPlanetFinish?: (metrics: PlanetAdventureMetrics) => void;
   onSlotScreenUpdate: (pts: SlotScreenPoint[]) => void;
   onHeadScreenUpdate?: (pt: HeadScreenPoint) => void;
+  onCodeCameraPresetChange?: (preset: CodeCameraPreset) => void;
   onWebglLost: (lost: boolean) => void;
 }
 
@@ -145,6 +165,36 @@ interface RunnerEntity {
   lane: number;
   surface: 'floor' | 'leftWall' | 'rightWall';
   active: boolean;
+}
+
+interface LaserBarrierVisual {
+  kind: 'laser_barrier';
+  def: DynamicHazardDef;
+  group: THREE.Group;
+  beamGroup: THREE.Group;
+  capMats: THREE.MeshStandardMaterial[];
+  targetActive: boolean;
+  beamScale: number;
+}
+
+interface PatrolDroneVisual {
+  kind: 'patrol_drone';
+  def: DynamicHazardDef;
+  podGroup: THREE.Group;
+  rotorGroup: THREE.Group;
+  targetZ: number;
+  targetYaw: number;
+}
+
+type DynamicHazardVisual = LaserBarrierVisual | PatrolDroneVisual;
+
+interface BossSentinelRig {
+  group: THREE.Group;
+  coreGroup: THREE.Group;
+  visorMat: THREE.MeshStandardMaterial;
+  petals: THREE.Group[];
+  totalCores: number;
+  litCores: number;
 }
 
 const TILE_SPACING = TRACK_TILE_SPACING;
@@ -191,6 +241,11 @@ export class UnifiedWorldController {
   private envMapTexture: THREE.Texture | null = null;
   private contextLost = false;
   private rig;
+  private companionDrone: CompanionDroneRig;
+  private activeLoadout: PlayerLoadout = createDefaultLoadout();
+  private trailPalette: number[] = getTrailPalette('classic_spark');
+  private trailColorCursor = 0;
+  private activeBiome: BiomeThemeDef = BIOME_THEMES.skyport_canyon;
 
   private mode: WorldMode = 'TITLE';
   private gentleSpeed = true;
@@ -238,8 +293,27 @@ export class UnifiedWorldController {
   private activePointers = new Map<number, { x: number; y: number }>();
   private pinchStartDist = 0;
   private pinchStartOrbitDist = DEFAULT_WORKSHOP_ORBIT.distance;
+  private codePinchStartDist = 15;
   private swipeConsumed = false;
   private resizeObserver: ResizeObserver | null = null;
+
+  // Interactive 3D Track Inspection Camera state in CODE_3D (orbit, pan, pinch-zoom, presets)
+  private codeCamPreset: CodeCameraPreset = 'overview';
+  private codeCamUserDragged = false;
+  private codeCamTarget: CodeCameraState = {
+    yaw: 0.52,
+    pitch: 0.37,
+    distance: 14.6,
+    focusZ: -9.6,
+    lookYBias: -0.15
+  };
+  private codeCamCurrent: CodeCameraState = {
+    yaw: 0.52,
+    pitch: 0.37,
+    distance: 14.6,
+    focusZ: -9.6,
+    lookYBias: -0.15
+  };
 
   // Extracted Skyport & Workshop Environment Handles
   private env: WorkshopEnvironmentHandles;
@@ -247,6 +321,9 @@ export class UnifiedWorldController {
   // Groups
   private trackGroup = new THREE.Group();
   private crystalMeshes: Map<number, THREE.Mesh> = new Map();
+  private dynamicHazardVisuals: Map<string, DynamicHazardVisual> = new Map();
+  private bossRig: BossSentinelRig | null = null;
+  private lastHazardTick = 0;
   private gateLeftDoor: THREE.Mesh | null = null;
   private gateRightDoor: THREE.Mesh | null = null;
   private gateOpenAmt = 0;
@@ -275,6 +352,7 @@ export class UnifiedWorldController {
   private simFromZ = 0;
   private simToZ = 0;
   private simScanMatch: boolean | null = null;
+  private simFailResetTimer = 0;
 
   // Action Wall-Run State
   private runnerGroup = new THREE.Group();
@@ -425,6 +503,9 @@ export class UnifiedWorldController {
     this.rig = createRobotRig(this.tex, this.isSoftwareGl);
     this.scene.add(this.rig.root);
 
+    this.companionDrone = createCompanionDroneRig();
+    this.scene.add(this.companionDrone.root);
+
     this.scene.add(this.trackGroup);
     this.scene.add(this.circuitGroup);
     this.circuitGroup.add(this.circuitBeamGroup);
@@ -560,6 +641,7 @@ export class UnifiedWorldController {
     this.ghostPlan = null;
     this.ghostGroup.visible = false;
     this.ghostCircuitRing.visible = false;
+    this.syncHazardsToTick(0, false);
   }
 
   public setLivePathPreview(preview: LivePathPreview | null, enabled = true) {
@@ -568,6 +650,13 @@ export class UnifiedWorldController {
     this.pathPreviewEnabled = Boolean(enabled);
     this.pathPreviewModel = preview;
     if (modelChanged || gfxChanged) {
+      if (
+        modelChanged &&
+        this.mode === 'CODE_3D' &&
+        (Math.abs(this.botTrackZ - TRACK_START_Z) > 0.05 || this.botTrackY < -0.1)
+      ) {
+        this.resetBotToTrackStart();
+      }
       this.rebuildPathPreview3D();
     }
   }
@@ -607,11 +696,49 @@ export class UnifiedWorldController {
       const hexColor =
         seg.status !== 'ok'
           ? 0xfb7185
-          : seg.action === 'JUMP'
-            ? 0xa78bfa
-            : seg.action === 'BOOST'
-              ? 0xfbbf24
-              : 0x38bdf8;
+          : seg.action === 'WAIT'
+            ? 0x22d3ee
+            : seg.action === 'JUMP'
+              ? 0xa78bfa
+              : seg.action === 'BOOST'
+                ? 0xfbbf24
+                : 0x38bdf8;
+
+      if (seg.action === 'WAIT') {
+        const waitSurf = sampleTrackSurfaceAtZ(track, seg.fromZ);
+        const waitRingMat = new THREE.MeshBasicMaterial({
+          color: hexColor,
+          transparent: true,
+          opacity: 0.82,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        const waitRing = new THREE.Mesh(
+          new THREE.RingGeometry(0.46, 0.62, this.lowGraphics ? 14 : 24),
+          waitRingMat
+        );
+        waitRing.rotation.x = -Math.PI / 2;
+        waitRing.position.set(0, waitSurf.y + 0.075, seg.fromZ);
+        const waitGemMat = new THREE.MeshBasicMaterial({
+          color: 0xa5f3fc,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false
+        });
+        const waitGem = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), waitGemMat);
+        waitGem.position.set(0, waitSurf.y + 0.68, seg.fromZ);
+        segGroup.add(waitRing, waitGem);
+        materials.push(waitRingMat, waitGemMat);
+        baseOpacities.push(0.82, 0.85);
+        this.pathPreviewGroup.add(segGroup);
+        this.pathSegmentVisuals.push({
+          segment: seg,
+          group: segGroup,
+          materials,
+          baseOpacities
+        });
+        continue;
+      }
 
       const pts: THREE.Vector3[] = [];
       for (let i = 0; i <= sampleSteps; i++) {
@@ -830,8 +957,49 @@ export class UnifiedWorldController {
     this.vfx.emitShockwaveRing(x, y, z, 0x38bdf8, 0.32, 1.5, 0.36);
   }
 
+  public setPlayerLoadout(loadout: PlayerLoadout, celebrate = false) {
+    const norm = normalizePlayerLoadout(loadout);
+    this.activeLoadout = norm;
+    this.trailPalette = getTrailPalette(norm.equippedTrailId);
+    this.companionDrone.setDroneStyle(norm.equippedDroneId);
+    this.rig.setAccessory(norm.equippedAccessoryId);
+    if (celebrate) {
+      this.setMood('happy', 1.4);
+      this.companionDrone.triggerHappySpin();
+      const c = this.nextTrailColor();
+      this.spawnSparks(this.rig.root.position.x, this.rig.root.position.y + 1.4, this.rig.root.position.z, c, 18);
+    }
+  }
+
+  public triggerCompanionCelebrate() {
+    this.setMood('happy', 2.4);
+    this.companionDrone.triggerCelebrate();
+    const pos = this.rig.root.position;
+    this.spawnConfetti(pos.x, pos.y + 1.8, pos.z, 34);
+    this.spawnSparks(pos.x, pos.y + 1.35, pos.z, this.nextTrailColor(), 20);
+  }
+
+  private nextTrailColor(): number {
+    const pal = this.trailPalette;
+    if (!pal.length) return 0x38bdf8;
+    const color = pal[this.trailColorCursor % pal.length];
+    this.trailColorCursor = (this.trailColorCursor + 1) % pal.length;
+    return color;
+  }
+
+  public applyBiomeForLevel(level: LevelDef | null) {
+    const biome = getBiomeForLevel(level);
+    this.activeBiome = biome;
+    if (this.mode !== 'PLANET_ADVENTURE_3D') {
+      this.scene.background = new THREE.Color(biome.skyHex);
+      this.scene.fog = new THREE.FogExp2(biome.fogHex, biome.fogDensity);
+    }
+    this.env.applyBiome(biome);
+  }
+
   public setLevel(level: LevelDef) {
     this.level = level;
+    this.applyBiomeForLevel(level);
     this.clearGhostPreview();
     this.pathPreviewModel = null;
     this.pathHoveredBlockId = null;
@@ -839,12 +1007,19 @@ export class UnifiedWorldController {
     this.rebuildTrack(level);
     this.circuitGrid = level.circuit.map((row) => row.map((c) => ({ ...c })));
     this.rebuildCircuit3D();
-    this.resetBotToWorkshop();
+    if (this.mode === 'CODE_3D') {
+      this.resetBotToTrackStart();
+    } else {
+      this.resetBotToWorkshop();
+    }
   }
 
   private rebuildTrack(level: LevelDef) {
     clearAndDisposeGroup(this.trackGroup, this.sharedTextures);
     this.crystalMeshes.clear();
+    this.dynamicHazardVisuals.clear();
+    this.bossRig = null;
+    this.lastHazardTick = 0;
     this.gateLeftDoor = null;
     this.gateRightDoor = null;
     this.gateOpenAmt = 0;
@@ -1017,6 +1192,281 @@ export class UnifiedWorldController {
         this.circuitGroup.position.set(0, CIRCUIT_BOARD_Y, gateZ + CIRCUIT_BOARD_Z_OFFSET);
         // Position Action Runner continuation seamlessly beyond the Gate
         this.runnerBaseZ = gateZ - 4.0;
+
+        // Chapter 4 Boss Sentinel Guardian perched atop the finish gate lintel
+        if (level.isBoss) {
+          const bossGroup = new THREE.Group();
+          bossGroup.position.set(0, 6.25, gateZ + 0.15);
+
+          const armorMat = new THREE.MeshStandardMaterial({
+            color: 0x334155,
+            roughness: 0.36,
+            metalness: 0.68
+          });
+          const accentMat = new THREE.MeshStandardMaterial({
+            color: 0x0f172a,
+            roughness: 0.48,
+            metalness: 0.55
+          });
+          const visorMat = new THREE.MeshStandardMaterial({
+            color: 0xfb7185,
+            emissive: 0xe11d48,
+            emissiveIntensity: 0.95,
+            roughness: 0.18,
+            metalness: 0.1
+          });
+          const petalMat = new THREE.MeshStandardMaterial({
+            color: 0x475569,
+            emissive: 0x1e293b,
+            emissiveIntensity: 0.25,
+            roughness: 0.34,
+            metalness: 0.65
+          });
+          const trimMat = new THREE.MeshStandardMaterial({
+            color: 0xf59e0b,
+            emissive: 0xd97706,
+            emissiveIntensity: 0.45,
+            roughness: 0.32,
+            metalness: 0.5
+          });
+
+          const coreGroup = new THREE.Group();
+          const bodyMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.76, 0.88, 1.05, 8),
+            armorMat
+          );
+          const crownRing = new THREE.Mesh(new THREE.TorusGeometry(0.84, 0.075, 8, 20), trimMat);
+          crownRing.rotation.x = Math.PI / 2;
+          crownRing.position.y = 0.54;
+          const visorEye = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), visorMat);
+          visorEye.position.set(0, 0.04, 0.64);
+          const visorBezel = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.055, 8, 18), accentMat);
+          visorBezel.position.set(0, 0.04, 0.72);
+          coreGroup.add(bodyMesh, crownRing, visorEye, visorBezel);
+
+          const totalCores = Math.max(1, level.bossMeta?.coreCount ?? 3);
+          const petals: THREE.Group[] = [];
+          for (let p = 0; p < totalCores; p++) {
+            const angle = (p / totalCores) * Math.PI * 2 + Math.PI / 6;
+            const pivot = new THREE.Group();
+            pivot.rotation.y = angle;
+            const petalArm = new THREE.Group();
+            petalArm.position.set(0, 0, 1.08);
+            const shieldPlate = new THREE.Mesh(
+              new RoundedBoxGeometry(0.95, 0.72, 0.16, 2, 0.04),
+              petalMat
+            );
+            const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.1, 0.18), trimMat);
+            petalArm.add(shieldPlate, stripe);
+            pivot.add(petalArm);
+            bossGroup.add(pivot);
+            petals.push(petalArm);
+          }
+
+          bossGroup.add(coreGroup);
+          this.trackGroup.add(bossGroup);
+          this.bossRig = {
+            group: bossGroup,
+            coreGroup,
+            visorMat,
+            petals,
+            totalCores,
+            litCores: 0
+          };
+        }
+      }
+    }
+
+    // Build Chapter 4 deterministic moving hazards (Timed Laser Barriers & Patrol Drones)
+    if (level.hazards && level.hazards.length > 0) {
+      const hazPylonMat = new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        roughness: 0.42,
+        metalness: 0.68
+      });
+      const hazCollarMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        roughness: 0.35,
+        metalness: 0.45
+      });
+      const droneBodyMat = new THREE.MeshStandardMaterial({
+        color: 0xe2e8f0,
+        roughness: 0.28,
+        metalness: 0.24
+      });
+      const droneWingMat = new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        roughness: 0.4,
+        metalness: 0.65
+      });
+      const droneVisorMat = new THREE.MeshStandardMaterial({
+        color: 0xfb7185,
+        emissive: 0xe11d48,
+        emissiveIntensity: 0.85,
+        roughness: 0.2
+      });
+      const railStripMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        emissive: 0xd97706,
+        emissiveIntensity: 0.35,
+        roughness: 0.4
+      });
+
+      for (const haz of level.hazards) {
+        if (haz.kind === 'laser_gate') {
+          const hz = TRACK_START_Z - haz.tileIndex * TILE_SPACING;
+          const barrierGroup = new THREE.Group();
+          barrierGroup.position.set(0, 0, hz);
+
+          const capMats: THREE.MeshStandardMaterial[] = [];
+          [-1.56, 1.56].forEach((px) => {
+            const baseCollar = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.24, 0.28, 0.18, 12),
+              hazCollarMat
+            );
+            baseCollar.position.set(px, 0.09, 0);
+            const post = new THREE.Mesh(
+              new RoundedBoxGeometry(0.28, 1.65, 0.3, 2, 0.05),
+              hazPylonMat
+            );
+            post.position.set(px, 0.92, 0);
+            const capMat = new THREE.MeshStandardMaterial({
+              color: 0xfb7185,
+              emissive: 0xe11d48,
+              emissiveIntensity: 0.85,
+              roughness: 0.25
+            });
+            capMats.push(capMat);
+            const cap = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), capMat);
+            cap.position.set(px, 1.84, 0);
+            barrierGroup.add(baseCollar, post, cap);
+          });
+
+          const beamGroup = new THREE.Group();
+          const beamCoreMat = new THREE.MeshBasicMaterial({
+            color: 0xfda4af,
+            transparent: true,
+            opacity: 0.9
+          });
+          const beamOuterMat = new THREE.MeshBasicMaterial({
+            color: 0xf43f5e,
+            transparent: true,
+            opacity: 0.34,
+            depthWrite: false
+          });
+          [0.68, 1.24].forEach((by) => {
+            const core = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 2.94, 8), beamCoreMat);
+            core.rotation.z = Math.PI / 2;
+            core.position.y = by;
+            const outer = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 2.94, 8), beamOuterMat);
+            outer.rotation.z = Math.PI / 2;
+            outer.position.y = by;
+            beamGroup.add(core, outer);
+          });
+          barrierGroup.add(beamGroup);
+          this.trackGroup.add(barrierGroup);
+
+          this.dynamicHazardVisuals.set(haz.id, {
+            kind: 'laser_barrier',
+            def: haz,
+            group: barrierGroup,
+            beamGroup,
+            capMats,
+            targetActive: true,
+            beamScale: 1
+          });
+        } else {
+          // Patrol Drone with floor rail corridor spanning minTile..maxTile
+          const zStart = TRACK_START_Z - haz.minTile * TILE_SPACING;
+          const zEnd = TRACK_START_Z - haz.maxTile * TILE_SPACING;
+          const spanLen = Math.abs(zEnd - zStart) + TILE_SPACING * 0.55;
+          const midZ = (zStart + zEnd) * 0.5;
+          [-1.22, 1.22].forEach((rx) => {
+            const strip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.04, spanLen), railStripMat);
+            strip.position.set(rx, 0.03, midZ);
+            this.trackGroup.add(strip);
+          });
+
+          const podGroup = new THREE.Group();
+          const initZ = TRACK_START_Z - haz.startTile * TILE_SPACING;
+          podGroup.position.set(0, 1.18, initZ);
+
+          const chassisPod = new THREE.Mesh(
+            new RoundedBoxGeometry(1.12, 0.56, 0.88, 3, 0.14),
+            droneBodyMat
+          );
+          const visorBand = new THREE.Mesh(
+            new RoundedBoxGeometry(0.86, 0.18, 0.92, 2, 0.05),
+            droneVisorMat
+          );
+          visorBand.position.y = 0.04;
+          [-0.72, 0.72].forEach((wx) => {
+            const wing = new THREE.Mesh(
+              new RoundedBoxGeometry(0.36, 0.12, 0.62, 2, 0.03),
+              droneWingMat
+            );
+            wing.position.set(wx, -0.02, 0);
+            podGroup.add(wing);
+          });
+          const scanCone = new THREE.Mesh(
+            new THREE.ConeGeometry(0.68, 1.05, 14, 1, true),
+            new THREE.MeshBasicMaterial({
+              color: 0xfb7185,
+              transparent: true,
+              opacity: 0.18,
+              side: THREE.DoubleSide,
+              depthWrite: false
+            })
+          );
+          scanCone.position.y = -0.68;
+
+          const rotorGroup = new THREE.Group();
+          rotorGroup.position.y = 0.4;
+          const rotorRing = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.04, 6, 18), hazCollarMat);
+          rotorRing.rotation.x = Math.PI / 2;
+          const bladeA = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.03, 0.09), droneWingMat);
+          const bladeB = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.03, 0.82), droneWingMat);
+          rotorGroup.add(rotorRing, bladeA, bladeB);
+
+          podGroup.add(chassisPod, visorBand, scanCone, rotorGroup);
+          this.trackGroup.add(podGroup);
+
+          this.dynamicHazardVisuals.set(haz.id, {
+            kind: 'patrol_drone',
+            def: haz,
+            podGroup,
+            rotorGroup,
+            targetZ: initZ,
+            targetYaw: haz.startDir > 0 ? Math.PI : 0
+          });
+        }
+      }
+
+      this.syncHazardsToTick(0, true);
+    }
+  }
+
+  private syncHazardsToTick(tick: number, instant = false) {
+    if (!this.level || this.dynamicHazardVisuals.size === 0) return;
+    this.lastHazardTick = tick;
+    const snaps = evaluateAllHazardsAtTick(this.level, tick);
+    for (const snap of snaps) {
+      const vis = this.dynamicHazardVisuals.get(snap.id);
+      if (!vis) continue;
+      if (vis.kind === 'laser_barrier') {
+        vis.targetActive = snap.active;
+        if (instant) {
+          vis.beamScale = snap.active ? 1 : 0;
+          vis.beamGroup.visible = snap.active;
+          vis.beamGroup.scale.set(1, snap.active ? 1 : 0.01, snap.active ? 1 : 0.01);
+        }
+      } else {
+        vis.targetZ = TRACK_START_Z - snap.tileIndex * TILE_SPACING;
+        vis.targetYaw = (snap.dir ?? 1) > 0 ? Math.PI : 0;
+        if (instant) {
+          vis.podGroup.position.z = vis.targetZ;
+          vis.podGroup.rotation.y = vis.targetYaw;
+        }
       }
     }
   }
@@ -1153,6 +1603,12 @@ export class UnifiedWorldController {
       this.circuitBeamGroup.add(coreCyl, haloCyl);
     }
     this.circuitGroup.add(this.ghostCircuitRing);
+
+    // Sync Boss Sentinel shield petals to lit optical circuit cores
+    if (this.bossRig) {
+      const litCount = Object.values(trace.litCores).filter(Boolean).length;
+      this.bossRig.litCores = litCount;
+    }
   }
 
   private setupActionRunnerPool() {
@@ -1586,8 +2042,8 @@ export class UnifiedWorldController {
       }
       this.env.workshopGroup.visible = true;
       this.env.skyportGroup.visible = true;
-      this.scene.background = new THREE.Color(0x13203d);
-      this.scene.fog = new THREE.FogExp2(0x13203d, 0.0115);
+      this.scene.background = new THREE.Color(this.activeBiome.skyHex);
+      this.scene.fog = new THREE.FogExp2(this.activeBiome.fogHex, this.activeBiome.fogDensity);
     }
     if (mode !== 'ACTION_RUN_3D' && mode !== 'PLANET_ADVENTURE_3D') {
       this.runnerGroup.visible = false;
@@ -1621,6 +2077,9 @@ export class UnifiedWorldController {
         distance: 5.45
       });
       this.rig.applyChassis(this.chassis, null);
+    } else if (mode === 'CODE_3D') {
+      this.resetBotToTrackStart();
+      this.applyDefaultCodeCameraPreset();
     } else if (mode === 'CIRCUIT_3D') {
       const gateIdx = Math.max(1, (this.level?.track.length ?? 6) - 1);
       // Keep the bot planted solidly on the Gate Landing Bay stop pad (never floating over a preceding gap!)
@@ -1656,6 +2115,46 @@ export class UnifiedWorldController {
         : { ...DEFAULT_WORKSHOP_ORBIT };
   }
 
+  private getCurrentTrackLength(): number {
+    return Math.max(2, this.level?.track.length ?? 6);
+  }
+
+  private applyDefaultCodeCameraPreset() {
+    const trackLen = this.getCurrentTrackLength();
+    const isPortrait = this.width / Math.max(1, this.height) < 0.92;
+    const defaultPreset: CodeCameraPreset = isPortrait || trackLen >= 8 ? 'overview' : 'follow';
+    this.setCodeCameraPreset(defaultPreset);
+  }
+
+  public setCodeCameraPreset(preset: CodeCameraPreset) {
+    this.codeCamPreset = preset;
+    this.codeCamUserDragged = false;
+    const framing = computeResponsiveCameraFraming('CODE_3D', this.width, this.height);
+    this.codeCamTarget = computeCodeCameraPreset(
+      preset,
+      this.getCurrentTrackLength(),
+      this.width,
+      this.height,
+      framing.baseFov
+    );
+    this.cb.onCodeCameraPresetChange?.(preset);
+  }
+
+  public focusCodeTrackTile(tileIndex: number) {
+    this.codeCamUserDragged = true;
+    this.codeCamTarget = computeTileFocusCameraState(
+      this.codeCamTarget,
+      tileIndex,
+      this.getCurrentTrackLength(),
+      this.width,
+      this.height
+    );
+  }
+
+  public getCodeCameraPreset(): CodeCameraPreset {
+    return this.codeCamPreset;
+  }
+
   public triggerTouchReaction(zone: RobotTouchZone = 'head') {
     this.touchTimer = 1.45;
     this.setMood('happy', 1.45);
@@ -1665,6 +2164,7 @@ export class UnifiedWorldController {
   }
 
   public resetBotToWorkshop() {
+    this.simFailResetTimer = 0;
     this.botTrackZ = 0;
     this.botTrackY = 0;
     this.botTrackPitchX = 0;
@@ -1678,6 +2178,25 @@ export class UnifiedWorldController {
     this.crystalMeshes.forEach((m) => {
       m.visible = true;
     });
+    this.syncHazardsToTick(0, true);
+  }
+
+  public resetBotToTrackStart() {
+    this.simFailResetTimer = 0;
+    this.botTrackZ = TRACK_START_Z;
+    this.botTrackY = 0;
+    this.botTrackPitchX = 0;
+    this.runnerBotX = 0;
+    this.runnerBotY = 0;
+    this.runnerBotRoll = 0;
+    this.codeFeedbackTimer = 0;
+    this.codeFeedbackTier = null;
+    this.rig.root.position.set(0, 0, TRACK_START_Z);
+    this.rig.root.rotation.set(0, 0, 0);
+    this.crystalMeshes.forEach((m) => {
+      m.visible = true;
+    });
+    this.syncHazardsToTick(0, true);
   }
 
   public setGentleSpeed(gentle: boolean) {
@@ -1840,7 +2359,7 @@ export class UnifiedWorldController {
   }
 
   public playSimulation(result: SimResult, options?: { stepMode?: boolean }) {
-    this.resetBotToWorkshop();
+    this.resetBotToTrackStart();
     this.simResult = result;
     this.simStepMode = Boolean(options?.stepMode);
     this.simPaused = false;
@@ -1931,7 +2450,7 @@ export class UnifiedWorldController {
     this.simPaused = false;
     this.simStepFinished = false;
     this.simScanMatch = null;
-    this.resetBotToWorkshop();
+    this.resetBotToTrackStart();
     this.setMood('neutral', 0);
     this.mode = 'CODE_3D';
     this.cb.onSimPauseChange?.(false, false, false);
@@ -1947,22 +2466,37 @@ export class UnifiedWorldController {
 
     this.cb.onSimProgress(this.simIndex, ev);
 
+    if (typeof ev.tick === 'number') {
+      this.syncHazardsToTick(ev.tick, false);
+    }
+
     if (ev.action === 'SCAN') {
       this.setMood('scan', step.duration);
       SFX.sensorScan(Boolean(ev.scanMatch));
+    } else if (ev.action === 'WAIT') {
+      this.setMood('scan', step.duration);
+      SFX.uiTick();
     } else if (ev.action === 'JUMP') {
       this.setMood('neutral', 0);
+      this.spawnSparks(0, 0.5, this.simFromZ, this.nextTrailColor(), 14);
       SFX.jump();
     } else if (ev.action === 'BOOST') {
       this.setMood('boost', step.duration);
-      this.spawnSparks(0, 0.7, this.simFromZ, 0xf472b6, 18);
+      this.spawnSparks(0, 0.7, this.simFromZ, this.nextTrailColor(), 20);
       SFX.boost();
     } else {
       this.setMood('neutral', 0);
+      if (this.activeLoadout.equippedTrailId !== 'classic_spark') {
+        this.spawnSparks(0, 0.25, this.simFromZ, this.nextTrailColor(), 8);
+      }
       SFX.step();
     }
     if (ev.status === 'stuck') {
       this.spawnSparks(0, 0.35, this.simToZ, 0xd97706, 18);
+    } else if (ev.status === 'fail' && ev.hazardId) {
+      this.spawnSparks(0, 0.95, this.simToZ, 0xfb7185, 22);
+      this.rig.injectImpact(0.75, 0.45, 0);
+      this.cameraJuice.addImpulse(0.9, -0.55, 0.6, 0);
     }
 
     if (ev.newCrystals && ev.newCrystals.length > 0) {
@@ -1986,14 +2520,27 @@ export class UnifiedWorldController {
     this.mode = 'CODE_3D';
     this.cb.onSimPauseChange?.(false, false, false);
     if (res.status === 'win') {
+      this.simFailResetTimer = 0;
       this.setMood('happy', 2.4);
+      this.companionDrone.triggerCelebrate();
       SFX.chirpHappy();
-    } else if (res.failCode === 'empty' || res.failCode === 'empty_container' || res.failCode === 'short') {
+    } else if (
+      res.failCode === 'empty' ||
+      res.failCode === 'empty_container' ||
+      res.failCode === 'empty_function' ||
+      res.failCode === 'short'
+    ) {
       this.setMood('confused', 2.8);
       SFX.chirpConfused();
+      if (Math.abs(this.botTrackZ - TRACK_START_Z) > 0.05 || this.botTrackY < -0.1) {
+        this.simFailResetTimer = 1.25;
+      }
     } else {
       this.setMood('sad', 3.0);
       SFX.chirpSad();
+      if (Math.abs(this.botTrackZ - TRACK_START_Z) > 0.05 || this.botTrackY < -0.1) {
+        this.simFailResetTimer = 1.25;
+      }
     }
     this.cb.onSimComplete(res);
   }
@@ -2004,6 +2551,16 @@ export class UnifiedWorldController {
     this.height = Math.max(240, this.container.clientHeight || window.innerHeight);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
+    if (this.mode === 'CODE_3D' && !this.codeCamUserDragged) {
+      const framing = computeResponsiveCameraFraming('CODE_3D', this.width, this.height);
+      this.codeCamTarget = computeCodeCameraPreset(
+        this.codeCamPreset,
+        this.getCurrentTrackLength(),
+        this.width,
+        this.height,
+        framing.baseFov
+      );
+    }
     if (this.renderPipeline) {
       this.renderPipeline.resize(this.width, this.height);
     } else {
@@ -2022,21 +2579,32 @@ export class UnifiedWorldController {
       this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
 
-    // Two-finger touch pinch-to-zoom in BUILD_3D & PAINT_BOOTH
+    // Two-finger touch pinch-to-zoom in BUILD_3D, PAINT_BOOTH, & CODE_3D
     if (
       this.activePointers.size === 2 &&
-      (this.mode === 'BUILD_3D' || this.mode === 'PAINT_BOOTH')
+      (this.mode === 'BUILD_3D' || this.mode === 'PAINT_BOOTH' || this.mode === 'CODE_3D')
     ) {
       const pts = Array.from(this.activePointers.values());
       const curDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       if (this.pinchStartDist > 12) {
         const ratio = this.pinchStartDist / Math.max(12, curDist);
         this.pointerDragged = true;
-        this.workshopAutoSpin = false;
-        this.orbitTarget = clampWorkshopOrbit({
-          ...this.orbitTarget,
-          distance: this.pinchStartOrbitDist * ratio
-        });
+        if (this.mode === 'CODE_3D') {
+          this.codeCamUserDragged = true;
+          this.codeCamTarget = clampCodeCameraState(
+            {
+              ...this.codeCamTarget,
+              distance: this.codePinchStartDist * ratio
+            },
+            this.getCurrentTrackLength()
+          );
+        } else {
+          this.workshopAutoSpin = false;
+          this.orbitTarget = clampWorkshopOrbit({
+            ...this.orbitTarget,
+            distance: this.pinchStartOrbitDist * ratio
+          });
+        }
       }
       return;
     }
@@ -2058,6 +2626,34 @@ export class UnifiedWorldController {
         } else if (sdy < -24) {
           this.jumpActionDash();
         }
+      }
+      return;
+    }
+
+    if (
+      this.pointerDownActive &&
+      e.pointerId === this.pointerDownId &&
+      this.mode === 'CODE_3D'
+    ) {
+      const dx = e.clientX - this.pointerLastX;
+      const dy = e.clientY - this.pointerLastY;
+      this.pointerLastX = e.clientX;
+      this.pointerLastY = e.clientY;
+      const totalDist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
+      if (totalDist >= 6) {
+        this.pointerDragged = true;
+        this.codeCamUserDragged = true;
+      }
+      if (this.pointerDragged) {
+        const panScale = 0.036 * Math.max(0.75, this.codeCamTarget.distance / 15);
+        this.codeCamTarget = clampCodeCameraState(
+          {
+            ...this.codeCamTarget,
+            yaw: this.codeCamTarget.yaw - dx * 0.0072,
+            focusZ: this.codeCamTarget.focusZ - dy * panScale
+          },
+          this.getCurrentTrackLength()
+        );
       }
       return;
     }
@@ -2087,6 +2683,18 @@ export class UnifiedWorldController {
   };
 
   private handleCanvasWheel = (e: WheelEvent) => {
+    if (this.mode === 'CODE_3D') {
+      e.preventDefault();
+      this.codeCamUserDragged = true;
+      this.codeCamTarget = clampCodeCameraState(
+        {
+          ...this.codeCamTarget,
+          distance: this.codeCamTarget.distance + e.deltaY * 0.009
+        },
+        this.getCurrentTrackLength()
+      );
+      return;
+    }
     if (this.mode !== 'BUILD_3D' && this.mode !== 'PAINT_BOOTH') return;
     e.preventDefault();
     this.orbitTarget = clampWorkshopOrbit({
@@ -2124,6 +2732,7 @@ export class UnifiedWorldController {
       const pts = Array.from(this.activePointers.values());
       this.pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       this.pinchStartOrbitDist = this.orbitTarget.distance;
+      this.codePinchStartDist = this.codeCamTarget.distance;
       this.pointerDragged = true;
       return;
     }
@@ -2174,6 +2783,18 @@ export class UnifiedWorldController {
       this.mode === 'CODE_3D' ||
       this.mode === 'VICTORY'
     ) {
+      if (this.companionDrone.root.visible) {
+        const droneHits = this.raycaster.intersectObject(this.companionDrone.root, true);
+        if (droneHits.length > 0) {
+          const hit = droneHits[0];
+          this.companionDrone.triggerHappySpin();
+          this.setMood('happy', 1.1);
+          this.spawnSparks(hit.point.x, hit.point.y, hit.point.z, this.nextTrailColor(), 16);
+          this.cb.onDroneTap?.();
+          return;
+        }
+      }
+
       const botHits = this.raycaster.intersectObject(this.rig.visual, true);
       if (botHits.length > 0) {
         const hit = botHits[0];
@@ -2255,6 +2876,61 @@ export class UnifiedWorldController {
     if (this.gateLeftDoor && this.gateRightDoor) {
       this.gateLeftDoor.position.x = -0.975 - this.gateOpenAmt;
       this.gateRightDoor.position.x = 0.975 + this.gateOpenAmt;
+    }
+
+    // Chapter 4 Moving Hazards (Timed Laser Barriers & Patrol Drones) smooth damped updates
+    if (this.dynamicHazardVisuals.size > 0) {
+      if (this.mode === 'CODE_3D') {
+        let previewTick = 0;
+        if (this.pathHoveredBlockId && this.pathPreviewModel) {
+          const hoveredSeg = this.pathPreviewModel.segments.find((seg) =>
+            isPreviewItemHighlighted(seg, this.pathHoveredBlockId)
+          );
+          if (hoveredSeg && typeof hoveredSeg.tick === 'number') {
+            previewTick = hoveredSeg.tick;
+          }
+        }
+        if (previewTick !== this.lastHazardTick) {
+          this.syncHazardsToTick(previewTick, false);
+        }
+      }
+
+      this.dynamicHazardVisuals.forEach((vis) => {
+        if (vis.kind === 'laser_barrier') {
+          const goalScale = vis.targetActive ? 1 : 0;
+          vis.beamScale = THREE.MathUtils.damp(vis.beamScale, goalScale, 12, dt);
+          vis.beamGroup.visible = vis.beamScale > 0.03;
+          vis.beamGroup.scale.set(1, Math.max(0.02, vis.beamScale), Math.max(0.02, vis.beamScale));
+          const capHex = vis.targetActive ? 0xfb7185 : 0x34d399;
+          const capEmissive = vis.targetActive ? 0xe11d48 : 0x059669;
+          for (let i = 0; i < vis.capMats.length; i++) {
+            vis.capMats[i].color.setHex(capHex);
+            vis.capMats[i].emissive.setHex(capEmissive);
+          }
+        } else {
+          vis.podGroup.position.z = THREE.MathUtils.damp(vis.podGroup.position.z, vis.targetZ, 10, dt);
+          vis.podGroup.position.y = 1.18 + Math.sin(this.totalTime * 2.4) * 0.08;
+          vis.podGroup.rotation.y = THREE.MathUtils.damp(vis.podGroup.rotation.y, vis.targetYaw, 8, dt);
+          vis.rotorGroup.rotation.y += dt * 7.5;
+        }
+      });
+    }
+
+    // Chapter 4 Boss Sentinel Guardian smooth hover & shield petal opening as cores light up
+    if (this.bossRig) {
+      const allCleared =
+        this.bossRig.litCores >= this.bossRig.totalCores || this.mode === 'VICTORY';
+      this.bossRig.coreGroup.position.y = Math.sin(this.totalTime * 1.9) * 0.1;
+      this.bossRig.visorMat.color.setHex(allCleared ? 0x34d399 : 0xfb7185);
+      this.bossRig.visorMat.emissive.setHex(allCleared ? 0x10b981 : 0xe11d48);
+      for (let i = 0; i < this.bossRig.petals.length; i++) {
+        const petal = this.bossRig.petals[i];
+        const opened = i < this.bossRig.litCores || this.mode === 'VICTORY';
+        const targetZ = opened ? 1.55 : 1.08;
+        const targetTilt = opened ? -0.62 : 0;
+        petal.position.z = THREE.MathUtils.damp(petal.position.z, targetZ, 7, dt);
+        petal.rotation.x = THREE.MathUtils.damp(petal.rotation.x, targetTilt, 7, dt);
+      }
     }
 
     // 2-Phase Mechanic Installation Work -> Joyful Celebration Sequence
@@ -2428,6 +3104,9 @@ export class UnifiedWorldController {
         const localT = rawIdx - idx;
         const ev = evs[idx];
         if (ev) {
+          if (typeof ev.tick === 'number' && ev.tick !== this.lastHazardTick) {
+            this.syncHazardsToTick(ev.tick, false);
+          }
           const fZ = getTrackBotStopZ(this.level?.track, ev.fromPos);
           const tZ = getTrackBotStopZ(this.level?.track, ev.toPos);
           const gz = clampTrackBotZBeforeClosedGate(
@@ -2440,11 +3119,13 @@ export class UnifiedWorldController {
           const tSurf = sampleTrackSurfaceAtZ(this.level?.track, tZ);
           const baseLerpY = THREE.MathUtils.lerp(fSurf.y, tSurf.y, localT);
           const gy =
-            ev.action === 'JUMP'
-              ? Math.max(gSurf.y, baseLerpY + Math.sin(localT * Math.PI) * 1.9)
-              : ev.action === 'BOOST'
-                ? Math.max(gSurf.y + 0.04, baseLerpY + Math.sin(localT * Math.PI) * 0.95)
-                : gSurf.y;
+            ev.action === 'WAIT'
+              ? gSurf.y + Math.sin(localT * Math.PI) * 0.22
+              : ev.action === 'JUMP'
+                ? Math.max(gSurf.y, baseLerpY + Math.sin(localT * Math.PI) * 1.9)
+                : ev.action === 'BOOST'
+                  ? Math.max(gSurf.y + 0.04, baseLerpY + Math.sin(localT * Math.PI) * 0.95)
+                  : gSurf.y;
           this.ghostBotGroup.position.set(0, gy, gz);
           this.ghostBotGroup.rotation.x = gy <= gSurf.y + 0.12 ? gSurf.pitchX : 0;
           this.ghostBotGroup.rotation.y = 0;
@@ -2577,6 +3258,12 @@ export class UnifiedWorldController {
         this.botMood = 'neutral';
       }
     }
+    if (this.simFailResetTimer > 0) {
+      this.simFailResetTimer = Math.max(0, this.simFailResetTimer - dt);
+      if (this.simFailResetTimer === 0 && this.mode === 'CODE_3D') {
+        this.resetBotToTrackStart();
+      }
+    }
 
     // Update Simulation Playback
     let isMoving = false;
@@ -2593,7 +3280,14 @@ export class UnifiedWorldController {
         const t = Math.min(1, this.simElapsed / step.duration);
         const eased = 1 - Math.pow(1 - t, 2.2);
 
-        if (step.ev.action !== 'SCAN') {
+        if (step.ev.action === 'WAIT') {
+          isMoving = false;
+          speed = 0;
+          const waitSurf = sampleTrackSurfaceAtZ(this.level?.track, this.simFromZ);
+          this.botTrackZ = this.simFromZ;
+          this.botTrackY = waitSurf.y + Math.sin(t * Math.PI) * 0.14;
+          tiltPitch = 0;
+        } else if (step.ev.action !== 'SCAN') {
           isMoving = !this.simPaused;
           speed = this.simPaused ? 0 : step.ev.action === 'BOOST' ? 14 : 7;
           this.botTrackZ = clampTrackBotZBeforeClosedGate(
@@ -3143,6 +3837,21 @@ export class UnifiedWorldController {
       )
     });
 
+    // Update 3D Helper Drone Companion (hovers beside SparkBot in Workshop, Coding Track & Victory)
+    const showCompanionDrone =
+      Boolean(this.activeLoadout.equippedDroneId) &&
+      this.mode !== 'ACTION_RUN_3D' &&
+      this.mode !== 'PLANET_ADVENTURE_3D';
+    this.companionDrone.root.visible = showCompanionDrone;
+    if (showCompanionDrone) {
+      const isTrackMode =
+        this.mode === 'CODE_3D' ||
+        this.mode === 'SIMULATING' ||
+        this.mode === 'CIRCUIT_3D' ||
+        this.mode === 'VICTORY';
+      this.companionDrone.update(dt, this.totalTime, this.rig.root.position, isTrackMode);
+    }
+
     // Update Unified Zero-GC 3D VFX Pools (sparks, pastel puffs, plasma trails, shockwave rings)
     this.vfx.update(dt);
 
@@ -3178,8 +3887,14 @@ export class UnifiedWorldController {
       );
       _lookGoal.set(0, baseLookY + framing.lookYOffset, 0);
     } else if (this.mode === 'CODE_3D') {
-      _camGoal.set(6.6 * framing.distanceScale, 5.4 * Math.min(1.18, framing.distanceScale), 5.4 * framing.distanceScale);
-      _lookGoal.set(0, 0.85 + framing.lookYOffset, -7.2);
+      this.codeCamCurrent.yaw = THREE.MathUtils.damp(this.codeCamCurrent.yaw, this.codeCamTarget.yaw, 8.5, dt);
+      this.codeCamCurrent.pitch = THREE.MathUtils.damp(this.codeCamCurrent.pitch, this.codeCamTarget.pitch, 8.5, dt);
+      this.codeCamCurrent.distance = THREE.MathUtils.damp(this.codeCamCurrent.distance, this.codeCamTarget.distance, 8.5, dt);
+      this.codeCamCurrent.focusZ = THREE.MathUtils.damp(this.codeCamCurrent.focusZ, this.codeCamTarget.focusZ, 8.5, dt);
+      this.codeCamCurrent.lookYBias = THREE.MathUtils.damp(this.codeCamCurrent.lookYBias, this.codeCamTarget.lookYBias, 8.5, dt);
+      const v = evaluateCodeCameraVectors(this.codeCamCurrent, framing.lookYOffset);
+      _camGoal.set(v.camX, v.camY, v.camZ);
+      _lookGoal.set(v.lookX, v.lookY, v.lookZ);
     } else if (this.mode === 'SIMULATING') {
       _camGoal.set(
         4.8 * framing.distanceScale,
@@ -3296,6 +4011,7 @@ export class UnifiedWorldController {
     this.renderPipeline = null;
     this.env.dispose();
     this.planetWorld?.dispose();
+    this.companionDrone.dispose();
     this.rig.dispose();
     clearAndDisposeGroup(this.trackGroup, this.sharedTextures);
     clearAndDisposeGroup(this.pathPreviewGroup, this.sharedTextures);

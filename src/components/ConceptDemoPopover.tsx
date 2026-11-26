@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { Check, X, Zap } from 'lucide-react';
+import { Check, Square, Volume2, X, Zap } from 'lucide-react';
 import { PARTS, type BlockType, type PartId, type SensorCondition } from '../game/engine';
+import { SPEECH, useReadAloud } from '../game/readAloud';
 import { BlockIcon, HazardIcon, PartIcon } from './Icons';
 
 export type DemoTopic = PartId | BlockType | 'CIRCUIT_MIRROR' | 'CIRCUIT_SPLITTER';
@@ -29,10 +30,13 @@ const CODE_TOPICS: DemoRequest[] = [
   { topic: 'MOVE' },
   { topic: 'JUMP' },
   { topic: 'BOOST' },
+  { topic: 'WAIT' },
   { topic: 'LOOP' },
+  { topic: 'CALL_FUNC' },
   { topic: 'IF', condition: 'GAP' },
   { topic: 'IF', condition: 'MUD' },
-  { topic: 'IF', condition: 'RAMP' }
+  { topic: 'IF', condition: 'RAMP' },
+  { topic: 'IF', condition: 'HAZARD' }
 ];
 
 const CIRCUIT_TOPICS: DemoRequest[] = [
@@ -47,6 +51,8 @@ function getTopicLabel(req: DemoRequest): string {
   if (req.topic === 'MOVE') return 'Move';
   if (req.topic === 'JUMP') return 'Jump';
   if (req.topic === 'BOOST') return 'Boost';
+  if (req.topic === 'WAIT') return 'Wait Beat';
+  if (req.topic === 'CALL_FUNC') return 'My Block';
   if (req.topic === 'LOOP') return 'Loop';
   return PARTS[req.topic].name;
 }
@@ -73,6 +79,8 @@ const DemoHeaderEmblem: React.FC<{ demo: DemoRequest }> = ({ demo }) => {
     demo.topic === 'MOVE' ||
     demo.topic === 'JUMP' ||
     demo.topic === 'BOOST' ||
+    demo.topic === 'WAIT' ||
+    demo.topic === 'CALL_FUNC' ||
     demo.topic === 'LOOP' ||
     demo.topic === 'IF'
   ) {
@@ -320,7 +328,25 @@ function getDemoExplanation(demo: DemoRequest): { title: string; why: string } {
       why: 'A LOOP repeats the blocks inside it, shrinking long sequences so you stay under your block budget.'
     };
   }
+  if (demo.topic === 'WAIT') {
+    return {
+      title: 'Hold 1 Clock Beat (WAIT)',
+      why: 'WAIT pauses SparkBot in place for 1 tick so a Timed Laser Barrier shuts off or a Patrol Drone glides out of your way!'
+    };
+  }
+  if (demo.topic === 'CALL_FUNC') {
+    return {
+      title: 'Reusable Routine (MY BLOCK)',
+      why: 'Snap your favorite combo into the MY BLOCK tray once, then drop MY BLOCK chips anywhere in your program to reuse it!'
+    };
+  }
   if (demo.topic === 'IF') {
+    if (demo.condition === 'HAZARD') {
+      return {
+        title: 'Sensor Check · Hazard Ahead',
+        why: 'IF [HAZARD] checks if a Laser Barrier or Patrol Drone will block the next tile on the next beat. Pair with WAIT in THEN and MOVE in ELSE!'
+      };
+    }
     if (demo.condition === 'MUD') {
       return {
         title: 'Sensor Check · Mud Ahead',
@@ -394,6 +420,14 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [demo, onClose]);
 
+  const speech = useReadAloud();
+
+  useEffect(() => {
+    return () => {
+      SPEECH.stop();
+    };
+  }, []);
+
   if (!demo) return null;
 
   const isPart = demo.topic in PARTS;
@@ -401,6 +435,8 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({
   const distanceChip =
     demo.topic === 'MOVE' ? '+1' : demo.topic === 'JUMP' ? '+2' : demo.topic === 'BOOST' ? '+3' : null;
   const info = getDemoExplanation(demo);
+  const speechId = `demo_${demo.topic}_${demo.condition || ''}`;
+  const isSpeaking = speech.speaking && speech.activeId === speechId;
 
   return (
     <div
@@ -408,17 +444,20 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Visual Learning Demo"
-      onClick={onClose}
+      onClick={() => {
+        SPEECH.stop();
+        onClose();
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className="anim-pop flex w-full max-w-md flex-col gap-3 rounded-3xl border-2 border-sky-400/80 bg-slate-900 p-4 shadow-2xl sm:p-5"
       >
-        {/* Header: Topic Icon + Title + Metric + Close Button */}
-        <div className="flex items-center justify-between gap-3">
+        {/* Header: Topic Icon + Short Title + Metric + Listen + Close */}
+        <div className="flex items-center justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800">
               <DemoHeaderEmblem demo={demo} />
             </div>
             {demo.topic === 'IF' && demo.condition && (
@@ -428,27 +467,50 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({
             )}
             <div className="min-w-0">
               <h3 className="truncate text-sm font-black text-white sm:text-base">{info.title}</h3>
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-300 tabular-nums">
+              <div className="flex items-center gap-2 text-xs font-black text-slate-300 tabular-nums">
                 {partCost !== null && (
-                  <span className="inline-flex items-center gap-1 text-amber-300">
+                  <span className="inline-flex items-center gap-0.5 text-amber-300">
                     <Zap className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    {partCost} Energy
+                    {partCost}
                   </span>
                 )}
-                {distanceChip && <span className="text-sky-300">Distance {distanceChip}</span>}
+                {distanceChip && <span className="text-sky-300">{distanceChip}</span>}
               </div>
             </div>
           </div>
 
-          <button
-            id="closeDemoBtn"
-            type="button"
-            onClick={onClose}
-            aria-label="Close Visual Demo"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {speech.supported && (
+              <button
+                type="button"
+                onClick={() => SPEECH.toggleSpeak(`${info.title}. ${info.why}`, speechId)}
+                aria-label={isSpeaking ? 'Stop audio' : 'Listen'}
+                className={`flex h-11 w-11 items-center justify-center rounded-2xl border-2 transition-transform active:scale-95 ${
+                  isSpeaking
+                    ? 'border-rose-400 bg-rose-500/20 text-rose-200'
+                    : 'border-sky-400/70 bg-sky-500/15 text-sky-200 hover:border-sky-300'
+                }`}
+              >
+                {isSpeaking ? (
+                  <Square className="h-4 w-4 fill-current" />
+                ) : (
+                  <Volume2 className="h-5 w-5" />
+                )}
+              </button>
+            )}
+            <button
+              id="closeDemoBtn"
+              type="button"
+              onClick={() => {
+                SPEECH.stop();
+                onClose();
+              }}
+              aria-label="Close Visual Demo"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Category Topic Switcher (replaces per-block/per-part overlapping mini book badges) */}
@@ -492,50 +554,27 @@ export const ConceptDemoPopover: React.FC<ConceptDemoPopoverProps> = ({
           </div>
         )}
 
-        {/* Wrong vs Right Side-by-Side Visual Comparison Cards */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Pure Visual Wrong vs Right Side-by-Side Comparison Cards */}
+        <div className="grid grid-cols-2 gap-3" data-testid="concept-demo-why">
           <div
             aria-label="Wrong setup"
-            className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-rose-400/70 bg-rose-950/35 p-3"
+            className="flex flex-col items-center gap-2 rounded-2xl border-2 border-rose-400/70 bg-rose-950/35 p-3"
           >
-            <div className="flex items-center gap-1.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-slate-950 shadow">
-                <X className="h-4 w-4 stroke-[3]" />
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-wide text-rose-200">
-                Problem
-              </span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-500 text-slate-950 shadow">
+              <X className="h-5 w-5 stroke-[3]" />
             </div>
             <WrongOutcomeSvg demo={demo} />
           </div>
 
           <div
             aria-label="Right setup"
-            className="flex flex-col items-center gap-1.5 rounded-2xl border-2 border-emerald-400/80 bg-emerald-950/35 p-3 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+            className="flex flex-col items-center gap-2 rounded-2xl border-2 border-emerald-400/80 bg-emerald-950/35 p-3 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
           >
-            <div className="flex items-center gap-1.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400 text-slate-950 shadow">
-                <Check className="h-4 w-4 stroke-[3]" />
-              </div>
-              <span className="text-[11px] font-black uppercase tracking-wide text-emerald-200">
-                Solution
-              </span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400 text-slate-950 shadow">
+              <Check className="h-5 w-5 stroke-[3]" />
             </div>
             <RightOutcomeSvg demo={demo} />
           </div>
-        </div>
-
-        {/* Plain-English STEM Principle ("Why It Works") */}
-        <div
-          data-testid="concept-demo-why"
-          className="rounded-2xl border border-sky-400/35 bg-slate-950/85 px-3.5 py-2.5 text-left"
-        >
-          <div className="text-[10px] font-black uppercase tracking-wider text-sky-300">
-            Why It Works
-          </div>
-          <p className="mt-0.5 text-xs font-medium leading-relaxed text-slate-200">
-            {info.why}
-          </p>
         </div>
       </div>
     </div>

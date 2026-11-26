@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, Puzzle, Wrench, X } from 'lucide-react';
+import { ArrowRight, Check, Play, Puzzle, Square, Volume2, Wrench, X, Zap } from 'lucide-react';
 import {
   computeSpotlightCardPosition,
   type MissionTutorialStepDef,
   type RectBox
 } from '../game/missionTutorial';
+import { SPEECH, useReadAloud } from '../game/readAloud';
+import { BlockIcon, PartIcon } from './Icons';
 
 interface GuidedTutorialOverlayProps {
   step: MissionTutorialStepDef | null;
@@ -51,14 +53,21 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
 }) => {
   const maskId = useId();
   const arrowId = useId();
+  const speech = useReadAloud();
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [cardHeight, setCardHeight] = useState(172);
+  const [cardHeight, setCardHeight] = useState(72);
   const [measured, setMeasured] = useState<MeasuredTargets>(() => ({
     primary: null,
     secondary: null,
     viewportW: typeof window !== 'undefined' ? window.innerWidth : 1024,
     viewportH: typeof window !== 'undefined' ? window.innerHeight : 768
   }));
+
+  useEffect(() => {
+    return () => {
+      SPEECH.stop();
+    };
+  }, []);
 
   const measure = useCallback(() => {
     if (!step) return;
@@ -174,7 +183,6 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
   const isBuild = step.phase === 'build';
   const accentBorder = isBuild ? 'border-amber-300/75' : 'border-sky-300/75';
   const accentRingStroke = isBuild ? '#fbbf24' : '#38bdf8';
-  const accentText = isBuild ? 'text-amber-300' : 'text-sky-300';
 
   return (
     <div
@@ -185,7 +193,7 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
       role="region"
       aria-label={`Mission 1 Guided Tutorial: ${step.title}`}
       aria-live="polite"
-      className="pointer-events-none fixed inset-0 z-30 overflow-hidden"
+      className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
     >
       {/* Interactive-Through SVG Spotlight Mask (pointer-events-none so taps & drags pass straight through) */}
       <svg
@@ -294,7 +302,7 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
         />
       )}
 
-      {/* Compact, High-Contrast Floating Instruction Callout Card */}
+      {/* Slim Single-Row Floating Instruction Banner */}
       <div
         ref={cardRef}
         key={step.id}
@@ -304,9 +312,9 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
           top: `${cardPos.top}px`,
           width: `${cardPos.width}px`
         }}
-        className={`anim-tutorial-card pointer-events-auto fixed flex flex-col gap-2.5 rounded-2xl border bg-slate-900/96 p-3.5 text-left text-slate-100 shadow-[0_18px_42px_rgba(2,6,23,0.72)] backdrop-blur-md sm:p-4 ${accentBorder}`}
+        className={`anim-tutorial-card pointer-events-auto fixed flex flex-col gap-1.5 rounded-2xl border bg-slate-900/95 px-2.5 py-2 text-left text-slate-100 shadow-[0_12px_28px_rgba(2,6,23,0.68)] backdrop-blur-md ${accentBorder}`}
       >
-        {/* Top Segmented 7-Step Progress Strip */}
+        {/* Ultra-Thin 7-Step Progress Strip */}
         <div className="flex items-center gap-1" aria-hidden="true">
           {Array.from({ length: step.totalSteps }, (_, idx) => {
             const num = idx + 1;
@@ -315,7 +323,7 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
             return (
               <span
                 key={num}
-                className={`h-1 flex-1 rounded-full transition-colors ${
+                className={`h-[3px] flex-1 rounded-full transition-colors ${
                   done
                     ? 'bg-emerald-400'
                     : current
@@ -329,90 +337,153 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
           })}
         </div>
 
-        {/* Clean Unboxed Metadata Header + Skip Control */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-slate-300">
-            {isBuild ? (
-              <Wrench className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
-            ) : (
-              <Puzzle className="h-3.5 w-3.5 text-sky-300" aria-hidden="true" />
-            )}
-            <span className={accentText}>{isBuild ? 'Build Phase' : 'Code Phase'}</span>
-            <span aria-hidden="true" className="text-slate-600">
-              ·
-            </span>
-            <span className="tabular text-slate-400">
-              Step {step.stepNumber} of {step.totalSteps}
-            </span>
-          </div>
-
-          <button
-            id="skipTutorialBtn"
-            type="button"
-            onClick={onSkip}
-            aria-label="Skip Guided Tutorial"
-            className="flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-bold text-slate-400 transition-colors hover:bg-slate-800 hover:text-white active:scale-95"
+        {/* Single Compact Visual Row: Cue Icon + Step/Title + Compact Controls */}
+        <div className="flex items-center gap-2">
+          <div
+            aria-hidden="true"
+            className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/85 px-2"
           >
-            <span>Skip</span>
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Title & Concise Guidance Copy */}
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-black leading-snug text-white sm:text-[15px]">
-            {step.title}
-          </h3>
-          <p className="text-xs font-medium leading-relaxed text-slate-200 sm:text-[13px]">
-            {step.body}
-          </p>
-        </div>
-
-        {/* Optional Live Progress Counter (e.g., Move blocks added on Step 5) */}
-        {step.progress && (
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
-              <div
-                className="h-full rounded-full bg-sky-400 transition-all duration-200"
-                style={{
-                  width: `${Math.min(100, Math.round((step.progress.current / Math.max(1, step.progress.target)) * 100))}%`
-                }}
-              />
-            </div>
-            <span
-              data-testid="tutorial-step-progress"
-              className="tabular text-[11px] font-black text-sky-200"
-            >
-              {step.progress.current}/{step.progress.target} {step.progress.unit}
-            </span>
+            {step.id === 'build_budget' && (
+              <Zap className="h-5 w-5 fill-amber-400 text-amber-300" />
+            )}
+            {step.id === 'build_wheels' && (
+              <>
+                <PartIcon id="wheels" className="h-5.5 w-5.5" />
+                <ArrowRight className="h-3 w-3 text-amber-300" />
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-amber-300 bg-amber-400/25" />
+              </>
+            )}
+            {step.id === 'build_laser' && (
+              <>
+                <PartIcon id="laser" className="h-5.5 w-5.5" />
+                <ArrowRight className="h-3 w-3 text-amber-300" />
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-amber-300 bg-amber-400/25" />
+              </>
+            )}
+            {step.id === 'build_next_phase' && (
+              <span className="flex h-6.5 w-8 items-center justify-center rounded-lg bg-emerald-400 text-slate-950">
+                <ArrowRight className="h-4 w-4 stroke-[3]" />
+              </span>
+            )}
+            {step.id === 'code_add_move' && (
+              <>
+                <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border border-sky-400/80 bg-sky-500/20">
+                  <BlockIcon type="MOVE" className="h-4 w-4" />
+                </span>
+                <span className="tabular text-[11px] font-black text-sky-200">×5</span>
+              </>
+            )}
+            {step.id === 'code_rail_review' && (
+              <div className="flex items-center gap-0.5">
+                {[0, 1, 2].map((idx) => (
+                  <span
+                    key={idx}
+                    className="flex h-5 w-5 items-center justify-center rounded-md border border-sky-400/60 bg-sky-500/15"
+                  >
+                    <BlockIcon type="MOVE" className="h-3 w-3" />
+                  </span>
+                ))}
+              </div>
+            )}
+            {step.id === 'code_run' && (
+              <span className="flex h-6.5 w-8 items-center justify-center rounded-lg bg-emerald-400 text-slate-950">
+                <Play className="h-4 w-4 fill-slate-950" />
+              </span>
+            )}
           </div>
-        )}
 
-        {/* Action Prompt & Optional Manual Advance Button */}
-        <div className="flex items-center justify-between gap-2 border-t border-slate-800 pt-2">
-          <span className="min-w-0 truncate text-[11px] font-bold text-slate-300">
-            {step.actionHint}
-          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-black text-slate-400 tabular">
+                {isBuild ? (
+                  <Wrench className="h-3 w-3 text-amber-300" aria-hidden="true" />
+                ) : (
+                  <Puzzle className="h-3 w-3 text-sky-300" aria-hidden="true" />
+                )}
+                {step.stepNumber}/{step.totalSteps}
+              </span>
+              <h3 className="truncate text-xs font-black leading-tight text-white sm:text-[13px]">
+                {step.title}
+              </h3>
+            </div>
+            {step.progress && (
+              <div className="mt-1 flex items-center gap-1.5">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-sky-400 transition-all duration-200"
+                    style={{
+                      width: `${Math.min(100, Math.round((step.progress.current / Math.max(1, step.progress.target)) * 100))}%`
+                    }}
+                  />
+                </div>
+                <span
+                  data-testid="tutorial-step-progress"
+                  className="tabular text-[10px] font-black text-sky-200"
+                >
+                  {step.progress.current}/{step.progress.target}
+                </span>
+              </div>
+            )}
+          </div>
 
-          {step.allowManualNext && (
+          <div className="flex shrink-0 items-center gap-1">
+            {speech.supported && (
+              <button
+                type="button"
+                onClick={() =>
+                  SPEECH.toggleSpeak(`${step.title}. ${step.body}`, `tut_${step.id}`)
+                }
+                aria-label="Listen to Step"
+                className={`flex h-8 w-8 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
+                  speech.speaking && speech.activeId === `tut_${step.id}`
+                    ? 'border-rose-400 bg-rose-500/20 text-rose-200'
+                    : 'border-slate-700 bg-slate-800 text-sky-300 hover:border-sky-400'
+                }`}
+              >
+                {speech.speaking && speech.activeId === `tut_${step.id}` ? (
+                  <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                ) : (
+                  <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+              </button>
+            )}
+
+            {step.allowManualNext && (
+              <button
+                id="tutorialNextBtn"
+                type="button"
+                onClick={() => {
+                  SPEECH.stop();
+                  onAcknowledgeStep(step.id);
+                }}
+                aria-label={step.manualNextLabel || 'Next'}
+                className={`flex h-8 shrink-0 items-center justify-center rounded-xl border px-2.5 text-xs font-black text-slate-950 shadow-sm transition-all active:translate-y-0.5 ${
+                  isBuild
+                    ? 'border-amber-200 bg-gradient-to-b from-amber-300 to-amber-500 shadow-[0_2px_0_#b45309]'
+                    : 'border-sky-200 bg-gradient-to-b from-sky-300 to-sky-500 shadow-[0_2px_0_#0369a1]'
+                }`}
+              >
+                {step.manualNextLabel === 'Got it' ? (
+                  <Check className="h-4 w-4 stroke-[3]" aria-hidden="true" />
+                ) : (
+                  <ArrowRight className="h-4 w-4 stroke-[3]" aria-hidden="true" />
+                )}
+              </button>
+            )}
+
             <button
-              id="tutorialNextBtn"
+              id="skipTutorialBtn"
               type="button"
-              onClick={() => onAcknowledgeStep(step.id)}
-              className={`flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3.5 text-xs font-black text-slate-950 shadow-sm transition-transform active:scale-95 ${
-                isBuild
-                  ? 'border-amber-200 bg-amber-400 hover:bg-amber-300'
-                  : 'border-sky-200 bg-sky-400 hover:bg-sky-300'
-              }`}
+              onClick={() => {
+                SPEECH.stop();
+                onSkip();
+              }}
+              aria-label="Skip Guided Tutorial"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-slate-500 hover:text-white active:scale-95"
             >
-              <span>{step.manualNextLabel || 'Next'}</span>
-              {step.manualNextLabel === 'Got it' ? (
-                <Check className="h-3.5 w-3.5 stroke-[3]" aria-hidden="true" />
-              ) : (
-                <ArrowRight className="h-3.5 w-3.5 stroke-[3]" aria-hidden="true" />
-              )}
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>

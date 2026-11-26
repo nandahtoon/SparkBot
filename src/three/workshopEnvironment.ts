@@ -3,6 +3,7 @@ import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLigh
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { ProceduralTextures } from './materials';
 import type { GraphicsQualityBudget } from '../game/graphicsConfig';
+import type { BiomeThemeDef } from '../game/biomes';
 
 export interface WorkshopEnvironmentHandles {
   workshopGroup: THREE.Group;
@@ -19,6 +20,7 @@ export interface WorkshopEnvironmentHandles {
   ambientMotes: THREE.InstancedMesh;
   moteSeeds: Array<{ x: number; y: number; z: number; phase: number; speed: number; scale: number }>;
   solarRing: THREE.Mesh;
+  applyBiome: (biome: BiomeThemeDef) => void;
   setQualityBudget: (budget: GraphicsQualityBudget) => void;
   dispose: () => void;
 }
@@ -630,6 +632,27 @@ export function buildWorkshopEnvironment(
     ambientMotes.visible = budget.ambientMotesVisible;
   };
 
+  const applyBiome = (biome: BiomeThemeDef) => {
+    hemi.color.setHex(biome.hemiSkyHex);
+    hemi.groundColor.setHex(biome.hemiGroundHex);
+    key.color.setHex(biome.keyLightHex);
+    rim.color.setHex(biome.rimLightHex);
+    skyFloorMat.color.setHex(biome.skyFloorHex);
+    solarRingMat.color.setHex(biome.solarRingHex);
+    solarRingMat.emissive.setHex(biome.solarRingEmissiveHex);
+    for (let i = 0; i < mesaCount; i++) {
+      _color.setHex(biome.mesaHex).offsetHSL(0, 0, ((i % 3) - 1) * 0.03);
+      mesas.setColorAt(i, _color);
+      _color.setHex(i % 3 === 0 ? biome.solarRingHex : biome.mesaBandHex).multiplyScalar(0.7);
+      mesaBands.setColorAt(i, _color);
+      _color.setHex(i % 3 === 0 ? biome.solarRingHex : biome.mesaBandHex).multiplyScalar(0.88);
+      beacons.setColorAt(i, _color);
+    }
+    if (mesas.instanceColor) mesas.instanceColor.needsUpdate = true;
+    if (mesaBands.instanceColor) mesaBands.instanceColor.needsUpdate = true;
+    if (beacons.instanceColor) beacons.instanceColor.needsUpdate = true;
+  };
+
   scene.add(workshopGroup);
 
   return {
@@ -647,6 +670,7 @@ export function buildWorkshopEnvironment(
     ambientMotes,
     moteSeeds,
     solarRing,
+    applyBiome,
     setQualityBudget,
     dispose: () => {
       for (const item of disposables) {

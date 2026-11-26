@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Bug,
   Check,
   Copy,
   Cpu,
@@ -661,6 +662,104 @@ export const SandboxCreatorModal: React.FC<SandboxCreatorModalProps> = ({
                   >
                     IF Sensors: {draft.ifUnlocked ? 'On' : 'Off'}
                   </button>
+                </div>
+
+                {/* Debug Class Code Mode ("Fix My Bug!") */}
+                <div className="flex flex-col gap-2 rounded-xl border border-violet-500/45 bg-violet-950/20 p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-xs font-black text-violet-200">
+                      <Bug className="h-4 w-4 text-violet-300" aria-hidden="true" />
+                      Fix-My-Bug Class Puzzle
+                    </span>
+                    <button
+                      id="sandboxDebugToggleBtn"
+                      type="button"
+                      aria-pressed={Boolean(draft.isDebugPuzzle)}
+                      onClick={() =>
+                        updateDraft((cur) => ({
+                          ...cur,
+                          isDebugPuzzle: !cur.isDebugPuzzle,
+                          starterProgram:
+                            !cur.isDebugPuzzle && (!cur.starterProgram || cur.starterProgram.length === 0)
+                              ? [
+                                  { id: 'sb_s1', type: 'MOVE' },
+                                  { id: 'sb_s2', type: 'MOVE' }
+                                ]
+                              : cur.starterProgram,
+                          bugClue:
+                            !cur.isDebugPuzzle && !cur.bugClue
+                              ? 'Find and fix the bug in this starter code!'
+                              : cur.bugClue
+                        }))
+                      }
+                      className={`h-8 rounded-lg border px-2.5 text-[11px] font-black ${
+                        draft.isDebugPuzzle
+                          ? 'border-violet-300 bg-violet-400 text-slate-950'
+                          : 'border-slate-700 bg-slate-900 text-slate-300'
+                      }`}
+                    >
+                      {draft.isDebugPuzzle ? 'On' : 'Off'}
+                    </button>
+                  </div>
+
+                  {draft.isDebugPuzzle && (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        id="sandboxBugClueInput"
+                        type="text"
+                        maxLength={72}
+                        placeholder="Short clue for classmates..."
+                        value={draft.bugClue || ''}
+                        onChange={(e) =>
+                          setDraft((cur) => ({ ...cur, bugClue: e.target.value, updatedAt: Date.now() }))
+                        }
+                        className="h-9 w-full rounded-lg border border-violet-400/50 bg-slate-900 px-2.5 text-xs font-semibold text-white placeholder:text-slate-500 focus:border-violet-300 focus:outline-none"
+                      />
+                      <div className="flex flex-wrap items-center gap-1">
+                        {(['MOVE', 'JUMP', 'BOOST', 'WAIT'] as const).map((cmd) => (
+                          <button
+                            key={cmd}
+                            type="button"
+                            onClick={() =>
+                              updateDraft((cur) => {
+                                const curProg = cur.starterProgram || [];
+                                if (curProg.length >= 12) return cur;
+                                return {
+                                  ...cur,
+                                  starterProgram: [
+                                    ...curProg,
+                                    { id: `sb_b_${Date.now()}_${curProg.length}`, type: cmd }
+                                  ]
+                                };
+                              })
+                            }
+                            className="h-8 rounded-lg border border-slate-700 bg-slate-900 px-2 text-[10px] font-black text-sky-200 hover:border-sky-400"
+                          >
+                            +{cmd}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {(draft.starterProgram || []).map((blk, i) => (
+                          <button
+                            key={blk.id || i}
+                            type="button"
+                            onClick={() =>
+                              updateDraft((cur) => ({
+                                ...cur,
+                                starterProgram: (cur.starterProgram || []).filter((_, idx) => idx !== i)
+                              }))
+                            }
+                            title="Tap to remove starter block"
+                            className="flex h-7 items-center gap-1 rounded-md border border-violet-400/50 bg-slate-900 px-2 text-[10px] font-black text-violet-100 hover:border-rose-400"
+                          >
+                            <span>{blk.type}</span>
+                            <X className="h-3 w-3 text-slate-400" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

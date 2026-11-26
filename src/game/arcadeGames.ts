@@ -47,8 +47,8 @@ export const ARCADE_GAMES: ArcadeGameCardDef[] = [
   {
     id: 'break_wall',
     title: 'Wall Breaker',
-    subtitle: 'Bounce the plasma orb to smash crystal reactor walls',
-    controlsHint: 'Move mouse, touch drag, or A/D',
+    subtitle: 'Pilot your robot deflector, catch power-ups, blast Bomb Cores, and fire Mega Lasers',
+    controlsHint: 'Slide or A/D to move · Space / Tap Blast for Mega Laser',
     accentHex: '#f59e0b',
     baseBolts: 30
   },
@@ -92,8 +92,12 @@ export const ALL_GAME_ROOM_GAMES: ArcadeGameCardDef[] = [
 ];
 
 /* ============================================================================
- * 1. WALL BREAKER (Breakout-style brick wall smasher)
+ * 1. WALL BREAKER (Robot Deflector Reactor Smash with Special Cores & Power-Ups)
  * ========================================================================== */
+
+export type WallBrickKind = 'standard' | 'armored' | 'bomb' | 'prism' | 'bolt_vault';
+
+export type WallPowerUpKind = 'wide' | 'multi' | 'laser' | 'fire' | 'bolt';
 
 export interface WallBrick {
   id: number;
@@ -108,9 +112,11 @@ export interface WallBrick {
   color: string;
   points: number;
   hasBonusBolt: boolean;
+  kind?: WallBrickKind;
+  hitFlash?: number;
 }
 
-const WALL_ROW_COLORS = ['#f43f5e', '#f59e0b', '#38bdf8', '#34d399'];
+const WALL_ROW_COLORS = ['#fb7185', '#f59e0b', '#38bdf8', '#34d399'];
 
 export function createWallBreakerLayout(
   arenaWidth: number,
@@ -119,21 +125,56 @@ export function createWallBreakerLayout(
 ): WallBrick[] {
   const cols = 7;
   const rows = Math.min(5, 3 + Math.min(2, stage - 1));
-  const padX = 28;
-  const topY = 56;
-  const gap = 8;
+  const padX = Math.max(18, Math.min(34, Math.floor(arenaWidth * 0.055)));
+  const topY = 58;
+  const gap = Math.max(6, Math.min(10, Math.floor(arenaWidth * 0.015)));
   const usableW = Math.max(240, arenaWidth - padX * 2);
   const brickW = (usableW - gap * (cols - 1)) / cols;
-  const brickH = Math.min(26, Math.max(18, Math.floor(arenaHeight * 0.055)));
+  const brickH = Math.min(28, Math.max(20, Math.floor(arenaHeight * 0.056)));
 
   const bricks: WallBrick[] = [];
   let id = 1;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // Create fun architectural arch cutouts on stages >= 2
+      // Architectural arch cutouts on stage >= 2
       if (stage >= 2 && r === rows - 1 && (c === 1 || c === cols - 2)) continue;
-      const armored = r === 0 || (stage >= 2 && (r + c) % 4 === 0);
-      const maxHp = armored ? 2 : 1;
+
+      const isBomb =
+        (stage === 1 && r === 1 && (c === 1 || c === 5)) ||
+        (stage >= 2 && ((r === 1 && c === 3) || (r === 2 && (c === 0 || c === 6))));
+      const isPrism =
+        (stage === 1 && r === 1 && c === 3) ||
+        (stage >= 2 && r === 1 && (c === 1 || c === 5));
+      const isArmored = !isBomb && !isPrism && (r === 0 || (stage >= 2 && (r + c) % 4 === 0));
+      const hasBonusBolt = (r * cols + c) % 5 === 2;
+
+      let kind: WallBrickKind = 'standard';
+      let color = WALL_ROW_COLORS[r % WALL_ROW_COLORS.length];
+      let maxHp = 1;
+      let points = 15;
+
+      if (isBomb) {
+        kind = 'bomb';
+        color = '#f97316';
+        maxHp = 1;
+        points = 30;
+      } else if (isPrism) {
+        kind = 'prism';
+        color = '#a855f7';
+        maxHp = 1;
+        points = 30;
+      } else if (isArmored) {
+        kind = 'armored';
+        color = WALL_ROW_COLORS[r % WALL_ROW_COLORS.length];
+        maxHp = 2;
+        points = 25;
+      } else if (hasBonusBolt) {
+        kind = 'bolt_vault';
+        color = '#eab308';
+        maxHp = 1;
+        points = 20;
+      }
+
       bricks.push({
         id: id++,
         row: r,
@@ -144,13 +185,39 @@ export function createWallBreakerLayout(
         h: brickH,
         hp: maxHp,
         maxHp,
-        color: WALL_ROW_COLORS[r % WALL_ROW_COLORS.length],
-        points: armored ? 25 : 15,
-        hasBonusBolt: (r * cols + c) % 5 === 2
+        color,
+        points,
+        hasBonusBolt: hasBonusBolt || isBomb || isPrism,
+        kind,
+        hitFlash: 0
       });
     }
   }
   return bricks;
+}
+
+const POWERUP_ROTATION: WallPowerUpKind[] = ['wide', 'laser', 'multi', 'fire', 'bolt'];
+
+export function pickWallPowerUpKind(brick: WallBrick, dropIndex: number): WallPowerUpKind {
+  if (brick.kind === 'prism') return 'multi';
+  if (brick.kind === 'bomb') return 'fire';
+  if (brick.kind === 'bolt_vault') {
+    return POWERUP_ROTATION[Math.abs(dropIndex) % POWERUP_ROTATION.length];
+  }
+  return dropIndex % 2 === 0 ? 'bolt' : POWERUP_ROTATION[Math.abs(dropIndex) % POWERUP_ROTATION.length];
+}
+
+export function findBombBlastTargets(bricks: WallBrick[], centerBrick: WallBrick): WallBrick[] {
+  const cx = centerBrick.x + centerBrick.w / 2;
+  const cy = centerBrick.y + centerBrick.h / 2;
+  const maxDx = centerBrick.w * 1.48;
+  const maxDy = centerBrick.h * 1.65;
+  return bricks.filter((b) => {
+    if (b.id === centerBrick.id) return false;
+    const bx = b.x + b.w / 2;
+    const by = b.y + b.h / 2;
+    return Math.abs(bx - cx) <= maxDx && Math.abs(by - cy) <= maxDy;
+  });
 }
 
 export function computeWallBreakerReward(score: number, cleared: boolean): number {

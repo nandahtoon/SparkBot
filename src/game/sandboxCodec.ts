@@ -6,13 +6,57 @@ import {
   findShortestTrackPlan
 } from './simulator';
 import type {
+  ChassisGrid,
   CircuitCellType,
   CircuitGrid,
+  CodeBlock,
   LevelDef,
   SandboxMissionDraft,
   TileType,
   TrackTile
 } from './types';
+
+const DEBUG_CMD_ENCODE: Record<string, number> = {
+  MOVE: 0,
+  JUMP: 1,
+  BOOST: 2,
+  WAIT: 3
+};
+const DEBUG_CMD_DECODE: Array<'MOVE' | 'JUMP' | 'BOOST' | 'WAIT'> = ['MOVE', 'JUMP', 'BOOST', 'WAIT'];
+export const SANDBOX_MAX_BUG_CLUE_LEN = 64;
+export const SANDBOX_MAX_STARTER_BLOCKS = 12;
+
+export function sanitizeBugClue(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, SANDBOX_MAX_BUG_CLUE_LEN);
+}
+
+function normalizeStarterProgram(raw: CodeBlock[] | undefined): CodeBlock[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CodeBlock[] = [];
+  for (const blk of raw) {
+    if (out.length >= SANDBOX_MAX_STARTER_BLOCKS) break;
+    if (blk && (blk.type === 'MOVE' || blk.type === 'JUMP' || blk.type === 'BOOST' || blk.type === 'WAIT')) {
+      out.push({ id: `sb_dbg_${out.length + 1}`, type: blk.type });
+    }
+  }
+  return out;
+}
+
+function buildAutoDebugChassis(track: TrackTile[]): ChassisGrid {
+  const hasMud = track.some((t) => t.type === 'mud');
+  const hasGap = track.some((t) => t.type === 'gap');
+  const hasRamp = track.some((t) => t.type === 'ramp');
+  return [
+    [hasRamp ? 'booster' : null, null, null],
+    [hasGap ? 'thrusters' : null, null, 'laser'],
+    [hasMud ? 'treads' : 'wheels', null, null]
+  ];
+}
 
 export const SANDBOX_MIN_TILES = 4;
 export const SANDBOX_MAX_TILES = 14;
@@ -164,6 +208,9 @@ export function normalizeSandboxDraft(
     Math.min(budget, Math.round(Number(raw?.parBudget) || Math.min(budget, 95)))
   );
   const parBlocks = Math.max(1, Math.min(20, Math.round(Number(raw?.parBlocks) || 5)));
+  const isDebugPuzzle = Boolean(raw?.isDebugPuzzle);
+  const starterProgram = normalizeStarterProgram(raw?.starterProgram);
+  const bugClue = sanitizeBugClue(raw?.bugClue);
   return {
     id: typeof raw?.id === 'string' && raw.id.trim() ? raw.id.trim() : 'draft_active',
     name: sanitizeSandboxName(raw?.name),
@@ -174,6 +221,9 @@ export function normalizeSandboxDraft(
     ifUnlocked: raw?.ifUnlocked !== undefined ? Boolean(raw.ifUnlocked) : true,
     track,
     circuit,
+    isDebugPuzzle,
+    bugClue: bugClue || undefined,
+    starterProgram: starterProgram.length > 0 ? starterProgram : undefined,
     updatedAt: typeof raw?.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : Date.now()
   };
 }
@@ -311,13 +361,23 @@ export function sandboxDraftToLevelDef(
   opts?: { isClassCode?: boolean }
 ): LevelDef {
   const norm = normalizeSandboxDraft(draft);
+  const debugActive = Boolean(norm.isDebugPuzzle && norm.starterProgram && norm.starterProgram.length > 0);
+  const clue = norm.bugClue || 'Find and fix the broken code blocks so SparkBot reaches the Gate!';
   return {
     id: opts?.isClassCode ? 901 : 900,
     name: norm.name,
-    ageLabel: opts?.isClassCode ? 'Class Code' : 'Sandbox Lab',
-    brief: opts?.isClassCode
-      ? `Classroom Challenge "${norm.name}": Build a chassis within budget, code to the gate, and power all cores!`
-      : `Custom Sandbox Mission "${norm.name}": Test your track & laser puzzle!`,
+    ageLabel: debugActive
+      ? opts?.isClassCode
+        ? 'Debug Class Code'
+        : 'Debug Lab'
+      : opts?.isClassCode
+        ? 'Class Code'
+        : 'Sandbox Lab',
+    brief: debugActive
+      ? `Debug Challenge "${norm.name}": ${clue}`
+      : opts?.isClassCode
+        ? `Classroom Challenge "${norm.name}": Build a chassis within budget, code to the gate, and power all cores!`
+        : `Custom Sandbox Mission "${norm.name}": Test your track & laser puzzle!`,
     budget: norm.budget,
     parBudget: norm.parBudget,
     parBlocks: norm.parBlocks,
@@ -325,6 +385,10 @@ export function sandboxDraftToLevelDef(
     ifUnlocked: norm.ifUnlocked,
     isSandbox: true,
     isClassCode: Boolean(opts?.isClassCode),
+    isDebug: debugActive,
+    debugClue: debugActive ? clue : undefined,
+    starterChassis: debugActive ? buildAutoDebugChassis(norm.track) : undefined,
+    starterProgram: debugActive ? norm.starterProgram!.map((b) => ({ ...b })) : undefined,
     track: norm.track.map((t) => ({ ...t })),
     circuit: cloneCircuitGrid(norm.circuit)
   };
@@ -405,19 +469,24 @@ export function encodeChallengeCode(draft: SandboxMissionDraft): string {
   const encoder = new TextEncoder();
   const rawNameBytes = encoder.encode(norm.name).slice(0, SANDBOX_MAX_NAME_LEN);
   const trackLen = norm.track.length;
+  const starterBlocks = norm.isDebugPuzzle ? norm.starterProgram || [] : [];
+  const isV2 = Boolean(norm.isDebugPuzzle && starterBlocks.length > 0);
+  const rawClueBytes = isV2
+    ? encoder.encode(norm.bugClue || '').slice(0, SANDBOX_MAX_BUG_CLUE_LEN)
+    : new Uint8Array(0);
 
   // Compact binary format:
-  // [0]=version(1), [1]=budget, [2]=parBudget, [3]=parBlocks,
-  // [4]=flags(bit0=loop, bit1=if), [5]=nameLen, [6..]=nameBytes,
-  // [6+nameLen]=trackLen, [...trackBytes], [25 circuitBytes]
-  const totalLen = 6 + rawNameBytes.length + 1 + trackLen + 25;
+  // v1: [0]=1, [1]=budget, [2]=parBudget, [3]=parBlocks, [4]=flags, [5]=nameLen, ...name, trackLen, ...track, [25 circuit]
+  // v2: same + [starterLen, ...starterCmdBytes, clueLen, ...clueBytes]
+  const extraLen = isV2 ? 1 + starterBlocks.length + 1 + rawClueBytes.length : 0;
+  const totalLen = 6 + rawNameBytes.length + 1 + trackLen + 25 + extraLen;
   const buf = new Uint8Array(totalLen);
   let p = 0;
-  buf[p++] = 1;
+  buf[p++] = isV2 ? 2 : 1;
   buf[p++] = norm.budget;
   buf[p++] = norm.parBudget;
   buf[p++] = norm.parBlocks;
-  buf[p++] = (norm.loopUnlocked ? 1 : 0) | (norm.ifUnlocked ? 2 : 0);
+  buf[p++] = (norm.loopUnlocked ? 1 : 0) | (norm.ifUnlocked ? 2 : 0) | (isV2 ? 4 : 0);
   buf[p++] = rawNameBytes.length;
   for (let i = 0; i < rawNameBytes.length; i++) {
     buf[p++] = rawNameBytes[i];
@@ -431,6 +500,16 @@ export function encodeChallengeCode(draft: SandboxMissionDraft): string {
     for (let c = 0; c < 5; c++) {
       const cell = norm.circuit[r][c];
       buf[p++] = (CELL_ENCODE[cell.type] & 0x07) | (cell.rot === 1 ? 0x08 : 0);
+    }
+  }
+  if (isV2) {
+    buf[p++] = starterBlocks.length;
+    for (let i = 0; i < starterBlocks.length; i++) {
+      buf[p++] = DEBUG_CMD_ENCODE[starterBlocks[i].type] ?? 0;
+    }
+    buf[p++] = rawClueBytes.length;
+    for (let i = 0; i < rawClueBytes.length; i++) {
+      buf[p++] = rawClueBytes[i];
     }
   }
 
@@ -462,7 +541,7 @@ export function decodeChallengeCode(
 
   let p = 0;
   const version = buf[p++];
-  if (version !== 1) {
+  if (version !== 1 && version !== 2) {
     return { ok: false, error: `Unsupported challenge code version (${version}).` };
   }
   const budget = buf[p++];
@@ -486,7 +565,12 @@ export function decodeChallengeCode(
   const name = sanitizeSandboxName(decoder.decode(nameBytes));
 
   const trackLen = buf[p++];
-  if (trackLen < SANDBOX_MIN_TILES || trackLen > SANDBOX_MAX_TILES || p + trackLen + 25 !== buf.length) {
+  if (
+    trackLen < SANDBOX_MIN_TILES ||
+    trackLen > SANDBOX_MAX_TILES ||
+    (version === 1 && p + trackLen + 25 !== buf.length) ||
+    (version === 2 && p + trackLen + 25 + 2 > buf.length)
+  ) {
     return { ok: false, error: 'Challenge code track/circuit layout length mismatch.' };
   }
 
@@ -517,6 +601,34 @@ export function decodeChallengeCode(
     }
   }
 
+  let isDebugPuzzle = false;
+  let starterProgram: CodeBlock[] | undefined;
+  let bugClue: string | undefined;
+
+  if (version === 2) {
+    const starterLen = buf[p++];
+    if (starterLen > SANDBOX_MAX_STARTER_BLOCKS || p + starterLen + 1 > buf.length) {
+      return { ok: false, error: 'Debug challenge starter code payload is invalid.' };
+    }
+    const blocks: CodeBlock[] = [];
+    for (let i = 0; i < starterLen; i++) {
+      const cmdIdx = buf[p++];
+      const cmdType = DEBUG_CMD_DECODE[cmdIdx];
+      if (!cmdType) {
+        return { ok: false, error: 'Debug challenge contains an unknown code block.' };
+      }
+      blocks.push({ id: `cc_dbg_${i + 1}`, type: cmdType });
+    }
+    const clueLen = buf[p++];
+    if (clueLen > SANDBOX_MAX_BUG_CLUE_LEN || p + clueLen !== buf.length) {
+      return { ok: false, error: 'Debug challenge clue payload is invalid.' };
+    }
+    const clueBytes = buf.slice(p, p + clueLen);
+    isDebugPuzzle = Boolean(flags & 4) && blocks.length > 0;
+    starterProgram = blocks;
+    bugClue = sanitizeBugClue(decoder.decode(clueBytes)) || undefined;
+  }
+
   const draft = normalizeSandboxDraft({
     id: `class_${givenHex.toLowerCase()}`,
     name,
@@ -526,7 +638,10 @@ export function decodeChallengeCode(
     loopUnlocked: Boolean(flags & 1),
     ifUnlocked: Boolean(flags & 2),
     track,
-    circuit
+    circuit,
+    isDebugPuzzle,
+    starterProgram,
+    bugClue
   });
 
   return { ok: true, draft };

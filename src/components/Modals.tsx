@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Award,
   BookOpen,
@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Settings,
   Shield,
+  ShoppingBag,
   Square,
   Star,
   Timer,
@@ -27,6 +28,7 @@ import {
   Zap
 } from 'lucide-react';
 import { BONUS_LEVELS, LEVELS, type SaveProfile } from '../game/engine';
+import { DEBUG_MISSIONS } from '../game/debugMissions';
 import { formatChallengeTime, type SpeedRunEvaluation } from '../game/challengeTimer';
 import { buildBeatenLevelHistory } from '../game/levelHistory';
 import {
@@ -59,6 +61,8 @@ interface VictoryModalProps {
   parBudget: number;
   hasNextLevel: boolean;
   isSandbox?: boolean;
+  isDebugMission?: boolean;
+  debugBoltReward?: number;
   upgradedPillars?: AcademyPillarId[];
   speedRun?: VictorySpeedRunSummary | null;
   bugFixerBonus?: boolean;
@@ -67,6 +71,7 @@ interface VictoryModalProps {
   onReplay: () => void;
   onOpenMap: () => void;
   onOpenTrophies?: () => void;
+  onOpenShop?: () => void;
   onOpenSandbox?: () => void;
   onNextLevel: () => void;
 }
@@ -86,6 +91,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   parBudget,
   hasNextLevel,
   isSandbox = false,
+  isDebugMission = false,
+  debugBoltReward = 0,
   upgradedPillars = [],
   speedRun = null,
   bugFixerBonus = false,
@@ -94,6 +101,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onReplay,
   onOpenMap,
   onOpenTrophies,
+  onOpenShop,
   onOpenSandbox,
   onNextLevel
 }) => {
@@ -107,6 +115,27 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
       className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/78 p-3 sm:p-4"
     >
       <div className="anim-pop touch-pan-y flex max-h-[92dvh] w-full max-w-md flex-col items-center gap-3.5 overflow-y-auto rounded-3xl border-2 border-emerald-400/80 bg-slate-900 p-4 shadow-2xl sm:gap-4 sm:p-6">
+        {/* Bug Buster Mission Solved Banner */}
+        {isDebugMission && (
+          <div
+            data-testid="victory-debug-squashed-banner"
+            className="flex w-full items-center justify-between gap-2 rounded-2xl border-2 border-violet-400/80 bg-violet-500/20 px-4 py-2.5"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-400/25 text-violet-200">
+                <Bug className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div className="text-sm font-black text-white">Bug Fixed!</div>
+            </div>
+            {debugBoltReward > 0 && (
+              <span className="tabular inline-flex shrink-0 items-center gap-1 rounded-xl bg-slate-950/80 px-2.5 py-1 text-xs font-black text-amber-300">
+                <Zap className="h-3.5 w-3.5 fill-amber-300 text-amber-300" aria-hidden="true" />
+                +{debugBoltReward}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* 3 Big Stars */}
         <div className="flex items-center gap-3">
           {[1, 2, 3].map((s) => (
@@ -235,12 +264,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-400/20 text-sky-300">
                 <Bug className="h-4.5 w-4.5" aria-hidden="true" />
               </div>
-              <div>
-                <div className="text-xs font-black text-white">Bug Fixer Bonus!</div>
-                <div className="text-[11px] font-medium text-sky-200">
-                  Tested, debugged, and fixed your robot code
-                </div>
-              </div>
+              <div className="text-xs font-black text-white">Bug Fixer Bonus</div>
             </div>
             <span className="tabular inline-flex shrink-0 items-center gap-1 rounded-lg bg-slate-950/75 px-2 py-0.5 text-xs font-black text-amber-300">
               <Zap className="h-3.5 w-3.5 fill-amber-300 text-amber-300" aria-hidden="true" />
@@ -279,17 +303,12 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           id="victoryWallRunBtn"
           type="button"
           onClick={onPlayDash}
-          aria-label="Enter Game Room (Wall Breaker, Power Connect, Robot Run, Space Shooter, Planet Expedition)"
-          className="flex h-16 w-full items-center justify-between gap-3 rounded-2xl border-2 border-fuchsia-300 bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-4 text-white shadow-lg transition-transform hover:brightness-105 active:scale-95"
+          aria-label="Enter Game Room"
+          className="flex h-16 w-full items-center justify-between gap-3 rounded-2xl border-2 border-fuchsia-300 bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-4 text-white shadow-[0_4px_0_#6b21a8] transition-transform hover:brightness-105 active:translate-y-0.5"
         >
           <div className="flex items-center gap-3 text-left">
-            <Gamepad2 className="h-7 w-7 shrink-0 text-amber-300" />
-            <div>
-              <div className="text-sm font-black leading-tight text-white">Enter Game Room</div>
-              <div className="text-[11px] font-semibold text-fuchsia-100">
-                Wall Breaker · Connect · Run · Space · Planet
-              </div>
-            </div>
+            <Gamepad2 className="h-8 w-8 shrink-0 text-amber-300" />
+            <div className="text-base font-black leading-tight text-white">Arcade Games</div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Zap className="h-5 w-5 fill-amber-300 text-amber-300" />
@@ -338,6 +357,17 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               )}
             </button>
           )}
+          {onOpenShop && (
+            <button
+              id="victoryShopBtn"
+              type="button"
+              onClick={onOpenShop}
+              aria-label="Open Bolt Upgrade Shop"
+              className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-amber-400/70 bg-amber-500/15 text-amber-300 hover:border-amber-300 active:scale-95"
+            >
+              <ShoppingBag className="h-7 w-7" />
+            </button>
+          )}
           {isSandbox && onOpenSandbox && (
             <button
               id="victoryEditSandboxBtn"
@@ -371,7 +401,9 @@ interface LevelMapModalProps {
   visible: boolean;
   save: SaveProfile;
   currentLevelId: number;
+  initialTab?: 'story' | 'debug';
   onSelectLevel: (id: number) => void;
+  onSelectDebugMission?: (missionId: string) => void;
   onStartDaily: () => void;
   onOpenSandbox?: () => void;
   onOpenClassCode?: () => void;
@@ -382,25 +414,31 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
   visible,
   save,
   currentLevelId,
+  initialTab = 'story',
   onSelectLevel,
+  onSelectDebugMission,
   onStartDaily,
   onOpenSandbox,
   onOpenClassCode,
   onClose
 }) => {
   const speech = useReadAloud();
+  const [mapTab, setMapTab] = useState<'story' | 'debug'>(initialTab);
 
   useEffect(() => {
-    if (!visible) {
+    if (visible) {
+      setMapTab(initialTab);
+    } else {
       SPEECH.stop();
     }
-  }, [visible]);
+  }, [visible, initialTab]);
 
   if (!visible) return null;
 
   const history = buildBeatenLevelHistory(save);
   const shields = normalizeStreakShields(save.streakShields);
   const allLevelsById = new Map([...LEVELS, ...BONUS_LEVELS].map((l) => [l.id, l]));
+  const debugSolvedCount = DEBUG_MISSIONS.filter((m) => Boolean(save.debugCompleted?.[m.id])).length;
 
   return (
     <div
@@ -474,7 +512,106 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
           </button>
         </div>
 
-        {/* 3-Chapter Story Campaign (Ages 6–11) */}
+        {/* Story Campaign vs Bug Buster Debug Challenges Switcher */}
+        {onSelectDebugMission && (
+          <div
+            role="tablist"
+            aria-label="Mission Modes"
+            className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-800 bg-slate-950 p-1"
+          >
+            <button
+              id="mapStoryTabBtn"
+              type="button"
+              role="tab"
+              aria-selected={mapTab === 'story'}
+              onClick={() => setMapTab('story')}
+              className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl text-xs font-black transition-colors sm:text-sm ${
+                mapTab === 'story'
+                  ? 'bg-sky-400 text-slate-950'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+              <span>Story Campaign</span>
+            </button>
+            <button
+              id="mapDebugTabBtn"
+              type="button"
+              role="tab"
+              aria-selected={mapTab === 'debug'}
+              onClick={() => setMapTab('debug')}
+              className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl text-xs font-black transition-colors sm:text-sm ${
+                mapTab === 'debug'
+                  ? 'bg-violet-400 text-slate-950'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Bug className="h-4 w-4" aria-hidden="true" />
+              <span>Bug Buster ({debugSolvedCount}/{DEBUG_MISSIONS.length})</span>
+            </button>
+          </div>
+        )}
+
+        {/* Bug Buster Debug Missions Grid (Zero-Reading Visual Cards) */}
+        {mapTab === 'debug' && onSelectDebugMission && (
+          <section
+            aria-label="Bug Buster Debug Missions"
+            data-testid="bug-buster-section"
+            className="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
+          >
+            {DEBUG_MISSIONS.map((mission) => {
+              const solved = Boolean(save.debugCompleted?.[mission.id]);
+              return (
+                <button
+                  key={mission.id}
+                  type="button"
+                  data-debug-mission={mission.id}
+                  onClick={() => {
+                    SPEECH.stop();
+                    onSelectDebugMission(mission.id);
+                  }}
+                  aria-label={`Bug ${mission.order} ${mission.name}`}
+                  className={`flex flex-col items-center justify-between gap-2 rounded-2xl border-2 p-3 text-center transition-transform active:scale-95 ${
+                    solved
+                      ? 'border-emerald-400/80 bg-emerald-950/35 hover:border-emerald-300'
+                      : 'border-violet-500/75 bg-slate-950/90 hover:border-violet-300'
+                  }`}
+                >
+                  <div className="flex w-full items-center justify-between gap-1">
+                    <span className="tabular text-xs font-black text-violet-300">#{mission.order}</span>
+                    {solved ? (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-400 text-slate-950">
+                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      </span>
+                    ) : (
+                      <span className="tabular inline-flex items-center gap-0.5 text-xs font-black text-amber-300">
+                        <Zap className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
+                        +{mission.boltReward}
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 ${
+                      solved
+                        ? 'border-emerald-400/70 bg-emerald-500/20 text-emerald-300'
+                        : 'border-violet-400/70 bg-violet-500/20 text-violet-200'
+                    }`}
+                  >
+                    <Bug className="h-6 w-6" aria-hidden="true" />
+                  </div>
+
+                  <div className="max-w-full truncate text-xs font-black text-white">
+                    {mission.skillTag}
+                  </div>
+                </button>
+              );
+            })}
+          </section>
+        )}
+
+        {/* Story Campaign (Ages 6–12) */}
+        {mapTab === 'story' && (
         <div className="flex flex-col gap-3">
           {STORY_CHAPTERS.map((chapter) => {
             const chapterSpeechId = `chapter_${chapter.id}`;
@@ -486,54 +623,39 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                 aria-label={chapter.title}
                 className="flex flex-col gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/75 p-3"
               >
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-sm font-black text-white">
-                      {chapter.title}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-300">
-                        {chapter.ageBand} · {chapter.stemFocus}
-                      </span>
-                      {speech.supported && (
-                        <button
-                          type="button"
-                          data-listen-chapter={chapter.id}
-                          onClick={() =>
-                            SPEECH.toggleSpeak(
-                              `${chapter.title}. ${chapter.briefingLines.join(' ')}`,
-                              chapterSpeechId
-                            )
-                          }
-                          aria-label={
-                            isSpeakingChapter
-                              ? `Stop reading ${chapter.title}`
-                              : `Listen to ${chapter.title} briefing`
-                          }
-                          className={`flex h-8 items-center gap-1 whitespace-nowrap rounded-lg border px-2 text-[11px] font-black transition-transform active:scale-95 ${
-                            isSpeakingChapter
-                              ? 'border-rose-400 bg-rose-500/20 text-rose-100'
-                              : 'border-slate-700 bg-slate-900 text-sky-200 hover:border-sky-400'
-                          }`}
-                        >
-                          {isSpeakingChapter ? (
-                            <>
-                              <Square className="h-3 w-3 fill-current" aria-hidden="true" />
-                              <span>Stop</span>
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              <span>Listen</span>
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-black text-white">{chapter.title}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-sky-300">{chapter.ageBand}</span>
+                    {speech.supported && (
+                      <button
+                        type="button"
+                        data-listen-chapter={chapter.id}
+                        onClick={() =>
+                          SPEECH.toggleSpeak(
+                            `${chapter.title}. ${chapter.briefingLines.join(' ')}`,
+                            chapterSpeechId
+                          )
+                        }
+                        aria-label={
+                          isSpeakingChapter
+                            ? `Stop reading ${chapter.title}`
+                            : `Listen to ${chapter.title}`
+                        }
+                        className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
+                          isSpeakingChapter
+                            ? 'border-rose-400 bg-rose-500/20 text-rose-100'
+                            : 'border-slate-700 bg-slate-900 text-sky-200 hover:border-sky-400'
+                        }`}
+                      >
+                        {isSpeakingChapter ? (
+                          <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                        ) : (
+                          <Volume2 className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                    )}
                   </div>
-                  <p className="text-xs font-medium leading-snug text-slate-400">
-                    {chapter.briefingLines[0]}
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
@@ -552,6 +674,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                       : save.stars[lvl.id] || 0;
                     const bStar = isBonus && typeof rec === 'object' ? rec.bonusStar : false;
                     const active = currentLevelId === lvl.id;
+                    const isBoss = Boolean(lvl.isBoss);
 
                     return (
                       <button
@@ -559,25 +682,40 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                         type="button"
                         disabled={!unlocked}
                         onClick={() => onSelectLevel(lvl.id)}
-                        aria-label={isBonus ? `Bonus Level ${lvl.id}` : `Level ${lvl.id}`}
+                        aria-label={
+                          isBoss
+                            ? `Boss Level ${lvl.id} ${lvl.name}`
+                            : isBonus
+                              ? `Bonus Level ${lvl.id}`
+                              : `Level ${lvl.id}`
+                        }
                         className={`relative flex h-20 flex-col items-center justify-center gap-1 rounded-2xl border-2 px-1 transition-transform active:scale-95 ${
                           active
                             ? 'border-amber-300 bg-amber-400/20'
-                            : isBonus
-                              ? 'border-violet-500/70 bg-slate-800 hover:border-violet-300'
-                              : unlocked
-                                ? 'border-sky-400/70 bg-slate-800 hover:border-sky-300'
-                                : 'border-slate-800 bg-slate-950 opacity-50'
+                            : isBoss
+                              ? 'border-amber-400/85 bg-gradient-to-b from-amber-950/75 to-slate-900 hover:border-amber-300'
+                              : isBonus
+                                ? 'border-violet-500/70 bg-slate-800 hover:border-violet-300'
+                                : unlocked
+                                  ? 'border-sky-400/70 bg-slate-800 hover:border-sky-300'
+                                  : 'border-slate-800 bg-slate-950 opacity-50'
                         }`}
                       >
                         {bStar && <Award className="absolute right-1.5 top-1.5 h-4 w-4 text-amber-300" />}
+                        {isBoss && !bStar && (
+                          <Shield className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
+                        )}
                         {unlocked ? (
                           <span
                             className={`tabular text-xl font-black leading-none ${
-                              isBonus ? 'text-violet-200' : 'text-white'
+                              isBoss
+                                ? 'text-amber-300'
+                                : isBonus
+                                  ? 'text-violet-200'
+                                  : 'text-white'
                             }`}
                           >
-                            {lvl.id}
+                            {isBoss ? `BOSS` : lvl.id}
                           </span>
                         ) : (
                           <Lock className="h-5 w-5 text-slate-500" />
@@ -603,6 +741,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
             );
           })}
         </div>
+        )}
 
         {/* Beaten Levels History */}
         <section

@@ -556,6 +556,29 @@ input:focus-visible {
   animation: tutorialCardIn 190ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes hudRobotBounceIn {
+  0% {
+    opacity: 0.55;
+    transform: translateY(5px) scale(0.82);
+  }
+  52% {
+    opacity: 1;
+    transform: translateY(-2.5px) scale(1.09);
+  }
+  78% {
+    transform: translateY(1px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.anim-hud-robot-bounce {
+  animation: hudRobotBounceIn 420ms cubic-bezier(0.22, 1.35, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .anim-bob,
   .anim-pop,
@@ -590,7 +613,8 @@ input:focus-visible {
   .anim-magnetic-ghost-slot,
   .anim-tutorial-spotlight,
   .anim-tutorial-dash,
-  .anim-tutorial-card {
+  .anim-tutorial-card,
+  .anim-hud-robot-bounce {
     animation: none !important;
     transition: none !important;
   }

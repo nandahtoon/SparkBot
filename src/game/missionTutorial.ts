@@ -258,11 +258,11 @@ export function computeSpotlightCardPosition(params: {
     viewportHeight,
     primaryRect,
     secondaryRect = null,
-    cardHeight = 168
+    cardHeight = 76
   } = params;
 
   const margin = viewportWidth < 480 ? 12 : 16;
-  const topSafe = viewportWidth < 768 ? 96 : 68;
+  const topSafe = viewportWidth < 768 ? 100 : 72;
   const bottomSafe = 16;
   const cardWidth = Math.min(352, Math.max(248, viewportWidth - margin * 2));
 
@@ -298,11 +298,18 @@ export function computeSpotlightCardPosition(params: {
 
   const canPlaceBelow = idealBelowTop + cardHeight <= viewportHeight - bottomSafe;
   const canPlaceAbove = idealAboveTop >= topSafe;
+  const secondaryIsAbovePrimary = Boolean(
+    secondaryRect && secondaryRect.top + secondaryRect.height < targetTop - 20
+  );
 
-  // If the primary target is in the lower half (dock buttons/parts/blocks), prefer placing above—
-  // unless secondary target sits directly above (like 3D chassis slot), in which case tuck cleanly near topSafe!
+  // If the primary target is in the lower half (dock buttons/parts/blocks):
+  // - On mobile portrait or whenever dragging up to a 3D target above the dock, tuck cleanly at topSafe
+  //   so the tutorial bar NEVER covers the dock header or blocks the drag arrow!
   if (targetTop > viewportHeight * 0.48) {
-    if (canPlaceAbove && !overlapsSecondary(idealAboveTop)) {
+    if ((viewportWidth < 640 || secondaryIsAbovePrimary) && !overlapsSecondary(topSafe)) {
+      top = topSafe;
+      placement = 'above';
+    } else if (canPlaceAbove && !overlapsSecondary(idealAboveTop)) {
       top = idealAboveTop;
       placement = 'above';
     } else if (!overlapsSecondary(topSafe)) {

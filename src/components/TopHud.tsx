@@ -30,7 +30,7 @@ import { MuteIndicator, useMuteFlash } from './MuteIndicator';
 
 export interface MoodCue {
   mood: 'happy' | 'sad' | 'confused';
-  hazard?: 'GAP' | 'MUD' | 'RAMP';
+  hazard?: 'GAP' | 'MUD' | 'RAMP' | 'HAZARD';
   part?: PartId;
 }
 
@@ -129,45 +129,45 @@ export const TopHud: React.FC<TopHudProps> = ({
     <div className="pointer-events-none safe-top fixed inset-x-0 top-0 z-20 flex flex-col items-center gap-1 px-2 pb-1 sm:gap-1.5 sm:px-3.5">
       <div className="flex w-full flex-wrap items-center justify-between gap-x-1 gap-y-1 sm:gap-2">
         {/* Top-Left: Home, Map, Level Number, Profile */}
-        <div className="pointer-events-auto order-1 flex shrink-0 items-center gap-1 sm:gap-1.5">
+        <div className="pointer-events-auto order-1 flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             onClick={onGoHome}
             aria-label="Home Title Screen"
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/90 text-slate-100 shadow-md backdrop-blur-sm transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform hover:border-sky-400 active:scale-95"
           >
-            <Home className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Home className="h-4.5 w-4.5" />
           </button>
           <button
             type="button"
             onClick={onOpenMap}
             aria-label="Level Map"
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/90 text-sky-300 shadow-md backdrop-blur-sm transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-sky-300 shadow-md transition-transform hover:border-sky-400 active:scale-95"
           >
-            <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <LayoutGrid className="h-4.5 w-4.5" />
           </button>
 
           {/* Compact Numeric Level & Star Chip */}
           <div
             aria-label={isDaily ? 'Daily Challenge' : `Level ${levelId}`}
-            className={`flex h-8 items-center gap-1 rounded-xl border px-2 shadow-md backdrop-blur-sm sm:h-9 sm:gap-1.5 sm:px-2.5 ${
+            className={`flex h-10 items-center gap-1.5 rounded-2xl border-2 px-2.5 shadow-md ${
               isDaily
-                ? 'border-orange-400/85 bg-slate-900/90 text-orange-300'
+                ? 'border-orange-400/85 bg-slate-900/95 text-orange-300'
                 : isBonus
-                  ? 'border-violet-400/85 bg-slate-900/90 text-violet-300'
-                  : 'border-slate-600/80 bg-slate-900/90 text-amber-300'
+                  ? 'border-violet-400/85 bg-slate-900/95 text-violet-300'
+                  : 'border-slate-600/80 bg-slate-900/95 text-amber-300'
             }`}
           >
             {isDaily ? (
-              <Flame className="anim-flame-flicker h-3.5 w-3.5 fill-orange-400 text-orange-400 sm:h-4 sm:w-4" />
+              <Flame className="h-4 w-4 fill-orange-400 text-orange-400" />
             ) : (
-              <span className="tabular text-xs font-black sm:text-sm">{levelId}</span>
+              <span className="tabular text-sm font-black">{levelId}</span>
             )}
             <div className="flex gap-0.5">
               {[1, 2, 3].map((s) => (
                 <Star
                   key={s}
-                  className={`h-2.5 w-2.5 sm:h-3 sm:w-3 ${
+                  className={`h-3 w-3 ${
                     s <= starsEarned ? 'anim-reward-hop fill-amber-400 text-amber-400' : 'text-slate-600'
                   }`}
                 />
@@ -181,24 +181,31 @@ export const TopHud: React.FC<TopHudProps> = ({
             type="button"
             onClick={onOpenProfile}
             aria-label={`Open Save Profile (${profileName} — ${charDef.name})`}
-            className="flex h-8 items-center gap-1.5 rounded-xl border bg-slate-900/90 px-1 shadow-md backdrop-blur-sm transition-transform hover:brightness-110 active:scale-95 sm:h-9 sm:px-1.5"
+            className="flex h-10 items-center gap-1.5 rounded-2xl border-2 bg-slate-900/95 px-1.5 shadow-md transition-transform hover:brightness-110 active:scale-95"
             style={{ borderColor: charDef.accentCss }}
           >
-            <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-lg bg-slate-800 sm:h-6.5 sm:w-6.5">
-              {charDef.portraitUrl ? (
-                <img
-                  src={charDef.portraitUrl}
-                  alt={charDef.name}
-                  className="h-full w-full object-cover"
-                  style={{
-                    objectPosition: charDef.portraitPosition,
-                    transform: `scale(${charDef.portraitScale})`,
-                    transformOrigin: charDef.portraitOrigin
-                  }}
-                />
-              ) : (
-                <SparkBotEmblem className="h-5 w-5 sm:h-6 sm:w-6" />
-              )}
+            <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-xl bg-slate-800">
+              <span
+                key={`${mode}-${activeCharacter}`}
+                data-testid="hud-robot-sprite"
+                data-hud-mode={mode}
+                className="anim-hud-robot-bounce flex h-full w-full items-center justify-center"
+              >
+                {charDef.portraitUrl ? (
+                  <img
+                    src={charDef.portraitUrl}
+                    alt={charDef.name}
+                    className="h-full w-full object-cover"
+                    style={{
+                      objectPosition: charDef.portraitPosition,
+                      transform: `scale(${charDef.portraitScale})`,
+                      transformOrigin: charDef.portraitOrigin
+                    }}
+                  />
+                ) : (
+                  <SparkBotEmblem className="h-5 w-5 sm:h-6 sm:w-6" />
+                )}
+              </span>
             </span>
             <span
               data-testid="hud-profile-name"
@@ -209,51 +216,51 @@ export const TopHud: React.FC<TopHudProps> = ({
           </button>
         </div>
 
-        {/* Center: 4-Stage Dots + Challenge Timer (wraps as slim micro-row on < md, inline on md+) */}
+        {/* Center: 4-Stage Visual Icons + Icon-First Challenge Timer */}
         <div className="pointer-events-auto order-3 flex w-full items-center justify-center gap-1.5 md:order-2 md:w-auto">
-          <div className="flex h-7 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-900/85 px-1.5 shadow backdrop-blur-sm md:h-9 md:border-slate-600/80 md:bg-slate-900/90">
+          <div className="flex h-9 items-center gap-1 rounded-2xl border border-slate-700/90 bg-slate-900/92 px-1.5 shadow-md md:h-10">
             <button
               id="toBuildBtn"
               type="button"
               onClick={() => onSwitchPhase('BUILD_3D')}
               disabled={mode === 'SIMULATING' || mode === 'ACTION_RUN_3D' || mode === 'PLANET_ADVENTURE_3D'}
               aria-label="3D Build Workshop"
-              className={`flex h-5.5 w-5.5 items-center justify-center rounded-md transition-transform md:h-7 md:w-7 md:rounded-lg ${
+              className={`flex h-7 w-7 items-center justify-center rounded-xl transition-transform md:h-8 md:w-8 ${
                 activeStage === 0
-                  ? 'bg-amber-400 text-slate-950 md:scale-105'
+                  ? 'bg-amber-400 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:bg-slate-700 md:bg-slate-800 md:text-slate-300'
               }`}
             >
-              <Wrench className="h-3 w-3 md:h-3.5 md:w-3.5" />
+              <Wrench className="h-3.5 w-3.5 md:h-4 md:w-4" />
             </button>
             <button
               type="button"
               onClick={() => canCode && onSwitchPhase('CODE_3D')}
               disabled={!canCode || mode === 'SIMULATING' || mode === 'ACTION_RUN_3D' || mode === 'PLANET_ADVENTURE_3D'}
               aria-label="3D Code Track"
-              className={`flex h-5.5 w-5.5 items-center justify-center rounded-md transition-transform md:h-7 md:w-7 md:rounded-lg ${
+              className={`flex h-7 w-7 items-center justify-center rounded-xl transition-transform md:h-8 md:w-8 ${
                 activeStage === 1
-                  ? 'bg-sky-400 text-slate-950 md:scale-105'
+                  ? 'bg-sky-400 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:bg-slate-700 disabled:opacity-35 md:bg-slate-800 md:text-slate-300 md:disabled:opacity-40'
               }`}
             >
-              <Puzzle className="h-3 w-3 md:h-3.5 md:w-3.5" />
+              <Puzzle className="h-3.5 w-3.5 md:h-4 md:w-4" />
             </button>
             <div
               aria-label="3D Laser Circuit"
-              className={`flex h-5.5 w-5.5 items-center justify-center rounded-md md:h-7 md:w-7 md:rounded-lg ${
-                activeStage === 2 ? 'bg-cyan-400 text-slate-950 md:scale-105' : 'text-slate-500 md:bg-slate-800 md:text-slate-400'
+              className={`flex h-7 w-7 items-center justify-center rounded-xl md:h-8 md:w-8 ${
+                activeStage === 2 ? 'bg-cyan-400 text-slate-950 shadow-sm' : 'text-slate-500 md:bg-slate-800 md:text-slate-400'
               }`}
             >
-              <Star className="h-3 w-3 md:h-3.5 md:w-3.5" />
+              <Star className="h-3.5 w-3.5 md:h-4 md:w-4" />
             </div>
             <div
               aria-label="3D Action Dash"
-              className={`flex h-5.5 w-5.5 items-center justify-center rounded-md md:h-7 md:w-7 md:rounded-lg ${
-                activeStage === 3 ? 'bg-fuchsia-400 text-slate-950 md:scale-105' : 'text-slate-500 md:bg-slate-800 md:text-slate-400'
+              className={`flex h-7 w-7 items-center justify-center rounded-xl md:h-8 md:w-8 ${
+                activeStage === 3 ? 'bg-fuchsia-400 text-slate-950 shadow-sm' : 'text-slate-500 md:bg-slate-800 md:text-slate-400'
               }`}
             >
-              <Zap className="h-3 w-3 md:h-3.5 md:w-3.5" />
+              <Zap className="h-3.5 w-3.5 md:h-4 md:w-4" />
             </div>
           </div>
 
@@ -271,26 +278,26 @@ export const TopHud: React.FC<TopHudProps> = ({
               title={
                 challengeTimerEnabled
                   ? `Gold ≤ ${formatChallengeTime(timeTargets.goldMs)} · Silver ≤ ${formatChallengeTime(timeTargets.silverMs)} · Bronze ≤ ${formatChallengeTime(timeTargets.bronzeMs)}${bestTimeMs ? ` · Best ${formatChallengeTime(bestTimeMs)}` : ''}`
-                  : 'Enable optional Challenge Timer for speed-run bonus bolts'
+                  : 'Challenge Timer'
               }
               onClick={onToggleChallengeTimer}
-              className={`flex h-7 items-center gap-1 rounded-xl border px-2 shadow backdrop-blur-sm transition-transform hover:brightness-110 active:scale-95 md:h-9 md:gap-1.5 md:px-2.5 md:shadow-md ${
+              className={`flex h-9 items-center justify-center gap-1.5 rounded-2xl border shadow-md transition-transform hover:brightness-110 active:scale-95 md:h-10 ${
                 challengeTimerEnabled
-                  ? timerTierClass
-                  : 'border-slate-700/80 bg-slate-900/85 text-slate-300 hover:border-amber-300/80 hover:text-amber-200 md:border-slate-600/80 md:bg-slate-900/90'
+                  ? `px-2.5 ${timerTierClass}`
+                  : 'w-9 border-slate-700/90 bg-slate-900/92 text-amber-300 hover:border-amber-300/80 md:w-10'
               }`}
             >
               <Timer
-                className={`h-3 w-3 shrink-0 md:h-3.5 md:w-3.5 ${
+                className={`h-4 w-4 shrink-0 ${
                   challengeTimerEnabled ? (timerPaused ? 'opacity-60' : '') : 'text-amber-300'
                 }`}
                 aria-hidden="true"
               />
-              {challengeTimerEnabled ? (
+              {challengeTimerEnabled && (
                 <div className="flex items-center gap-1.5">
                   <span
                     data-testid="hud-challenge-timer-value"
-                    className="tabular text-[11px] font-black tracking-tight md:text-xs"
+                    className="tabular text-xs font-black tracking-tight"
                   >
                     {formatChallengeTime(elapsedMs)}
                   </span>
@@ -298,49 +305,47 @@ export const TopHud: React.FC<TopHudProps> = ({
                     data-testid="hud-challenge-timer-tier"
                     className="hidden rounded-md bg-slate-950/65 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide xl:inline"
                   >
-                    {timerPaused ? 'Paused' : tierHintLabel}
+                    {timerPaused ? '||' : tierHintLabel}
                   </span>
                 </div>
-              ) : (
-                <span className="text-[11px] font-extrabold tracking-wide">Timer</span>
               )}
             </button>
           )}
         </div>
 
-        {/* Top-Right: 3D Ghost Preview (when applicable), Reset (sm+), Sound, Settings (sm+), Pause */}
-        <div className="pointer-events-auto order-2 flex shrink-0 items-center gap-1 sm:gap-1.5 md:order-3">
+        {/* Top-Right: 3D Ghost Preview, Reset (sm+), Sound, Settings (sm+), Pause */}
+        <div className="pointer-events-auto order-2 flex shrink-0 items-center gap-1.5 md:order-3">
           {(mode === 'BUILD_3D' || mode === 'CODE_3D' || mode === 'CIRCUIT_3D') && (
             <button
               type="button"
               onClick={onToggleGhost}
               aria-label={ghostHelp ? 'Hide 3D Ghost Preview' : 'Show 3D Ghost Preview'}
               title="3D Ghost Preview"
-              className={`flex h-8 w-8 items-center justify-center rounded-xl border shadow-md backdrop-blur-sm transition-transform active:scale-95 sm:h-9 sm:w-9 ${
+              className={`flex h-10 w-10 items-center justify-center rounded-2xl border-2 shadow-md transition-transform active:scale-95 ${
                 ghostHelp
-                  ? 'border-cyan-300 bg-cyan-400 text-slate-950'
-                  : 'border-slate-600/80 bg-slate-900/90 text-cyan-300 hover:border-cyan-300'
+                  ? 'border-cyan-200 bg-cyan-400 text-slate-950'
+                  : 'border-slate-600/80 bg-slate-900/95 text-cyan-300 hover:border-cyan-300'
               }`}
             >
-              <Ghost className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+              <Ghost className="h-4.5 w-4.5" />
             </button>
           )}
           <button
             type="button"
             onClick={onReset}
             aria-label="Reset Stage"
-            className="hidden h-8 w-8 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/90 text-slate-100 shadow-md backdrop-blur-sm transition-transform hover:border-sky-400 active:scale-95 sm:flex sm:h-9 sm:w-9"
+            className="hidden h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform hover:border-sky-400 active:scale-95 sm:flex"
           >
-            <RotateCcw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <RotateCcw className="h-4.5 w-4.5" />
           </button>
           <div className="relative">
             <button
               type="button"
               onClick={onToggleMute}
               aria-label={muted ? 'Unmute Sound' : 'Mute Sound'}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/90 text-slate-100 shadow-md backdrop-blur-sm transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform hover:border-sky-400 active:scale-95"
             >
-              {muted ? <VolumeX className="h-3.5 w-3.5 text-rose-400 sm:h-4 sm:w-4" /> : <Volume2 className="h-3.5 w-3.5 text-sky-300 sm:h-4 sm:w-4" />}
+              {muted ? <VolumeX className="h-4.5 w-4.5 text-rose-400" /> : <Volume2 className="h-4.5 w-4.5 text-sky-300" />}
             </button>
             <MuteIndicator muted={muted} visible={muteFlashVisible} flashKey={muteFlashKey} />
           </div>
@@ -349,17 +354,17 @@ export const TopHud: React.FC<TopHudProps> = ({
             type="button"
             onClick={onOpenSettings}
             aria-label="Audio and Settings"
-            className="hidden h-8 w-8 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/90 text-sky-300 shadow-md backdrop-blur-sm transition-transform hover:border-sky-400 active:scale-95 sm:flex sm:h-9 sm:w-9"
+            className="hidden h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-sky-300 shadow-md transition-transform hover:border-sky-400 active:scale-95 sm:flex"
           >
-            <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Settings className="h-4.5 w-4.5" />
           </button>
           <button
             type="button"
             onClick={onPause}
             aria-label="Pause"
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/90 text-slate-100 shadow-md backdrop-blur-sm transition-transform hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform hover:border-sky-400 active:scale-95"
           >
-            <Pause className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Pause className="h-4.5 w-4.5" />
           </button>
         </div>
       </div>

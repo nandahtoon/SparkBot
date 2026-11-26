@@ -1,3 +1,9 @@
+import {
+  detectHazardAheadForNextTick,
+  evaluateAllHazardsAtTick,
+  getBlockingHazardAtTile,
+  levelHasDynamicHazards
+} from './hazards';
 import { findCircuitFixCell } from './optics';
 import {
   PARTS,
@@ -86,64 +92,101 @@ export function canPlacePartInSlot(
   return { ok: true, reason: null };
 }
 
-export function countBlocks(blocks: CodeBlock[]): number {
+export function countBlocks(blocks: CodeBlock[], functionBody?: CodeBlock[]): number {
   let total = 0;
-  for (const blk of blocks) {
+  for (const blk of blocks || []) {
     total += 1;
     if ((blk.type === 'LOOP' || blk.type === 'IF') && Array.isArray(blk.children)) {
       total += countBlocks(blk.children);
     }
+    if (blk.type === 'IF' && Array.isArray(blk.elseChildren)) {
+      total += countBlocks(blk.elseChildren);
+    }
+  }
+  if (Array.isArray(functionBody) && functionBody.length > 0) {
+    total += countBlocks(functionBody);
   }
   return total;
 }
 
 export function hasEmptyContainer(blocks: CodeBlock[]): boolean {
-  for (const blk of blocks) {
-    if (blk.type === 'LOOP' || blk.type === 'IF') {
+  for (const blk of blocks || []) {
+    if (blk.type === 'LOOP') {
       if (!blk.children || blk.children.length === 0) return true;
       if (hasEmptyContainer(blk.children)) return true;
+    } else if (blk.type === 'IF') {
+      const hasThen = Array.isArray(blk.children) && blk.children.length > 0;
+      const hasElse = Array.isArray(blk.elseChildren) && blk.elseChildren.length > 0;
+      if (!hasThen && !hasElse) return true;
+      if (hasThen && hasEmptyContainer(blk.children!)) return true;
+      if (hasElse && hasEmptyContainer(blk.elseChildren!)) return true;
     }
   }
   return false;
 }
 
-export function flattenBlocks(blocks: CodeBlock[], maxSteps = 64): Array<{ type: string; blockId: string }> {
+export function flattenBlocks(
+  blocks: CodeBlock[],
+  maxSteps = 64,
+  functionBody: CodeBlock[] = []
+): Array<{ type: string; blockId: string }> {
   const out: Array<{ type: string; blockId: string }> = [];
-  function walk(list: CodeBlock[]) {
+  function walk(list: CodeBlock[], callDepth: number) {
     for (const b of list) {
       if (out.length >= maxSteps) return;
       if (b.type === 'LOOP') {
         const reps = Math.max(1, Math.min(5, b.count || 2));
         for (let k = 0; k < reps; k++) {
-          walk(b.children || []);
+          walk(b.children || [], callDepth);
           if (out.length >= maxSteps) return;
         }
       } else if (b.type === 'IF') {
-        walk(b.children || []);
+        walk(b.children || [], callDepth);
+        if (Array.isArray(b.elseChildren) && b.elseChildren.length > 0) {
+          walk(b.elseChildren, callDepth);
+        }
+      } else if (b.type === 'CALL_FUNC') {
+        if (callDepth < 2 && functionBody.length > 0) {
+          walk(functionBody, callDepth + 1);
+        }
       } else {
         out.push({ type: b.type, blockId: b.id });
       }
     }
   }
-  walk(blocks || []);
+  walk(blocks || [], 0);
   return out;
 }
 
-export function simulateProgram(level: LevelDef, chassis: ChassisGrid, blocks: CodeBlock[]): SimResult {
+export function simulateProgram(
+  level: LevelDef,
+  chassis: ChassisGrid,
+  blocks: CodeBlock[],
+  functionBody: CodeBlock[] = []
+): SimResult {
   const info = computeChassisInfo(chassis);
   const track = level.track;
   const gateIndex = track.length - 1;
+  const hasHazards = levelHasDynamicHazards(level);
   let totalCrystals = 0;
   for (const t of track) {
     if (t.crystal) totalCrystals++;
   }
 
   let pos = 0;
+  let tick = 0;
+  let usedElseBranch = false;
+  let usedFunctionCall = false;
+  let usedWait = false;
   const collectedSet: Record<number, boolean> = {};
   const events: SimEvent[] = [];
   let execCount = 0;
-  const MAX_EXEC = 96;
+  const MAX_EXEC = 128;
   let terminated: SimResult | null = null;
+
+  function snapHazards(t: number) {
+    return hasHazards ? evaluateAllHazardsAtTick(level, t) : undefined;
+  }
 
   function makeResult(
     status: 'win' | 'fail',
@@ -159,28 +202,135 @@ export function simulateProgram(level: LevelDef, chassis: ChassisGrid, blocks: C
       events,
       collectedCrystals: Object.keys(collectedSet).length,
       totalCrystals,
-      finalPos: pos
+      finalPos: pos,
+      finalTick: tick,
+      usedElseBranch,
+      usedFunctionCall,
+      usedWait
     };
   }
 
-  function executeAction(action: 'MOVE' | 'JUMP' | 'BOOST', blockId: string) {
+  function checkDynamicHazardCollision(
+    fromPos: number,
+    landPos: number,
+    action: 'MOVE' | 'JUMP' | 'BOOST' | 'WAIT',
+    blockId: string,
+    callerBlockId: string | null,
+    newCrystals: number[],
+    nextTick: number
+  ): boolean {
+    if (!hasHazards) return false;
+    const hit = getBlockingHazardAtTile(level, landPos, nextTick);
+    if (!hit) return false;
+    tick = nextTick;
+    pos = landPos;
+    events.push({
+      fromPos,
+      toPos: landPos,
+      action,
+      tick,
+      blockId,
+      callerBlockId,
+      hazardId: hit.id,
+      hazardSnapshots: snapHazards(tick),
+      status: 'fail',
+      newCrystals
+    });
+    if (hit.kind === 'laser_gate') {
+      terminated = makeResult(
+        'fail',
+        `Laser Barrier active at Tile ${landPos}! Use WAIT or IF [HAZARD] -> WAIT to pass on the open beat.`,
+        'laser_gate',
+        null
+      );
+    } else {
+      terminated = makeResult(
+        'fail',
+        `Patrol Drone swept Tile ${landPos}! Time your step with WAIT, JUMP, or IF [HAZARD].`,
+        'patrol_drone',
+        null
+      );
+    }
+    return true;
+  }
+
+  function executeAction(
+    action: 'MOVE' | 'JUMP' | 'BOOST' | 'WAIT',
+    blockId: string,
+    callerBlockId: string | null
+  ) {
     const newCrystals: number[] = [];
+
+    if (action === 'WAIT') {
+      usedWait = true;
+      const nextTick = tick + 1;
+      if (checkDynamicHazardCollision(pos, pos, action, blockId, callerBlockId, newCrystals, nextTick)) {
+        return;
+      }
+      tick = nextTick;
+      events.push({
+        fromPos: pos,
+        toPos: pos,
+        action: 'WAIT',
+        tick,
+        blockId,
+        callerBlockId,
+        hazardSnapshots: snapHazards(tick),
+        status: 'ok',
+        newCrystals: []
+      });
+      return;
+    }
+
     if (action === 'MOVE') {
       if (!info.hasDrive) {
-        events.push({ fromPos: pos, toPos: pos, action, blockId, status: 'fail', newCrystals: [] });
+        events.push({
+          fromPos: pos,
+          toPos: pos,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fail',
+          newCrystals: []
+        });
         terminated = makeResult('fail', 'Need Standard Wheels or Monster Treads!', 'missing_part', 'wheels');
         return;
       }
+      const nextTick = tick + 1;
       const nextPos = Math.min(pos + 1, gateIndex);
       const tile = track[nextPos];
       if (tile.type === 'gap') {
-        events.push({ fromPos: pos, toPos: nextPos, action, blockId, status: 'fall', newCrystals: [] });
+        tick = nextTick;
+        events.push({
+          fromPos: pos,
+          toPos: nextPos,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fall',
+          newCrystals: []
+        });
         pos = nextPos;
         terminated = makeResult('fail', 'Gap ahead! Use JUMP or BOOST to cross.', 'gap', info.hasThrusters ? null : 'thrusters');
         return;
       }
       if (tile.type === 'ramp') {
-        events.push({ fromPos: pos, toPos: nextPos, action, blockId, status: 'fail', newCrystals: [] });
+        tick = nextTick;
+        events.push({
+          fromPos: pos,
+          toPos: nextPos,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fail',
+          newCrystals: []
+        });
         terminated = makeResult(
           'fail',
           info.hasBooster ? 'Too steep to drive! Use BOOST!' : 'Need Turbo Booster for ramps!',
@@ -190,55 +340,150 @@ export function simulateProgram(level: LevelDef, chassis: ChassisGrid, blocks: C
         return;
       }
       if (tile.type === 'mud' && !info.hasTreads) {
-        events.push({ fromPos: pos, toPos: nextPos, action, blockId, status: 'stuck', newCrystals: [] });
+        tick = nextTick;
+        events.push({
+          fromPos: pos,
+          toPos: nextPos,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'stuck',
+          newCrystals: []
+        });
         pos = nextPos;
         terminated = makeResult('fail', 'Stuck in mud! Need Monster Treads!', 'mud', 'treads');
         return;
       }
+      if (checkDynamicHazardCollision(pos, nextPos, action, blockId, callerBlockId, newCrystals, nextTick)) {
+        return;
+      }
+      const fromM = pos;
       pos = nextPos;
+      tick = nextTick;
       if (tile.crystal && !collectedSet[pos]) {
         collectedSet[pos] = true;
         newCrystals.push(pos);
       }
-      events.push({ fromPos: pos - 1, toPos: pos, action, blockId, status: 'ok', newCrystals });
+      events.push({
+        fromPos: fromM,
+        toPos: pos,
+        action,
+        tick,
+        blockId,
+        callerBlockId,
+        hazardSnapshots: snapHazards(tick),
+        status: 'ok',
+        newCrystals
+      });
     } else if (action === 'JUMP') {
       if (!info.hasThrusters) {
-        events.push({ fromPos: pos, toPos: pos, action, blockId, status: 'fail', newCrystals: [] });
+        events.push({
+          fromPos: pos,
+          toPos: pos,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fail',
+          newCrystals: []
+        });
         terminated = makeResult('fail', 'Need Jump Thrusters!', 'missing_part', 'thrusters');
         return;
       }
+      const nextTick = tick + 1;
       const fromJ = pos;
       const landJ = Math.min(pos + 2, gateIndex);
       const landTileJ = track[landJ];
       if (landTileJ.type === 'gap') {
-        events.push({ fromPos: fromJ, toPos: landJ, action, blockId, status: 'fall', newCrystals: [] });
+        tick = nextTick;
+        events.push({
+          fromPos: fromJ,
+          toPos: landJ,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fall',
+          newCrystals: []
+        });
         pos = landJ;
         terminated = makeResult('fail', 'Landed in a gap! Adjust your JUMP spot.', 'gap', null);
         return;
       }
       if (landTileJ.type === 'ramp') {
-        events.push({ fromPos: fromJ, toPos: landJ, action, blockId, status: 'fail', newCrystals: [] });
+        tick = nextTick;
+        events.push({
+          fromPos: fromJ,
+          toPos: landJ,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fail',
+          newCrystals: []
+        });
         terminated = makeResult('fail', 'Steep ramp! Use Turbo Booster + BOOST!', info.hasBooster ? 'ramp' : 'missing_part', info.hasBooster ? null : 'booster');
         return;
       }
       if (landTileJ.type === 'mud' && !info.hasTreads) {
-        events.push({ fromPos: fromJ, toPos: landJ, action, blockId, status: 'stuck', newCrystals: [] });
+        tick = nextTick;
+        events.push({
+          fromPos: fromJ,
+          toPos: landJ,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'stuck',
+          newCrystals: []
+        });
         pos = landJ;
         terminated = makeResult('fail', 'Landed in mud! Need Monster Treads!', 'mud', 'treads');
         return;
       }
+      if (checkDynamicHazardCollision(fromJ, landJ, action, blockId, callerBlockId, newCrystals, nextTick)) {
+        return;
+      }
       pos = landJ;
+      tick = nextTick;
       if (landTileJ.crystal && !collectedSet[pos]) {
         collectedSet[pos] = true;
         newCrystals.push(pos);
       }
-      events.push({ fromPos: fromJ, toPos: pos, action, blockId, status: 'ok', newCrystals });
+      events.push({
+        fromPos: fromJ,
+        toPos: pos,
+        action,
+        tick,
+        blockId,
+        callerBlockId,
+        hazardSnapshots: snapHazards(tick),
+        status: 'ok',
+        newCrystals
+      });
     } else if (action === 'BOOST') {
       if (!info.hasBooster) {
-        events.push({ fromPos: pos, toPos: pos, action, blockId, status: 'fail', newCrystals: [] });
+        events.push({
+          fromPos: pos,
+          toPos: pos,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fail',
+          newCrystals: []
+        });
         terminated = makeResult('fail', 'Need Turbo Booster!', 'missing_part', 'booster');
         return;
       }
+      const nextTick = tick + 1;
       const fromB = pos;
       const landB = Math.min(pos + 3, gateIndex);
       const landTileB = track[landB];
@@ -249,25 +494,72 @@ export function simulateProgram(level: LevelDef, chassis: ChassisGrid, blocks: C
         }
       }
       if (landTileB.type === 'gap') {
-        events.push({ fromPos: fromB, toPos: landB, action, blockId, status: 'fall', newCrystals });
+        tick = nextTick;
+        events.push({
+          fromPos: fromB,
+          toPos: landB,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fall',
+          newCrystals
+        });
         pos = landB;
         terminated = makeResult('fail', 'Boosted into a gap!', 'gap', null);
         return;
       }
       if (landTileB.type === 'ramp') {
-        events.push({ fromPos: fromB, toPos: landB, action, blockId, status: 'fail', newCrystals });
+        tick = nextTick;
+        events.push({
+          fromPos: fromB,
+          toPos: landB,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'fail',
+          newCrystals
+        });
         pos = landB;
         terminated = makeResult('fail', 'Stopped on a steep ramp! Boost from further back.', 'ramp', null);
         return;
       }
       if (landTileB.type === 'mud' && !info.hasTreads) {
-        events.push({ fromPos: fromB, toPos: landB, action, blockId, status: 'stuck', newCrystals });
+        tick = nextTick;
+        events.push({
+          fromPos: fromB,
+          toPos: landB,
+          action,
+          tick,
+          blockId,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
+          status: 'stuck',
+          newCrystals
+        });
         pos = landB;
         terminated = makeResult('fail', 'Landed in mud! Need Monster Treads!', 'mud', 'treads');
         return;
       }
+      if (checkDynamicHazardCollision(fromB, landB, action, blockId, callerBlockId, newCrystals, nextTick)) {
+        return;
+      }
       pos = landB;
-      events.push({ fromPos: fromB, toPos: pos, action, blockId, status: 'ok', newCrystals });
+      tick = nextTick;
+      events.push({
+        fromPos: fromB,
+        toPos: pos,
+        action,
+        tick,
+        blockId,
+        callerBlockId,
+        hazardSnapshots: snapHazards(tick),
+        status: 'ok',
+        newCrystals
+      });
     }
 
     if (pos === gateIndex) {
@@ -279,7 +571,7 @@ export function simulateProgram(level: LevelDef, chassis: ChassisGrid, blocks: C
     }
   }
 
-  function runList(list: CodeBlock[]) {
+  function runList(list: CodeBlock[], callerBlockId: string | null, callDepth: number) {
     if (!Array.isArray(list)) return;
     for (const blk of list) {
       if (terminated || execCount >= MAX_EXEC) return;
@@ -287,38 +579,73 @@ export function simulateProgram(level: LevelDef, chassis: ChassisGrid, blocks: C
       if (blk.type === 'LOOP') {
         const reps = Math.max(1, Math.min(5, blk.count || 2));
         for (let r = 0; r < reps && !terminated && execCount < MAX_EXEC; r++) {
-          runList(blk.children || []);
+          runList(blk.children || [], callerBlockId, callDepth);
         }
       } else if (blk.type === 'IF') {
         execCount++;
         const rawCond = String(blk.condition || 'GAP').toUpperCase();
         const cond: SensorCondition =
-          rawCond === 'GAP' || rawCond === 'MUD' || rawCond === 'RAMP' ? rawCond : 'GAP';
+          rawCond === 'GAP' || rawCond === 'MUD' || rawCond === 'RAMP' || rawCond === 'HAZARD'
+            ? rawCond
+            : 'GAP';
         const scanTile = Math.min(pos + 1, gateIndex);
-        const aheadType = track[scanTile] ? String(track[scanTile].type || 'normal').toUpperCase() : 'NORMAL';
-        const matched = aheadType === cond;
+        let matched = false;
+        if (cond === 'HAZARD') {
+          matched = Boolean(detectHazardAheadForNextTick(level, pos, tick));
+        } else {
+          const aheadType = track[scanTile] ? String(track[scanTile].type || 'normal').toUpperCase() : 'NORMAL';
+          matched = aheadType === cond;
+        }
+        const hasElse = Array.isArray(blk.elseChildren) && blk.elseChildren.length > 0;
+        const branchTaken: 'then' | 'else' | 'skip' = matched ? 'then' : hasElse ? 'else' : 'skip';
+        if (branchTaken === 'else') {
+          usedElseBranch = true;
+        }
         events.push({
           fromPos: pos,
           toPos: pos,
           action: 'SCAN',
+          tick,
           condition: cond,
           scanTile,
           scanMatch: matched,
+          branchTaken,
           blockId: blk.id,
+          callerBlockId,
+          hazardSnapshots: snapHazards(tick),
           status: 'ok',
           newCrystals: []
         });
         if (matched) {
-          runList(blk.children || []);
+          runList(blk.children || [], callerBlockId, callDepth);
+        } else if (hasElse) {
+          runList(blk.elseChildren || [], callerBlockId, callDepth);
         }
+      } else if (blk.type === 'CALL_FUNC') {
+        usedFunctionCall = true;
+        if (!Array.isArray(functionBody) || functionBody.length === 0) {
+          terminated = makeResult(
+            'fail',
+            'MY BLOCK is empty! Snap 1 or more blocks into the MY BLOCK tray first.',
+            'empty_function',
+            null
+          );
+          return;
+        }
+        if (callDepth >= 2) {
+          continue;
+        }
+        runList(functionBody, blk.id, callDepth + 1);
       } else {
         execCount++;
-        executeAction(blk.type, blk.id);
+        executeAction(blk.type, blk.id, callerBlockId);
       }
     }
   }
 
-  runList(blocks || []);
+  runList(blocks || [], null, 0);
+
+  if (terminated) return terminated;
 
   if (events.length === 0) {
     const emptyChild = hasEmptyContainer(blocks || []);
@@ -329,7 +656,6 @@ export function simulateProgram(level: LevelDef, chassis: ChassisGrid, blocks: C
       null
     );
   }
-  if (terminated) return terminated;
   return makeResult('fail', 'Almost there! Add more blocks to reach the gate.', 'short', null);
 }
 
@@ -383,25 +709,35 @@ export function buildStepInspection(
   if (info.hasMagnet) activeCapabilities.push('Magnet');
 
   let statusLabel = '';
+  const fnPrefix = ev.callerBlockId ? 'MY BLOCK · ' : '';
   if (ev.action === 'SCAN') {
     const cond = ev.condition || 'GAP';
-    statusLabel = ev.scanMatch
-      ? `IF [${cond}] → TRUE (enter branch)`
-      : `IF [${cond}] → FALSE (skip branch)`;
+    if (ev.scanMatch) {
+      statusLabel = `${fnPrefix}IF [${cond}] → TRUE (run THEN)`;
+    } else if (ev.branchTaken === 'else') {
+      statusLabel = `${fnPrefix}IF [${cond}] → FALSE (run ELSE)`;
+    } else {
+      statusLabel = `${fnPrefix}IF [${cond}] → FALSE (skip branch)`;
+    }
+  } else if (ev.action === 'WAIT') {
+    statusLabel =
+      ev.status === 'fail'
+        ? `${fnPrefix}${result.failReason || `WAIT blocked at Tile ${tilePosition}`}`
+        : `${fnPrefix}WAIT → Held on Tile ${tilePosition} (Beat ${ev.tick ?? 1})`;
   } else if (ev.status === 'fall') {
-    statusLabel = `${ev.action} → Fell into gap at Tile ${tilePosition}`;
+    statusLabel = `${fnPrefix}${ev.action} → Fell into gap at Tile ${tilePosition}`;
   } else if (ev.status === 'stuck') {
-    statusLabel = `${ev.action} → Stuck in mud at Tile ${tilePosition}`;
+    statusLabel = `${fnPrefix}${ev.action} → Stuck in mud at Tile ${tilePosition}`;
   } else if (ev.status === 'fail') {
-    statusLabel = result.failReason || `${ev.action} blocked at Tile ${tilePosition}`;
+    statusLabel = `${fnPrefix}${result.failReason || `${ev.action} blocked at Tile ${tilePosition}`}`;
   } else if (tilePosition === gateIndex) {
-    statusLabel = `${ev.action} → Reached Laser Gate (Tile ${tilePosition})!`;
+    statusLabel = `${fnPrefix}${ev.action} → Reached Laser Gate (Tile ${tilePosition})!`;
   } else if (ev.action === 'MOVE') {
-    statusLabel = `MOVE → Rolled to Tile ${tilePosition}`;
+    statusLabel = `${fnPrefix}MOVE → Rolled to Tile ${tilePosition}`;
   } else if (ev.action === 'JUMP') {
-    statusLabel = `JUMP → Leaped to Tile ${tilePosition}`;
+    statusLabel = `${fnPrefix}JUMP → Leaped to Tile ${tilePosition}`;
   } else {
-    statusLabel = `BOOST → Surged to Tile ${tilePosition}`;
+    statusLabel = `${fnPrefix}BOOST → Surged to Tile ${tilePosition}`;
   }
 
   return {
@@ -422,7 +758,11 @@ export function buildStepInspection(
   };
 }
 
-export function collectAncestorBlockIds(blocks: CodeBlock[], targetId: string | null): string[] {
+export function collectAncestorBlockIds(
+  blocks: CodeBlock[],
+  targetId: string | null,
+  functionBody?: CodeBlock[]
+): string[] {
   if (!targetId || !Array.isArray(blocks)) return [];
   const path: string[] = [];
   function dfs(list: CodeBlock[]): boolean {
@@ -433,11 +773,20 @@ export function collectAncestorBlockIds(blocks: CodeBlock[], targetId: string | 
         if (dfs(blk.children)) return true;
         path.pop();
       }
+      if (Array.isArray(blk.elseChildren) && blk.elseChildren.length > 0) {
+        path.push(blk.id);
+        if (dfs(blk.elseChildren)) return true;
+        path.pop();
+      }
     }
     return false;
   }
-  dfs(blocks);
-  return path;
+  if (dfs(blocks)) return path;
+  if (Array.isArray(functionBody) && functionBody.length > 0) {
+    path.length = 0;
+    if (dfs(functionBody)) return path;
+  }
+  return [];
 }
 
 export function calculateStars(
@@ -476,26 +825,31 @@ export function findShortestTrackPlan(level: LevelDef): {
   const track = level?.track || [];
   const gateIndex = track.length - 1;
   if (gateIndex <= 0) return null;
+  const hasHazards = levelHasDynamicHazards(level);
+  const canWait = Boolean(level.waitUnlocked);
 
   for (const prof of CHASSIS_SOLVER_PROFILES) {
     if (prof.cost > level.budget) continue;
-    const queue = [{ pos: 0, seq: [] as string[], crystals: 0 }];
-    const bestAt: Record<string, number> = { '0': 0 };
+    const queue = [{ pos: 0, tick: 0, seq: [] as string[], crystals: 0 }];
+    const bestAt: Record<string, number> = { '0:0': 0 };
 
     while (queue.length > 0) {
       const cur = queue.shift()!;
       if (cur.pos === gateIndex) return { profile: prof, sequence: cur.seq };
-      if (cur.seq.length >= 20) continue;
+      if (cur.seq.length >= 22) continue;
+
+      const nextTick = cur.tick + 1;
 
       if (prof.wheels || prof.treads) {
         const np = Math.min(cur.pos + 1, gateIndex);
         const nt = track[np];
-        if (nt.type !== 'gap' && nt.type !== 'ramp' && (nt.type !== 'mud' || prof.treads)) {
+        const hazardBlocked = hasHazards && Boolean(getBlockingHazardAtTile(level, np, nextTick));
+        if (!hazardBlocked && nt.type !== 'gap' && nt.type !== 'ramp' && (nt.type !== 'mud' || prof.treads)) {
           const nc = cur.crystals + (nt.crystal ? 1 : 0);
-          const keyM = `${np}:${cur.seq.length}`;
+          const keyM = hasHazards ? `${np}:${nextTick}` : `${np}:${cur.seq.length}`;
           if (bestAt[keyM] === undefined || nc > bestAt[keyM]) {
             bestAt[keyM] = nc;
-            queue.push({ pos: np, seq: [...cur.seq, 'MOVE'], crystals: nc });
+            queue.push({ pos: np, tick: nextTick, seq: [...cur.seq, 'MOVE'], crystals: nc });
           }
         }
       }
@@ -503,12 +857,13 @@ export function findShortestTrackPlan(level: LevelDef): {
       if (prof.thrusters) {
         const jp = Math.min(cur.pos + 2, gateIndex);
         const jt = track[jp];
-        if (jt.type !== 'gap' && jt.type !== 'ramp' && (jt.type !== 'mud' || prof.treads)) {
+        const hazardBlocked = hasHazards && Boolean(getBlockingHazardAtTile(level, jp, nextTick));
+        if (!hazardBlocked && jt.type !== 'gap' && jt.type !== 'ramp' && (jt.type !== 'mud' || prof.treads)) {
           const jc = cur.crystals + (jt.crystal ? 1 : 0);
-          const keyJ = `${jp}:${cur.seq.length}`;
+          const keyJ = hasHazards ? `${jp}:${nextTick}` : `${jp}:${cur.seq.length}`;
           if (bestAt[keyJ] === undefined || jc > bestAt[keyJ]) {
             bestAt[keyJ] = jc;
-            queue.push({ pos: jp, seq: [...cur.seq, 'JUMP'], crystals: jc });
+            queue.push({ pos: jp, tick: nextTick, seq: [...cur.seq, 'JUMP'], crystals: jc });
           }
         }
       }
@@ -516,15 +871,27 @@ export function findShortestTrackPlan(level: LevelDef): {
       if (prof.booster) {
         const bp = Math.min(cur.pos + 3, gateIndex);
         const bt = track[bp];
-        if (bt.type !== 'gap' && bt.type !== 'ramp' && (bt.type !== 'mud' || prof.treads)) {
+        const hazardBlocked = hasHazards && Boolean(getBlockingHazardAtTile(level, bp, nextTick));
+        if (!hazardBlocked && bt.type !== 'gap' && bt.type !== 'ramp' && (bt.type !== 'mud' || prof.treads)) {
           let bc = cur.crystals;
           for (let s = cur.pos + 1; s <= bp; s++) {
             if (track[s].crystal && track[s].type !== 'gap') bc++;
           }
-          const keyB = `${bp}:${cur.seq.length}`;
+          const keyB = hasHazards ? `${bp}:${nextTick}` : `${bp}:${cur.seq.length}`;
           if (bestAt[keyB] === undefined || bc > bestAt[keyB]) {
             bestAt[keyB] = bc;
-            queue.push({ pos: bp, seq: [...cur.seq, 'BOOST'], crystals: bc });
+            queue.push({ pos: bp, tick: nextTick, seq: [...cur.seq, 'BOOST'], crystals: bc });
+          }
+        }
+      }
+
+      if (hasHazards && canWait) {
+        const waitBlocked = Boolean(getBlockingHazardAtTile(level, cur.pos, nextTick));
+        if (!waitBlocked) {
+          const keyW = `${cur.pos}:${nextTick}`;
+          if (bestAt[keyW] === undefined || cur.crystals > bestAt[keyW]) {
+            bestAt[keyW] = cur.crystals;
+            queue.push({ pos: cur.pos, tick: nextTick, seq: [...cur.seq, 'WAIT'], crystals: cur.crystals });
           }
         }
       }
@@ -690,7 +1057,8 @@ export function generateStructuralHint(
   phase: 'build' | 'code' | 'circuit' | 'sandbox' | 'action',
   chassis: ChassisGrid,
   program: CodeBlock[],
-  circuitGrid: CircuitGrid
+  circuitGrid: CircuitGrid,
+  functionBody: CodeBlock[] = []
 ): string {
   if (!level) return '';
   const info = computeChassisInfo(chassis || createEmptyChassis());
@@ -718,9 +1086,11 @@ export function generateStructuralHint(
   }
 
   if (phase === 'code') {
-    const blkCount = Array.isArray(program) ? countBlocks(program) : 0;
+    const blkCount = Array.isArray(program)
+      ? countBlocks(program, level.functionUnlocked ? functionBody : undefined)
+      : 0;
     if (blkCount > 0) {
-      const sim = simulateProgram(level, chassis || createEmptyChassis(), program);
+      const sim = simulateProgram(level, chassis || createEmptyChassis(), program, functionBody);
       if (sim.status === 'win') {
         if (blkCount > level.parBlocks && level.loopUnlocked && plan) {
           if (level.ifUnlocked) {
@@ -774,7 +1144,8 @@ export function getTutorialStep(
   chassis: ChassisGrid,
   program: CodeBlock[],
   circuitGrid: CircuitGrid,
-  selectedPart: PartId | null
+  selectedPart: PartId | null,
+  functionBody: CodeBlock[] = []
 ): TutorialStep {
   const info = computeChassisInfo(chassis || createEmptyChassis());
   const plan = findShortestTrackPlan(level);
@@ -866,7 +1237,7 @@ export function getTutorialStep(
   }
 
   if (phase === 'code') {
-    const sim = simulateProgram(level, chassis || createEmptyChassis(), program || []);
+    const sim = simulateProgram(level, chassis || createEmptyChassis(), program || [], functionBody);
     if (sim.status === 'win') {
       return {
         stepNum: 5,
@@ -887,7 +1258,7 @@ export function getTutorialStep(
         circuitTarget: null
       };
     }
-    const flat = flattenBlocks(program || []);
+    const flat = flattenBlocks(program || [], 64, functionBody);
     const seq = plan ? plan.sequence : ['MOVE'];
     const nextCmd = seq[Math.min(flat.length, seq.length - 1)] || 'MOVE';
     return {
@@ -983,7 +1354,7 @@ export type GhostPreviewPlan =
   | { kind: 'build'; partId: PartId; targetSlot: [number, number] }
   | {
       kind: 'code';
-      actionSequence: Array<'MOVE' | 'JUMP' | 'BOOST'>;
+      actionSequence: Array<'MOVE' | 'JUMP' | 'BOOST' | 'WAIT'>;
       simResult: SimResult;
       missingBlockType: BlockType;
       highlightCondition?: SensorCondition;
@@ -995,7 +1366,8 @@ export function computeGhostPreviewPlan(
   phase: 'build' | 'code' | 'circuit',
   chassis: ChassisGrid,
   program: CodeBlock[],
-  circuitGrid: CircuitGrid
+  circuitGrid: CircuitGrid,
+  functionBody: CodeBlock[] = []
 ): GhostPreviewPlan | null {
   const plan = findShortestTrackPlan(level);
   const info = computeChassisInfo(chassis || createEmptyChassis());
@@ -1025,7 +1397,8 @@ export function computeGhostPreviewPlan(
 
   if (phase === 'code') {
     const seq = (plan?.sequence || ['MOVE']).filter(
-      (s): s is 'MOVE' | 'JUMP' | 'BOOST' => s === 'MOVE' || s === 'JUMP' || s === 'BOOST'
+      (s): s is 'MOVE' | 'JUMP' | 'BOOST' | 'WAIT' =>
+        s === 'MOVE' || s === 'JUMP' || s === 'BOOST' || s === 'WAIT'
     );
     const ghostChassis = cloneChassis(chassis);
     if (plan?.profile.treads) ghostChassis[2][0] = 'treads';
@@ -1039,12 +1412,13 @@ export function computeGhostPreviewPlan(
       type: act
     }));
     const simResult = simulateProgram(level, ghostChassis, ghostBlocks);
-    const flat = flattenBlocks(program || []);
+    const flat = flattenBlocks(program || [], 64, functionBody);
     const nextAction = (seq[Math.min(flat.length, seq.length - 1)] || 'MOVE') as BlockType;
 
     let highlightCondition: SensorCondition | undefined;
     if (level.ifUnlocked) {
-      if (level.track.some((t) => t.type === 'gap')) highlightCondition = 'GAP';
+      if (levelHasDynamicHazards(level)) highlightCondition = 'HAZARD';
+      else if (level.track.some((t) => t.type === 'gap')) highlightCondition = 'GAP';
       else if (level.track.some((t) => t.type === 'mud')) highlightCondition = 'MUD';
       else if (level.track.some((t) => t.type === 'ramp')) highlightCondition = 'RAMP';
     }

@@ -22,6 +22,7 @@ import {
   getLevelById,
   getTutorialStep,
   LEVELS,
+  levelHasDynamicHazards,
   normalizeAudioSettings,
   normalizeBotCharacter,
   normalizeBotTheme,
@@ -60,6 +61,7 @@ import {
   renameSaveProfile,
   validateProfileName
 } from './game/profileStorage';
+import { dismissSplashScreen, updateSplashProgress } from './game/splashScreen';
 import {
   createRosterSlot,
   deleteRosterSlot,
@@ -92,6 +94,11 @@ import {
 } from './game/codeFeedback';
 import { buildLivePathPreview } from './game/pathPreview';
 import {
+  buildPredictBeforeRunQuestion,
+  shouldPromptPredictQuiz,
+  type PredictQuizQuestion
+} from './game/predictQuiz';
+import {
   createEmptyProgramHistory,
   pushProgramHistory,
   redoProgramHistory,
@@ -112,6 +119,7 @@ import {
 } from './game/sandboxCodec';
 import type { SandboxMissionDraft } from './game/engine';
 import type { UnifiedWorldController, WorldMode } from './three/worldScene';
+import { getNextCodeCameraPreset, type CodeCameraPreset } from './three/codeCamera';
 import type { HeadScreenPoint, SlotScreenPoint } from './three/robotRig';
 import { TitleOverlay } from './components/TitleOverlay';
 import { TopHud, type MoodCue } from './components/TopHud';
@@ -119,6 +127,7 @@ import { BuildDock } from './components/BuildDock';
 import { PaintBoothDock } from './components/PaintBoothDock';
 import { BotProfileModal } from './components/BotProfileModal';
 import { CodeDock } from './components/CodeDock';
+import { PredictBeforeRunCard } from './components/PredictBeforeRunCard';
 import { ActionRunHud, CircuitOverlay } from './components/CircuitAndActionHud';
 import {
   LevelMapModal,
@@ -171,6 +180,31 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAndroidBackButton } from './hooks/useAndroidBackButton';
 import { HAPTICS, type AndroidBackAction } from './game/androidApp';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { BoltShopModal, QuestBoardModal } from './components/ShopAndQuestsModal';
+import {
+  claimMasteryQuest,
+  countClaimableQuests,
+  incrementQuestCounters,
+  normalizePlayerLoadout,
+  normalizeQuestCounters,
+  purchaseShopItem,
+  toggleEquipShopItem,
+  type PlayerLoadout
+} from './game/shopAndQuests';
+import {
+  DEBUG_MISSIONS,
+  debugMissionToLevelDef,
+  getDebugMissionById
+} from './game/debugMissions';
+
+function programHasBlockType(blocks: CodeBlock[], targetType: CodeBlock['type']): boolean {
+  for (const blk of blocks) {
+    if (blk.type === targetType) return true;
+    if (blk.children && programHasBlockType(blk.children, targetType)) return true;
+    if (blk.elseChildren && programHasBlockType(blk.elseChildren, targetType)) return true;
+  }
+  return false;
+}
 
 const TrophyShelfModal = React.lazy(() =>
   import('./components/TrophyShelfModal').then((m) => ({ default: m.TrophyShelfModal }))
@@ -222,6 +256,11 @@ export default function App() {
   const [showParentDashboard, setShowParentDashboard] = useState(false);
   const [showSandbox, setShowSandbox] = useState(false);
   const [showClassCode, setShowClassCode] = useState(false);
+  const [showShop, setShowShop] = useState(false);
+  const [showQuests, setShowQuests] = useState(false);
+  const [mapInitialTab, setMapInitialTab] = useState<'story' | 'debug'>('story');
+  const [shopPreviewLoadout, setShopPreviewLoadout] = useState<PlayerLoadout | null>(null);
+  const [lastDebugBoltReward, setLastDebugBoltReward] = useState(0);
   const [trophyInitialTab, setTrophyInitialTab] = useState<'badges' | 'facts'>('badges');
   const [adaptiveHintTier, setAdaptiveHintTier] = useState<0 | AdaptiveHintTier>(0);
   const [, setMaxHintTierUsed] = useState<0 | AdaptiveHintTier>(0);
@@ -258,6 +297,7 @@ export default function App() {
   const codeFeedbackCountRef = useRef(0);
   const lastHeadRef = useRef<HeadScreenPoint | null>(null);
   const [lastCodeFeedbackTier, setLastCodeFeedbackTier] = useState<CodeComplexityTier | null>(null);
+  const [codeCameraPreset, setCodeCameraPreset] = useState<CodeCameraPreset>('overview');
   const [lastPlacement, setLastPlacement] = useState<{
     id: number;
     part: PartId;
@@ -272,6 +312,7 @@ export default function App() {
 
   const [chassis, setChassis] = useState<ChassisGrid>(() => createEmptyChassis());
   const [program, setProgram] = useState<CodeBlock[]>([]);
+  const [functionBody, setFunctionBody] = useState<CodeBlock[]>([]);
   const [programHistory, setProgramHistory] = useState<ProgramHistoryState>(() =>
     createEmptyProgramHistory()
   );
@@ -287,10 +328,17 @@ export default function App() {
     () => new Set()
   );
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [activeCallerBlockId, setActiveCallerBlockId] = useState<string | null>(null);
   const [activeSimResult, setActiveSimResult] = useState<SimResult | null>(null);
   const [activeSimStepIdx, setActiveSimStepIdx] = useState<number>(-1);
   const [simPaused, setSimPaused] = useState(false);
   const [simAwaitingStep, setSimAwaitingStep] = useState(false);
+  const [pendingPredictQuiz, setPendingPredictQuiz] = useState<{
+    question: PredictQuizQuestion;
+    sim: SimResult;
+    levelKey: string;
+  } | null>(null);
+  const [predictPromptedLevelKey, setPredictPromptedLevelKey] = useState<string | null>(null);
   const [moodCue, setMoodCue] = useState<MoodCue | null>(null);
   const [lastSimCrystals, setLastSimCrystals] = useState<{ collected: number; total: number }>({
     collected: 0,
@@ -349,6 +397,16 @@ export default function App() {
     return save.bestTimes?.[key] ?? null;
   }, [currentLevel, save.bestTimes]);
 
+  const activeLoadout = useMemo(() => normalizePlayerLoadout(save.loadout), [save.loadout]);
+  const activeQuestCounters = useMemo(
+    () => normalizeQuestCounters(save.questCounters),
+    [save.questCounters]
+  );
+  const claimableQuestsCount = useMemo(
+    () => countClaimableQuests(activeQuestCounters, save.claimedQuestIds || []),
+    [activeQuestCounters, save.claimedQuestIds]
+  );
+
   const isChallengeTimerRunning =
     challengeTimerEnabled &&
     !circuitSolvedFreeze &&
@@ -361,6 +419,8 @@ export default function App() {
     !showParentDashboard &&
     !showSandbox &&
     !showClassCode &&
+    !showShop &&
+    !showQuests &&
     (mode === 'BUILD_3D' ||
       mode === 'CODE_3D' ||
       mode === 'SIMULATING' ||
@@ -407,6 +467,10 @@ export default function App() {
   useEffect(() => {
     worldRef.current?.setPaintConfig(activePaintConfig, null);
   }, [activePaintConfig]);
+
+  useEffect(() => {
+    worldRef.current?.setPlayerLoadout(shopPreviewLoadout || activeLoadout, false);
+  }, [activeLoadout, shopPreviewLoadout]);
 
   useEffect(() => {
     return () => {
@@ -504,11 +568,23 @@ export default function App() {
 
   const beginLevel = useCallback(
     (lvl: LevelDef, preserveChassis = false) => {
-      setCurrentLevel(lvl);
-      const nextChassis = preserveChassis ? chassis : createEmptyChassis();
+      const hasStarterChassis = Boolean(lvl.starterChassis);
+      const startInCode = Boolean(lvl.isDebug && hasStarterChassis);
+      const nextChassis = hasStarterChassis
+        ? lvl.starterChassis!.map((row) => [...row])
+        : preserveChassis
+          ? chassis
+          : createEmptyChassis();
+      const nextProgram = lvl.starterProgram ? lvl.starterProgram.map((b) => ({ ...b })) : [];
+      const nextFunctionBody = lvl.starterFunctionBody
+        ? lvl.starterFunctionBody.map((b) => ({ ...b }))
+        : [];
       const nextCircuit = cloneCircuitGrid(lvl.circuit);
+
+      setCurrentLevel(lvl);
       setChassis(nextChassis);
-      setProgram([]);
+      setProgram(nextProgram);
+      setFunctionBody(nextFunctionBody);
       setProgramHistory(createEmptyProgramHistory());
       setHoveredCodeBlockId(null);
       setCircuitGrid(nextCircuit);
@@ -516,13 +592,17 @@ export default function App() {
       setLastPlacement(null);
       setLastCodeFeedbackTier(null);
       setActiveBlockId(null);
+      setActiveCallerBlockId(null);
       setActiveSimResult(null);
       setActiveSimStepIdx(-1);
       setSimPaused(false);
       setSimAwaitingStep(false);
+      setPendingPredictQuiz(null);
+      setPredictPromptedLevelKey(null);
       setMoodCue(null);
       setActiveDemo(null);
       setUpgradedPillars([]);
+      setLastDebugBoltReward(0);
       setPaused(false);
       setShowMap(false);
       setShowTrophies(false);
@@ -532,6 +612,9 @@ export default function App() {
       setShowParentDashboard(false);
       setShowSandbox(false);
       setShowClassCode(false);
+      setShowShop(false);
+      setShowQuests(false);
+      setShopPreviewLoadout(null);
       setTrophyInitialTab('badges');
       setAdaptiveHintTier(0);
       setMaxHintTierUsed(0);
@@ -557,10 +640,18 @@ export default function App() {
       setLastVictorySpeedRun(null);
       setPlanetMetrics(null);
       setPlanetSummary(null);
-      setMode('BUILD_3D');
+      const initialMode: WorldMode = startInCode ? 'CODE_3D' : 'BUILD_3D';
+      setMode(initialMode);
       setTutorialDismissed(false);
       setTutorialAckSteps(new Set());
-      if (lvl.id !== 1 || lvl.isDaily || lvl.isBonus || lvl.isSandbox || lvl.isClassCode) {
+      if (
+        lvl.id !== 1 ||
+        lvl.isDaily ||
+        lvl.isBonus ||
+        lvl.isSandbox ||
+        lvl.isClassCode ||
+        lvl.isDebug
+      ) {
         setTutorialForceActive(false);
       }
       setGhostHelp(false);
@@ -568,7 +659,7 @@ export default function App() {
       worldRef.current?.setWorkshopAutoSpin(false);
       worldRef.current?.resetWorkshopView();
       worldRef.current?.updateChassis(nextChassis, null);
-      worldRef.current?.setMode('BUILD_3D');
+      worldRef.current?.setMode(initialMode);
       SFX.unlock();
       SFX.speakWallE('greeting', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
     },
@@ -576,8 +667,8 @@ export default function App() {
   );
 
   const livePathPreview = useMemo(
-    () => buildLivePathPreview(currentLevel, chassis, program),
-    [chassis, currentLevel, program]
+    () => buildLivePathPreview(currentLevel, chassis, program, functionBody),
+    [chassis, currentLevel, functionBody, program]
   );
 
   // Refs for WebGL callbacks so canvas never unmounts
@@ -587,6 +678,7 @@ export default function App() {
     currentLevel,
     chassis,
     program,
+    functionBody,
     save,
     livePathPreview,
     showPathPreview
@@ -597,6 +689,7 @@ export default function App() {
     currentLevel,
     chassis,
     program,
+    functionBody,
     save,
     livePathPreview,
     showPathPreview
@@ -644,29 +737,24 @@ export default function App() {
     worldRef.current?.setHoveredCodeBlock(mode === 'CODE_3D' ? hoveredCodeBlockId : null);
   }, [hoveredCodeBlockId, mode]);
 
-  const handleCircuitCellTap = useCallback((r: number, c: number) => {
-    const cur = stateRef.current;
-    if (cur.mode !== 'CIRCUIT_3D') return;
-    const cell = cur.circuitGrid[r]?.[c];
-    if (!cell || (cell.type !== 'mirror' && cell.type !== 'splitter')) return;
-
-    const nextGrid = cloneCircuitGrid(cur.circuitGrid);
-    nextGrid[r][c].rot = nextGrid[r][c].rot === 0 ? 1 : 0;
-    setCircuitGrid(nextGrid);
-    worldRef.current?.setCircuitGrid(nextGrid);
-    SFX.mirror();
-    HAPTICS.trigger('tap');
-
-    const trace = traceCircuit(nextGrid);
-    if (trace.solved) {
-      SFX.laserSolved();
+  const finalizeMissionVictory = useCallback(
+    (sim: SimResult) => {
+      const cur = stateRef.current;
+      const isDebug = Boolean(cur.currentLevel.isDebug);
+      if (isDebug) {
+        SFX.bugSquashed();
+      } else {
+        SFX.laserSolved();
+      }
       HAPTICS.trigger('victory');
-      worldRef.current?.setMood('happy', 2.4);
+      worldRef.current?.triggerCompanionCelebrate();
       setCircuitSolvedFreeze(true);
 
       const info = computeChassisInfo(cur.chassis);
-      const blkCount = countBlocks(cur.program);
-      const sim = simulateProgram(cur.currentLevel, cur.chassis, cur.program);
+      const blkCount = countBlocks(
+        cur.program,
+        cur.currentLevel.functionUnlocked ? cur.functionBody : undefined
+      );
       const starRes = calculateStars(
         cur.currentLevel,
         info.cost,
@@ -700,8 +788,18 @@ export default function App() {
       }
 
       setLastSimCrystals({ collected: sim.collectedCrystals, total: sim.totalCrystals });
-      const fixedBug = hadPriorFailRef.current;
-      setBugFixerEarned(fixedBug);
+      const fixedBug = hadPriorFailRef.current || isDebug;
+      setBugFixerEarned(!isDebug && hadPriorFailRef.current);
+
+      const debugId = cur.currentLevel.debugMissionId;
+      const alreadySolvedDebug = Boolean(debugId && cur.save.debugCompleted?.[debugId]);
+      const debugBolts = isDebug
+        ? alreadySolvedDebug
+          ? 20
+          : cur.currentLevel.debugBoltReward || 45
+        : 0;
+      setLastDebugBoltReward(debugBolts);
+
       const levelFacts = getUnlockedFactCardsForLevel(cur.currentLevel.id);
       const debugFact = fixedBug ? getFactCardById('debugging_mindset') : null;
       const candidateFacts = debugFact ? [...levelFacts, debugFact] : levelFacts;
@@ -711,7 +809,8 @@ export default function App() {
         cur.currentLevel,
         cur.chassis,
         cur.program,
-        sim
+        sim,
+        cur.functionBody
       );
       if (fixedBug) {
         mastery.next.bugsDebugged = (mastery.next.bugsDebugged || 0) + 1;
@@ -727,16 +826,42 @@ export default function App() {
       setNewlyUnlockedFacts(unlocks.newlyUnlockedFacts);
       setUpgradedPillars(unlocks.newlyUpgradedBadges.map((b) => b.id));
 
+      const usedLoop =
+        programHasBlockType(cur.program, 'LOOP') || programHasBlockType(cur.functionBody, 'LOOP');
+      const usedIf =
+        programHasBlockType(cur.program, 'IF') || programHasBlockType(cur.functionBody, 'IF');
+      const usedFunc = programHasBlockType(cur.program, 'CALL_FUNC');
+
       setSave((prev) => {
         const mergedFacts = Array.from(
           new Set([...(prev.unlockedFactIds || []), ...newFactIds])
         );
+        const baseBolts = isDebug ? debugBolts : 50 + (hadPriorFailRef.current ? 15 : 0);
+        const nextDebugCompleted = { ...(prev.debugCompleted || {}) };
+        if (debugId) {
+          nextDebugCompleted[debugId] = true;
+        }
+        const nextQuestCounters = incrementQuestCounters(
+          normalizeQuestCounters(prev.questCounters),
+          {
+            missionsCleared: 1,
+            bugsSquashed: isDebug ? 1 : 0,
+            loopsUsed: usedLoop ? 1 : 0,
+            conditionalsUsed: usedIf ? 1 : 0,
+            functionsUsed: usedFunc ? 1 : 0,
+            crystalsCollected: sim.collectedCrystals,
+            dailyCleared: cur.currentLevel.isDaily ? 1 : 0
+          }
+        );
+
         const next: SaveProfile = {
           ...prev,
           stars: { ...prev.stars },
           bonusStars: { ...prev.bonusStars },
+          debugCompleted: nextDebugCompleted,
+          questCounters: nextQuestCounters,
           tutorialDone: true,
-          totalBolts: prev.totalBolts + 50 + speedRunEval.bonusBolts + (fixedBug ? 15 : 0),
+          totalBolts: prev.totalBolts + baseBolts + speedRunEval.bonusBolts,
           passes: prev.passes + 1,
           skillStats: mastery.next,
           unlockedFactIds: mergedFacts,
@@ -767,8 +892,12 @@ export default function App() {
             stars: Math.max(oldStars, starRes.stars),
             bonusStar: oldBonus || isBonusStar
           };
-        } else if (cur.currentLevel.isSandbox || cur.currentLevel.isClassCode) {
-          // Custom Sandbox & Classroom Code runs award bolts/telemetry without altering campaign stars
+        } else if (
+          cur.currentLevel.isSandbox ||
+          cur.currentLevel.isClassCode ||
+          cur.currentLevel.isDebug
+        ) {
+          // Debug, Sandbox & Classroom Code runs award bolts/quests/telemetry without altering story stars
         } else {
           next.stars[cur.currentLevel.id] = Math.max(
             prev.stars[cur.currentLevel.id] || 0,
@@ -789,11 +918,36 @@ export default function App() {
           triggerMilestoneCelebration(unlocks.newlyUnlockedFacts, unlocks.newlyUpgradedBadges);
         }
       }, 650);
-    }
-  }, [triggerMilestoneCelebration]);
+    },
+    [levelElapsedRef, setLevelElapsedMs, triggerMilestoneCelebration]
+  );
+
+  const handleCircuitCellTap = useCallback(
+    (r: number, c: number) => {
+      const cur = stateRef.current;
+      if (cur.mode !== 'CIRCUIT_3D') return;
+      const cell = cur.circuitGrid[r]?.[c];
+      if (!cell || (cell.type !== 'mirror' && cell.type !== 'splitter')) return;
+
+      const nextGrid = cloneCircuitGrid(cur.circuitGrid);
+      nextGrid[r][c].rot = nextGrid[r][c].rot === 0 ? 1 : 0;
+      setCircuitGrid(nextGrid);
+      worldRef.current?.setCircuitGrid(nextGrid);
+      SFX.mirror();
+      HAPTICS.trigger('tap');
+
+      const trace = traceCircuit(nextGrid);
+      if (trace.solved) {
+        const sim = simulateProgram(cur.currentLevel, cur.chassis, cur.program, cur.functionBody);
+        finalizeMissionVictory(sim);
+      }
+    },
+    [finalizeMissionVictory]
+  );
 
   const handleSimProgress = useCallback((idx: number, ev: SimEvent) => {
     setActiveBlockId(ev.blockId);
+    setActiveCallerBlockId(ev.callerBlockId || null);
     setActiveSimStepIdx(idx);
   }, []);
 
@@ -802,25 +956,31 @@ export default function App() {
     setSimAwaitingStep(awaitingStep);
   }, []);
 
-  const handleSimComplete = useCallback((res: SimResult) => {
-    setActiveBlockId(null);
-    setActiveSimResult(null);
-    setActiveSimStepIdx(-1);
-    setSimPaused(false);
-    setSimAwaitingStep(false);
-    setLastSimCrystals({ collected: res.collectedCrystals, total: res.totalCrystals });
-    if (res.status === 'win') {
-      setFailingBlockId(null);
-      setLastFailedSim(null);
-      setAdaptiveHintTier(0);
-      setMoodCue({ mood: 'happy' });
-      window.setTimeout(() => {
-        setMoodCue(null);
-        setMode('CIRCUIT_3D');
-        worldRef.current?.setMode('CIRCUIT_3D');
-      }, 850);
-      return;
-    }
+  const handleSimComplete = useCallback(
+    (res: SimResult) => {
+      setActiveBlockId(null);
+      setActiveCallerBlockId(null);
+      setActiveSimResult(null);
+      setActiveSimStepIdx(-1);
+      setSimPaused(false);
+      setSimAwaitingStep(false);
+      setLastSimCrystals({ collected: res.collectedCrystals, total: res.totalCrystals });
+      if (res.status === 'win') {
+        setFailingBlockId(null);
+        setLastFailedSim(null);
+        setAdaptiveHintTier(0);
+        setMoodCue({ mood: 'happy' });
+        if (stateRef.current.currentLevel.isDebug) {
+          finalizeMissionVictory(res);
+          return;
+        }
+        window.setTimeout(() => {
+          setMoodCue(null);
+          setMode('CIRCUIT_3D');
+          worldRef.current?.setMode('CIRCUIT_3D');
+        }, 850);
+        return;
+      }
 
     const lastEv = res.events[res.events.length - 1];
     setFailingBlockId(lastEv?.blockId || null);
@@ -857,7 +1017,12 @@ export default function App() {
       return next;
     });
 
-    if (res.failCode === 'empty' || res.failCode === 'empty_container' || res.failCode === 'short') {
+    if (
+      res.failCode === 'empty' ||
+      res.failCode === 'empty_container' ||
+      res.failCode === 'empty_function' ||
+      res.failCode === 'short'
+    ) {
       setMoodCue({ mood: 'confused' });
       setMode('CODE_3D');
     } else {
@@ -868,7 +1033,9 @@ export default function App() {
             ? 'MUD'
             : res.failCode === 'ramp'
               ? 'RAMP'
-              : undefined;
+              : res.failCode === 'laser_gate' || res.failCode === 'patrol_drone'
+                ? 'HAZARD'
+                : undefined;
       setMoodCue({
         mood: 'sad',
         hazard: haz,
@@ -876,7 +1043,7 @@ export default function App() {
       });
       setMode('CODE_3D');
     }
-  }, []);
+  }, [finalizeMissionVictory]);
 
   const handleActionFinish = useCallback((metrics: ActionDashMetrics) => {
     setActionMetrics(metrics);
@@ -928,13 +1095,38 @@ export default function App() {
     const el = mountRef.current;
     if (!el) return;
     let disposed = false;
+    updateSplashProgress(68, 'Building 3D workshop...');
 
     import('./three/worldScene')
       .then(({ UnifiedWorldController }) => {
         if (disposed || !mountRef.current) return;
+        updateSplashProgress(88, 'Waking SparkBot...');
         const ctrl = new UnifiedWorldController(mountRef.current, {
           onBotTap: (zone: RobotTouchZone) => {
             triggerRobotSpeech(pickTouchResponse(zone, touchCounterRef.current++));
+          },
+          onDroneTap: () => {
+            const v = touchCounterRef.current++;
+            SFX.droneChirp(v);
+            HAPTICS.trigger('tap');
+            const id = ++speechIdRef.current;
+            setRobotSpeech({
+              id,
+              phrase: 'excited',
+              variant: v,
+              emote: 'stars',
+              mood: 'happy',
+              accentColor: '#38bdf8',
+              pitchScale: 1.25,
+              syllables: 2,
+              ariaLabel: 'Helper Drone chirps happily'
+            });
+            if (speechTimerRef.current !== null) {
+              window.clearTimeout(speechTimerRef.current);
+            }
+            speechTimerRef.current = window.setTimeout(() => {
+              setRobotSpeech((cur) => (cur && cur.id === id ? null : cur));
+            }, 2200);
           },
           onPaintPartPick: (part: PaintPartKey) => {
             SFX.uiTick();
@@ -967,6 +1159,7 @@ export default function App() {
               setHeadPoint(pt);
             }
           },
+          onCodeCameraPresetChange: (preset) => setCodeCameraPreset(preset),
           onWebglLost: (lost) => setWebglLost(lost)
         });
         worldRef.current = ctrl;
@@ -983,6 +1176,7 @@ export default function App() {
         ctrl.setBotTheme(initTheme);
         ctrl.setBotCharacter(initChar, false);
         ctrl.setPaintConfig(initPaint, null);
+        ctrl.setPlayerLoadout(normalizePlayerLoadout(latest.save.loadout), false);
         ctrl.updateChassis(latest.chassis, null);
         ctrl.setLivePathPreview(latest.livePathPreview, latest.showPathPreview);
 
@@ -1001,9 +1195,19 @@ export default function App() {
             ctrl.setCircuitGrid(latest.circuitGrid);
           }
         }
+
+        // Wait two animation frames so the 3D scene has painted before revealing
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            if (!disposed) dismissSplashScreen();
+          });
+        });
       })
       .catch(() => {
-        if (!disposed) setWebglLost(true);
+        if (!disposed) {
+          setWebglLost(true);
+          dismissSplashScreen({ minVisibleMs: 0 });
+        }
       });
 
     return () => {
@@ -1198,6 +1402,22 @@ export default function App() {
     setTutorialForceActive(true);
   }, [beginLevel]);
 
+  const launchSimulation = useCallback(
+    (sim: SimResult, stepMode: boolean) => {
+      SFX.unlock();
+      if (!stepMode) {
+        SFX.speakWallE('excited', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
+      }
+      setActiveSimResult(sim);
+      setActiveSimStepIdx(sim.events.length > 0 ? 0 : -1);
+      setSimPaused(false);
+      setSimAwaitingStep(false);
+      setMode('SIMULATING');
+      worldRef.current?.playSimulation(sim, { stepMode });
+    },
+    [activeCharacter]
+  );
+
   const handleRunProgram = () => {
     setMoodCue(null);
     setLastCodeFeedbackTier(null);
@@ -1212,22 +1432,80 @@ export default function App() {
     ) {
       completeMissionTutorial();
     }
-    const sim = simulateProgram(currentLevel, chassis, program);
-    SFX.unlock();
-    SFX.speakWallE('excited', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
-    setActiveSimResult(sim);
-    setActiveSimStepIdx(sim.events.length > 0 ? 0 : -1);
-    setSimPaused(false);
-    setSimAwaitingStep(false);
-    setMode('SIMULATING');
-    worldRef.current?.playSimulation(sim, { stepMode: false });
+    const sim = simulateProgram(currentLevel, chassis, program, functionBody);
+    const levelKey = currentLevel.isDaily
+      ? `daily_${currentLevel.dailyDateKey || getDailyDateKey()}`
+      : `lvl_${currentLevel.id}`;
+    const shouldAsk = shouldPromptPredictQuiz({
+      enabled: save.predictQuizEnabled !== false,
+      level: currentLevel,
+      alreadyPromptedLevelKey: predictPromptedLevelKey,
+      levelKey
+    });
+
+    if (shouldAsk) {
+      const question = buildPredictBeforeRunQuestion({
+        level: currentLevel,
+        chassis,
+        program,
+        functionBody,
+        simResult: sim
+      });
+      if (question) {
+        SFX.uiTick();
+        setPendingPredictQuiz({ question, sim, levelKey });
+        return;
+      }
+    }
+
+    launchSimulation(sim, false);
   };
+
+  const handlePredictQuizComplete = useCallback(
+    ({ correct, skipped }: { correct: boolean; skipped: boolean }) => {
+      const curQuiz = pendingPredictQuiz;
+      setPendingPredictQuiz(null);
+      if (!curQuiz) return;
+      setPredictPromptedLevelKey(curQuiz.levelKey);
+
+      if (!skipped && correct) {
+        SFX.installComplete();
+        SFX.speakWallE('proud', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
+        setSave((prev) => {
+          const nextSkills = {
+            chassisBuilds: 0,
+            jumpsCleared: 0,
+            mudCleared: 0,
+            loopsCompressed: 0,
+            sensorsUsed: 0,
+            circuitsSolved: 0,
+            ...(prev.skillStats || {}),
+            predictionsCorrect: (prev.skillStats?.predictionsCorrect || 0) + 1
+          };
+          const next: SaveProfile = {
+            ...prev,
+            totalBolts: prev.totalBolts + 20,
+            skillStats: nextSkills,
+            questCounters: incrementQuestCounters(normalizeQuestCounters(prev.questCounters), {
+              predictionsCorrect: 1
+            })
+          };
+          saveActiveRosterProfile(next);
+          return next;
+        });
+      }
+
+      launchSimulation(curQuiz.sim, false);
+    },
+    [activeCharacter, launchSimulation, pendingPredictQuiz]
+  );
 
   const handleStepProgram = () => {
     SFX.uiTick();
     setMoodCue(null);
     setLastCodeFeedbackTier(null);
     setHoveredCodeBlockId(null);
+    setPendingPredictQuiz(null);
     if (
       currentLevel.id === 1 &&
       !currentLevel.isDaily &&
@@ -1250,13 +1528,8 @@ export default function App() {
       saveActiveRosterProfile(next);
       return next;
     });
-    const sim = simulateProgram(currentLevel, chassis, program);
-    setActiveSimResult(sim);
-    setActiveSimStepIdx(sim.events.length > 0 ? 0 : -1);
-    setSimPaused(false);
-    setSimAwaitingStep(false);
-    setMode('SIMULATING');
-    worldRef.current?.playSimulation(sim, { stepMode: true });
+    const sim = simulateProgram(currentLevel, chassis, program, functionBody);
+    launchSimulation(sim, true);
   };
 
   const handleToggleSimPause = () => {
@@ -1277,6 +1550,7 @@ export default function App() {
     SFX.click();
     worldRef.current?.stopSimulation();
     setActiveBlockId(null);
+    setActiveCallerBlockId(null);
     setActiveSimResult(null);
     setActiveSimStepIdx(-1);
     setSimPaused(false);
@@ -1377,6 +1651,17 @@ export default function App() {
     setSave((prev) => {
       const nextEnabled = prev.adaptiveHintsEnabled === false;
       const next: SaveProfile = { ...prev, adaptiveHintsEnabled: nextEnabled };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  };
+
+  const handleTogglePredictQuiz = () => {
+    SFX.uiTick();
+    setPendingPredictQuiz(null);
+    setSave((prev) => {
+      const nextEnabled = prev.predictQuizEnabled === false;
+      const next: SaveProfile = { ...prev, predictQuizEnabled: nextEnabled };
       saveActiveRosterProfile(next);
       return next;
     });
@@ -1664,6 +1949,9 @@ export default function App() {
             ifUnlocked: normDraft.ifUnlocked,
             track: normDraft.track,
             circuit: normDraft.circuit,
+            isDebugPuzzle: Boolean(normDraft.isDebugPuzzle),
+            bugClue: normDraft.bugClue,
+            starterProgram: normDraft.starterProgram,
             savedLevels: nextSaved
           }
         };
@@ -1692,6 +1980,9 @@ export default function App() {
           ifUnlocked: curSandbox.ifUnlocked,
           track: curSandbox.track,
           circuit: curSandbox.circuit,
+          isDebugPuzzle: Boolean(curSandbox.isDebugPuzzle),
+          bugClue: curSandbox.bugClue,
+          starterProgram: curSandbox.starterProgram,
           savedLevels: prevSaved.filter((item) => item.id !== id)
         }
       };
@@ -1726,6 +2017,83 @@ export default function App() {
     },
     [handleSaveSandboxDraft]
   );
+
+  const handleBuyShopItem = useCallback((itemId: string) => {
+    setSave((prev) => {
+      const curLoadout = normalizePlayerLoadout(prev.loadout);
+      const res = purchaseShopItem(curLoadout, prev.totalBolts, itemId);
+      if (!res.ok) {
+        SFX.chirpConfused();
+        return prev;
+      }
+      SFX.shopBuy();
+      HAPTICS.trigger('victory');
+      worldRef.current?.setPlayerLoadout(res.loadout, true);
+      const next: SaveProfile = {
+        ...prev,
+        totalBolts: res.totalBolts,
+        loadout: res.loadout,
+        questCounters: incrementQuestCounters(normalizeQuestCounters(prev.questCounters), {
+          shopBought: 1
+        })
+      };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  }, []);
+
+  const handleToggleEquipShopItem = useCallback((itemId: string) => {
+    setSave((prev) => {
+      const curLoadout = normalizePlayerLoadout(prev.loadout);
+      const nextLoadout = toggleEquipShopItem(curLoadout, itemId);
+      SFX.uiTick();
+      HAPTICS.trigger('tap');
+      worldRef.current?.setPlayerLoadout(nextLoadout, true);
+      const next: SaveProfile = {
+        ...prev,
+        loadout: nextLoadout
+      };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  }, []);
+
+  const handleClaimQuest = useCallback((questId: string) => {
+    setSave((prev) => {
+      const counters = normalizeQuestCounters(prev.questCounters);
+      const res = claimMasteryQuest(counters, prev.claimedQuestIds || [], prev.totalBolts, questId);
+      if (!res.ok) return prev;
+      SFX.questClaim();
+      HAPTICS.trigger('victory');
+      worldRef.current?.triggerCompanionCelebrate();
+      const next: SaveProfile = {
+        ...prev,
+        totalBolts: res.totalBolts,
+        claimedQuestIds: res.claimedQuestIds
+      };
+      saveActiveRosterProfile(next);
+      return next;
+    });
+  }, []);
+
+  const handleSelectDebugMission = useCallback(
+    (missionId: string) => {
+      const mission = getDebugMissionById(missionId);
+      if (!mission) return;
+      SFX.click();
+      beginLevel(debugMissionToLevelDef(mission));
+    },
+    [beginLevel]
+  );
+
+  const handleResetDebugStarterCode = useCallback(() => {
+    if (!currentLevel.starterProgram) return;
+    SFX.click();
+    applyProgramChange(currentLevel.starterProgram.map((b) => ({ ...b })));
+    if (currentLevel.starterFunctionBody) {
+      setFunctionBody(currentLevel.starterFunctionBody.map((b) => ({ ...b })));
+    }
+  }, [applyProgramChange, currentLevel.starterFunctionBody, currentLevel.starterProgram]);
 
   const handleEnterPaintBooth = () => {
     SFX.click();
@@ -1770,12 +2138,12 @@ export default function App() {
             ? 'circuit'
             : null;
     if (!phase) return;
-    const plan = computeGhostPreviewPlan(currentLevel, phase, chassis, program, circuitGrid);
+    const plan = computeGhostPreviewPlan(currentLevel, phase, chassis, program, circuitGrid, functionBody);
     if (plan) {
       setGhostHelp(true);
       worldRef.current?.playGhostPreview(plan);
     }
-  }, [chassis, circuitGrid, currentLevel, mode, program]);
+  }, [chassis, circuitGrid, currentLevel, functionBody, mode, program]);
 
   const handleRequestHint = useCallback(() => {
     SFX.uiTick();
@@ -1933,8 +2301,8 @@ export default function App() {
           : mode === 'CIRCUIT_3D'
             ? 'circuit'
             : 'build';
-    return getTutorialStep(currentLevel, phase, chassis, program, circuitGrid, selectedPart);
-  }, [chassis, circuitGrid, currentLevel, mode, program, selectedPart]);
+    return getTutorialStep(currentLevel, phase, chassis, program, circuitGrid, selectedPart, functionBody);
+  }, [chassis, circuitGrid, currentLevel, functionBody, mode, program, selectedPart]);
 
   const hasBlockingTutorialOverlay =
     paused ||
@@ -1946,6 +2314,8 @@ export default function App() {
     showParentDashboard ||
     showSandbox ||
     showClassCode ||
+    showShop ||
+    showQuests ||
     Boolean(activeDemo) ||
     inspect3D;
 
@@ -1970,7 +2340,10 @@ export default function App() {
     });
   }, [chassis, currentLevel, missionTutorialVisible, mode, program, selectedPart, tutorialAckSteps]);
 
-  const blockCount = useMemo(() => countBlocks(program), [program]);
+  const blockCount = useMemo(
+    () => countBlocks(program, currentLevel.functionUnlocked ? functionBody : undefined),
+    [currentLevel.functionUnlocked, functionBody, program]
+  );
   const victoryBonusInfo = useMemo(
     () =>
       validateBonusStarConditions(
@@ -1996,6 +2369,13 @@ export default function App() {
 
   const nextLevelDef = useMemo(() => {
     if (currentLevel.isDaily) return null;
+    if (currentLevel.isDebug && currentLevel.debugMissionId) {
+      const curIdx = DEBUG_MISSIONS.findIndex((m) => m.id === currentLevel.debugMissionId);
+      if (curIdx >= 0 && curIdx < DEBUG_MISSIONS.length - 1) {
+        return debugMissionToLevelDef(DEBUG_MISSIONS[curIdx + 1]);
+      }
+      return null;
+    }
     return getLevelById(currentLevel.id + 1);
   }, [currentLevel]);
 
@@ -2009,6 +2389,7 @@ export default function App() {
       phase,
       chassis,
       program,
+      functionBody,
       circuitGrid,
       tier: adaptiveHintTier,
       lastSimResult: lastFailedSim,
@@ -2020,6 +2401,7 @@ export default function App() {
     circuitGrid,
     currentLevel,
     failingBlockId,
+    functionBody,
     lastFailedSim,
     mode,
     program
@@ -2064,10 +2446,12 @@ export default function App() {
           streak={activeStreak}
           dailyStars={save.daily.dateKey === getDailyDateKey() ? save.daily.stars : 0}
           trophyTiers={trophyTiers}
+          claimableQuestsCount={claimableQuestsCount}
           muted={save.muted}
           onStartMission={() => {
             SFX.click();
-            beginLevel(currentLevel);
+            const nextStoryLevelId = Math.min(LEVELS.length, Math.max(1, save.unlockedLevel || 1));
+            beginLevel(getLevelById(nextStoryLevelId) || LEVELS[0]);
           }}
           onStartDaily={() => {
             SFX.click();
@@ -2077,8 +2461,17 @@ export default function App() {
             SFX.click();
             setShowGameRoom(true);
           }}
+          onOpenShop={() => {
+            SFX.click();
+            setShowShop(true);
+          }}
+          onOpenQuests={() => {
+            SFX.click();
+            setShowQuests(true);
+          }}
           onOpenLevelMap={() => {
             SFX.click();
+            setMapInitialTab('story');
             setShowMap(true);
           }}
           onOpenTrophies={() => {
@@ -2110,7 +2503,7 @@ export default function App() {
           canCode={chassisInfo.hasDrive && chassisInfo.hasFrontLaser}
           muted={save.muted}
           ghostHelp={ghostHelp}
-          moodCue={moodCue}
+          moodCue={currentAdaptiveHint || activeMissionTutorialStep ? null : moodCue}
           challengeTimerEnabled={challengeTimerEnabled}
           elapsedMs={levelElapsedMs}
           timeTargets={currentTimeTargets}
@@ -2253,13 +2646,20 @@ export default function App() {
       )}
 
       {/* Stage 2: 3D Track Visual Coding */}
-      {(mode === 'CODE_3D' || mode === 'SIMULATING') && (
+      {(mode === 'CODE_3D' || mode === 'SIMULATING') && !pendingPredictQuiz && (
         <CodeDock
           program={program}
+          functionBody={functionBody}
           parBlocks={currentLevel.parBlocks}
           loopUnlocked={currentLevel.loopUnlocked}
           ifUnlocked={Boolean(currentLevel.ifUnlocked || currentLevel.loopUnlocked)}
+          elseUnlocked={Boolean(currentLevel.elseUnlocked)}
+          functionUnlocked={Boolean(currentLevel.functionUnlocked)}
+          waitUnlocked={Boolean(currentLevel.waitUnlocked)}
+          hasDynamicHazards={levelHasDynamicHazards(currentLevel)}
+          bossMeta={currentLevel.bossMeta || null}
           activeBlockId={activeBlockId}
+          activeCallerBlockId={activeCallerBlockId}
           simulating={mode === 'SIMULATING'}
           simPaused={simPaused}
           simAwaitingStep={simAwaitingStep}
@@ -2277,6 +2677,7 @@ export default function App() {
           canRedo={programHistory.future.length > 0}
           showPathPreview={showPathPreview}
           pathPreview={livePathPreview}
+          predictQuizEnabled={save.predictQuizEnabled !== false}
           onUndo={handleUndoProgram}
           onRedo={handleRedoProgram}
           onTogglePathPreview={() => {
@@ -2284,11 +2685,18 @@ export default function App() {
             HAPTICS.trigger('tap');
             setShowPathPreview((prev) => !prev);
           }}
+          onTogglePredictQuiz={handleTogglePredictQuiz}
           onHoverBlock={setHoveredCodeBlockId}
           onBlockPlaced={handleCodeBlockPlaced}
           onChangeProgram={(next) => {
             SFX.click();
             applyProgramChange(next);
+          }}
+          onChangeFunctionBody={(next) => {
+            SFX.click();
+            setFunctionBody(next);
+            setMoodCue(null);
+            setFailingBlockId(null);
           }}
           onRunProgram={handleRunProgram}
           onStepProgram={handleStepProgram}
@@ -2300,6 +2708,31 @@ export default function App() {
             SFX.click();
             setActiveDemo({ topic, condition });
           }}
+          track={currentLevel.track}
+          hazards={currentLevel.hazards}
+          codeCameraPreset={codeCameraPreset}
+          onCycleCameraPreset={() => {
+            SFX.uiTick();
+            HAPTICS.trigger('tap');
+            const nextPreset = getNextCodeCameraPreset(codeCameraPreset);
+            setCodeCameraPreset(nextPreset);
+            worldRef.current?.setCodeCameraPreset(nextPreset);
+          }}
+          onFocusTrackTile={(tileIndex) => {
+            SFX.uiTick();
+            HAPTICS.trigger('tap');
+            worldRef.current?.focusCodeTrackTile(tileIndex);
+          }}
+          debugClue={currentLevel.debugClue || null}
+          onResetDebugCode={currentLevel.starterProgram ? handleResetDebugStarterCode : undefined}
+        />
+      )}
+
+      {/* Predict-Before-Run ("Brain Spark") Interactive Pre-Run Check */}
+      {mode === 'CODE_3D' && pendingPredictQuiz && (
+        <PredictBeforeRunCard
+          question={pendingPredictQuiz.question}
+          onComplete={handlePredictQuizComplete}
         />
       )}
 
@@ -2365,6 +2798,9 @@ export default function App() {
         !showParentDashboard &&
         !showSandbox &&
         !showClassCode &&
+        !showQuests &&
+        !currentAdaptiveHint &&
+        !activeMissionTutorialStep &&
         !paused && <RobotSpeechBubble speech={robotSpeech} moodCue={moodCue} headPoint={headPoint} />}
 
       {/* Ghost Hand Visual Demo (hidden while Mission 1 Guided Tutorial spotlight is active) */}
@@ -2381,6 +2817,8 @@ export default function App() {
           !showParentDashboard &&
           !showSandbox &&
           !showClassCode &&
+          !showShop &&
+          !showQuests &&
           !activeDemo &&
           !inspect3D &&
           (mode === 'BUILD_3D' || mode === 'CODE_3D' || mode === 'CIRCUIT_3D')
@@ -2502,8 +2940,10 @@ export default function App() {
             save={save}
             adaptiveHintsEnabled={save.adaptiveHintsEnabled !== false}
             challengeTimerEnabled={challengeTimerEnabled}
+            predictQuizEnabled={save.predictQuizEnabled !== false}
             onToggleAdaptiveHints={handleToggleAdaptiveHints}
             onToggleChallengeTimer={handleToggleChallengeTimer}
+            onTogglePredictQuiz={handleTogglePredictQuiz}
             onClose={() => {
               SFX.click();
               setShowParentDashboard(false);
@@ -2515,6 +2955,7 @@ export default function App() {
           <GameRoomModal
             visible={showGameRoom}
             activeCharacter={activeCharacter}
+            equippedDroneId={activeLoadout.equippedDroneId}
             totalBolts={save.totalBolts}
             hasNextLevel={Boolean(nextLevelDef)}
             chassisInfo={chassisInfo}
@@ -2559,8 +3000,46 @@ export default function App() {
       </React.Suspense>
 
       {/* Modals */}
+      <BoltShopModal
+        visible={showShop}
+        totalBolts={save.totalBolts}
+        loadout={activeLoadout}
+        onBuyItem={handleBuyShopItem}
+        onToggleEquip={handleToggleEquipShopItem}
+        onPreviewLoadout={setShopPreviewLoadout}
+        onOpenQuests={() => {
+          SFX.click();
+          setShowQuests(true);
+        }}
+        onClose={() => {
+          SFX.click();
+          setShowShop(false);
+        }}
+      />
+
+      <QuestBoardModal
+        visible={showQuests}
+        totalBolts={save.totalBolts}
+        counters={activeQuestCounters}
+        claimedQuestIds={save.claimedQuestIds || []}
+        onClaimQuest={handleClaimQuest}
+        onOpenShop={() => {
+          SFX.click();
+          setShowShop(true);
+        }}
+        onOpenDebugMissions={() => {
+          SFX.click();
+          setMapInitialTab('debug');
+          setShowMap(true);
+        }}
+        onClose={() => {
+          SFX.click();
+          setShowQuests(false);
+        }}
+      />
+
       <VictoryModal
-        visible={mode === 'VICTORY' && !showGameRoom}
+        visible={mode === 'VICTORY' && !showGameRoom && !showShop && !showQuests}
         stars={victoryStars}
         bonusEarned={victoryBonusInfo.earned}
         fullCrystals={victoryBonusInfo.fullCrystals}
@@ -2574,6 +3053,8 @@ export default function App() {
         parBudget={victoryBonusInfo.parBudget}
         hasNextLevel={Boolean(nextLevelDef)}
         isSandbox={Boolean(currentLevel.isSandbox && !currentLevel.isClassCode)}
+        isDebugMission={Boolean(currentLevel.isDebug)}
+        debugBoltReward={lastDebugBoltReward}
         upgradedPillars={upgradedPillars}
         speedRun={lastVictorySpeedRun}
         bugFixerBonus={bugFixerEarned}
@@ -2588,12 +3069,17 @@ export default function App() {
         }}
         onOpenMap={() => {
           SFX.click();
+          setMapInitialTab(currentLevel.isDebug ? 'debug' : 'story');
           setShowMap(true);
         }}
         onOpenTrophies={() => {
           SFX.click();
           setTrophyInitialTab(newlyUnlockedFacts.length > 0 ? 'facts' : 'badges');
           setShowTrophies(true);
+        }}
+        onOpenShop={() => {
+          SFX.click();
+          setShowShop(true);
         }}
         onOpenSandbox={
           currentLevel.isSandbox && !currentLevel.isClassCode
@@ -2613,11 +3099,13 @@ export default function App() {
         visible={showMap}
         save={save}
         currentLevelId={currentLevel.id}
+        initialTab={mapInitialTab}
         onSelectLevel={(id) => {
           SFX.click();
           const target = getLevelById(id) || BONUS_LEVELS[0];
           beginLevel(target);
         }}
+        onSelectDebugMission={handleSelectDebugMission}
         onStartDaily={() => {
           SFX.click();
           beginLevel(generateDailyChallenge(getDailyDateKey()));

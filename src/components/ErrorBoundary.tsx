@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { dismissSplashScreen } from '../game/splashScreen';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo): void {
+    dismissSplashScreen({ minVisibleMs: 0 });
     if (typeof console !== 'undefined' && console.error) {
       console.error('[SparkBot ErrorBoundary]', error, info.componentStack);
     }

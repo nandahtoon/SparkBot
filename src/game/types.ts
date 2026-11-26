@@ -78,7 +78,7 @@ export const PARTS: Record<PartId, PartDef> = {
     preferredSlot: [0, 0],
     unlocksLabel: 'BOOST',
     placementHint: 'Any chassis slot',
-    functionSummary: 'High-thrust rocket pack that climbs steep ramps and blasts 2 tiles across open gaps.',
+    functionSummary: 'High-thrust rocket pack that climbs steep ramps and blasts 3 tiles forward across open gaps.',
     logicUseCase: 'Unlocks BOOST blocks. Combine with IF [RAMP] -> BOOST inside a LOOP, or use on tight-budget stages to clear both ramps and gaps.'
   },
   laser: {
@@ -154,6 +154,46 @@ export interface TrackTile {
   crystal: boolean;
 }
 
+export interface LaserBarrierHazard {
+  id: string;
+  kind: 'laser_gate';
+  tileIndex: number;
+  period: number;
+  activeOffset: number;
+}
+
+export interface PatrolDroneHazard {
+  id: string;
+  kind: 'patrol_drone';
+  minTile: number;
+  maxTile: number;
+  startTile: number;
+  startDir: 1 | -1;
+}
+
+export type DynamicHazardDef = LaserBarrierHazard | PatrolDroneHazard;
+
+export interface HazardTickSnapshot {
+  id: string;
+  kind: DynamicHazardDef['kind'];
+  tileIndex: number;
+  active: boolean;
+  nextActive: boolean;
+  dir?: 1 | -1;
+  nextTileIndex?: number;
+  minTile?: number;
+  maxTile?: number;
+  period?: number;
+}
+
+export interface BossMeta {
+  name: string;
+  title: string;
+  coreCount: number;
+  introLine: string;
+  defeatLine: string;
+}
+
 export type CircuitCellType = 'empty' | 'mirror' | 'splitter' | 'core' | 'wall';
 
 export interface CircuitCell {
@@ -173,10 +213,23 @@ export interface LevelDef {
   parBlocks: number;
   loopUnlocked: boolean;
   ifUnlocked?: boolean;
+  elseUnlocked?: boolean;
+  functionUnlocked?: boolean;
+  waitUnlocked?: boolean;
+  isBoss?: boolean;
+  bossMeta?: BossMeta;
+  hazards?: DynamicHazardDef[];
   isBonus?: boolean;
   isDaily?: boolean;
   isSandbox?: boolean;
   isClassCode?: boolean;
+  isDebug?: boolean;
+  debugMissionId?: string;
+  debugClue?: string;
+  debugBoltReward?: number;
+  starterChassis?: ChassisGrid;
+  starterProgram?: CodeBlock[];
+  starterFunctionBody?: CodeBlock[];
   dailyDateKey?: string;
   track: TrackTile[];
   circuit: CircuitGrid;
@@ -192,13 +245,16 @@ export interface SandboxMissionDraft {
   ifUnlocked: boolean;
   track: TrackTile[];
   circuit: CircuitGrid;
+  isDebugPuzzle?: boolean;
+  bugClue?: string;
+  starterProgram?: CodeBlock[];
   updatedAt: number;
 }
 
 export type ChassisGrid = (PartId | null)[][];
 
-export type SensorCondition = 'GAP' | 'MUD' | 'RAMP';
-export type BlockType = 'MOVE' | 'JUMP' | 'BOOST' | 'LOOP' | 'IF';
+export type SensorCondition = 'GAP' | 'MUD' | 'RAMP' | 'HAZARD';
+export type BlockType = 'MOVE' | 'JUMP' | 'BOOST' | 'WAIT' | 'LOOP' | 'IF' | 'CALL_FUNC';
 
 export interface CodeBlock {
   id: string;
@@ -206,6 +262,7 @@ export interface CodeBlock {
   count?: number;
   condition?: SensorCondition;
   children?: CodeBlock[];
+  elseChildren?: CodeBlock[];
 }
 
 export interface ChassisInfo {
@@ -224,10 +281,15 @@ export interface ChassisInfo {
 export interface SimEvent {
   fromPos: number;
   toPos: number;
-  action: 'MOVE' | 'JUMP' | 'BOOST' | 'SCAN';
+  action: 'MOVE' | 'JUMP' | 'BOOST' | 'WAIT' | 'SCAN';
+  tick?: number;
   condition?: SensorCondition;
   scanTile?: number;
   scanMatch?: boolean;
+  branchTaken?: 'then' | 'else' | 'skip';
+  callerBlockId?: string | null;
+  hazardId?: string | null;
+  hazardSnapshots?: HazardTickSnapshot[];
   blockId: string;
   status: 'ok' | 'fail' | 'fall' | 'stuck';
   newCrystals: number[];
@@ -236,12 +298,27 @@ export interface SimEvent {
 export interface SimResult {
   status: 'win' | 'fail';
   failReason: string | null;
-  failCode: 'empty' | 'empty_container' | 'short' | 'missing_part' | 'gap' | 'mud' | 'ramp' | null;
+  failCode:
+    | 'empty'
+    | 'empty_container'
+    | 'empty_function'
+    | 'short'
+    | 'missing_part'
+    | 'gap'
+    | 'mud'
+    | 'ramp'
+    | 'laser_gate'
+    | 'patrol_drone'
+    | null;
   missingPart: PartId | null;
   events: SimEvent[];
   collectedCrystals: number;
   totalCrystals: number;
   finalPos: number;
+  finalTick?: number;
+  usedElseBranch?: boolean;
+  usedFunctionCall?: boolean;
+  usedWait?: boolean;
 }
 
 export interface CircuitSegment {
@@ -276,6 +353,10 @@ export interface SkillStats {
   circuitsSolved: number;
   bugsDebugged?: number;
   logicGatesSolved?: number;
+  functionsUsed?: number;
+  elseBranchesUsed?: number;
+  predictionsCorrect?: number;
+  bossesDefeated?: number;
 }
 
 export type BotThemeId = 'amber' | 'cobalt' | 'emerald';
@@ -353,7 +434,12 @@ export interface SaveProfile {
   streakShields?: number;
   unlockedFactIds?: string[];
   adaptiveHintsEnabled?: boolean;
+  predictQuizEnabled?: boolean;
   learningTelemetry?: import('./educationStrategy').LearningTelemetry;
+  loadout?: import('./shopAndQuests').PlayerLoadout;
+  debugCompleted?: Record<string, boolean>;
+  questCounters?: import('./shopAndQuests').QuestProgressCounters;
+  claimedQuestIds?: string[];
   sandbox: {
     name?: string;
     budget: number;
@@ -363,6 +449,9 @@ export interface SaveProfile {
     ifUnlocked?: boolean;
     track: TrackTile[];
     circuit: CircuitGrid;
+    isDebugPuzzle?: boolean;
+    bugClue?: string;
+    starterProgram?: CodeBlock[];
     savedLevels?: SandboxMissionDraft[];
   };
 }

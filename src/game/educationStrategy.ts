@@ -28,10 +28,10 @@ import {
 import type { MilestoneUnlockKind } from './milestoneParticles';
 
 /* ============================================================================
- * 1. STORY-DRIVEN 3-CHAPTER CAMPAIGN & AGE BAND SCAFFOLDING (Ages 6–11)
+ * 1. STORY-DRIVEN 4-CHAPTER CAMPAIGN & AGE BAND SCAFFOLDING (Ages 6–12)
  * ========================================================================== */
 
-export type StoryChapterId = 1 | 2 | 3;
+export type StoryChapterId = 1 | 2 | 3 | 4;
 
 export interface StoryChapterDef {
   id: StoryChapterId;
@@ -83,6 +83,19 @@ export const STORY_CHAPTERS: StoryChapterDef[] = [
     stemFocus: 'Nested Loops, Sensor Conditionals & Multi-Beam Optics',
     levelIds: [8, 9, 10, 11, 12],
     accentColor: '#a78bfa'
+  },
+  {
+    id: 4,
+    title: 'Chapter 4 · Citadel of Motion',
+    ageBand: 'Ages 9–12',
+    subtitle: 'IF/ELSE, MY BLOCK Functions, Moving Hazards & Boss Rescue',
+    briefingLines: [
+      'The Overload Sentinel has locked the Citadel with timed laser gates and sweeping patrol drones!',
+      'Master IF / ELSE decisions, reusable MY BLOCK functions, and timing beats to break all 3 Sentinel shields!'
+    ],
+    stemFocus: 'IF/ELSE Branching, Functions, Deterministic Timing & Boss Rescue',
+    levelIds: [13, 14, 15, 16],
+    accentColor: '#f59e0b'
   }
 ];
 
@@ -97,7 +110,13 @@ export function getStoryChapterForLevel(levelId: number): StoryChapterDef {
  * 2. COLLECTIBLE REAL-WORLD STEM FACT CARDS
  * ========================================================================== */
 
-export type AcademyPillarId = StemPillarId | 'debugging' | 'logic';
+export type AcademyPillarId =
+  | StemPillarId
+  | 'debugging'
+  | 'logic'
+  | 'branching'
+  | 'functions'
+  | 'prediction';
 
 export type FactDiagramKey =
   | 'wheels'
@@ -109,7 +128,11 @@ export type FactDiagramKey =
   | 'splitter'
   | 'sensors'
   | 'debugging'
-  | 'logic';
+  | 'logic'
+  | 'branching'
+  | 'functions'
+  | 'timing'
+  | 'boss';
 
 export interface StemFactCardDef {
   id: string;
@@ -235,6 +258,50 @@ export const STEM_FACT_CARDS: StemFactCardDef[] = [
       'Computers think with tiny switches called logic gates. AND needs both signals ON, OR needs either signal ON, and NOT flips ON to OFF.',
     realWorldExample: 'Car seatbelt alerts use logic gates: Seat Occupied AND Belt Unbuckled triggers a chime.',
     diagramKey: 'logic'
+  },
+  {
+    id: 'branching_if_else',
+    title: 'Two-Path Decisions: IF / ELSE',
+    pillar: 'branching',
+    unlockedByLabel: 'Level 12 or 13 · Citadel Entry',
+    triggerLevelIds: [12, 13],
+    summary:
+      'IF / ELSE gives a robot a backup plan: when a sensor sees a hazard, run the THEN lane; otherwise immediately run the ELSE lane!',
+    realWorldExample: 'Smart thermostats use IF/ELSE: IF room is cold, turn heater ON — ELSE switch to energy-saving standby.',
+    diagramKey: 'branching'
+  },
+  {
+    id: 'functions_abstraction',
+    title: 'Reusable Functions (MY BLOCK)',
+    pillar: 'functions',
+    unlockedByLabel: 'Level 14 · Patrol Corridor',
+    triggerLevelIds: [14, 15],
+    summary:
+      'Packaging a useful combo into a reusable function lets you call it anywhere in your program—and fixing it once fixes every call!',
+    realWorldExample: 'Video game engines store a "Jump" function once and reuse it across every hero, platform, and level.',
+    diagramKey: 'functions'
+  },
+  {
+    id: 'timing_synchronization',
+    title: 'Clock Beats & Synchronization',
+    pillar: 'prediction',
+    unlockedByLabel: 'Level 13 or 15 · Timed Hazards',
+    triggerLevelIds: [13, 15],
+    summary:
+      'Waiting one clock beat lets moving barriers and patrol drones clear your path without wasting energy or colliding.',
+    realWorldExample: 'Factory robot arms synchronize on shared clock cycles so two arms never collide while assembling cars.',
+    diagramKey: 'timing'
+  },
+  {
+    id: 'boss_systems_engineering',
+    title: 'Systems Engineering & Boss Rescues',
+    pillar: 'functions',
+    unlockedByLabel: 'Level 16 · Overload Sentinel Boss',
+    triggerLevelIds: [16],
+    summary:
+      'Real robotics missions combine hardware budgets, reusable software functions, timing sensors, and optical circuits into one reliable system.',
+    realWorldExample: 'Spacecraft docking systems blend thrusters, lidar hazard timing, and automated computer routines working together.',
+    diagramKey: 'boss'
   }
 ];
 
@@ -247,7 +314,7 @@ export function getFactCardById(id: string): StemFactCardDef | null {
 }
 
 /* ============================================================================
- * 3. 8-PILLAR STEM MASTERY SYSTEM
+ * 3. 11-PILLAR STEM MASTERY SYSTEM (Ages 6–12)
  * ========================================================================== */
 
 export interface AcademyPillarMeta {
@@ -314,6 +381,27 @@ export const ACADEMY_PILLARS: AcademyPillarMeta[] = [
     shortLabel: 'Logic Gates',
     category: 'Computational Thinking',
     thresholds: [1, 3, 6]
+  },
+  {
+    id: 'branching',
+    label: 'IF / ELSE Branching',
+    shortLabel: 'IF / ELSE',
+    category: 'Computational Thinking',
+    thresholds: [1, 2, 4]
+  },
+  {
+    id: 'functions',
+    label: 'Functions & Reuse',
+    shortLabel: 'MY BLOCK',
+    category: 'Computational Thinking',
+    thresholds: [1, 2, 4]
+  },
+  {
+    id: 'prediction',
+    label: 'Predict & Timing',
+    shortLabel: 'Predict',
+    category: 'Computational Thinking',
+    thresholds: [1, 3, 6]
   }
 ];
 
@@ -340,7 +428,10 @@ export function computeAcademySkillBadges(statsInput?: Partial<SkillStats>): Aca
     sensors: parseNonNegInt(s.sensorsUsed),
     optics: parseNonNegInt(s.circuitsSolved),
     debugging: parseNonNegInt(s.bugsDebugged),
-    logic: parseNonNegInt(s.logicGatesSolved)
+    logic: parseNonNegInt(s.logicGatesSolved),
+    branching: parseNonNegInt(s.elseBranchesUsed),
+    functions: parseNonNegInt(s.functionsUsed),
+    prediction: parseNonNegInt(s.predictionsCorrect)
   };
 
   return ACADEMY_PILLARS.map((meta) => {
@@ -446,13 +537,22 @@ export interface AdaptiveHint {
 }
 
 let parsonsUid = 1;
-function pBlk(type: CodeBlock['type'], opts?: { count?: number; condition?: SensorCondition; children?: CodeBlock[] }): CodeBlock {
+function pBlk(
+  type: CodeBlock['type'],
+  opts?: { count?: number; condition?: SensorCondition; children?: CodeBlock[]; elseChildren?: CodeBlock[] }
+): CodeBlock {
   const id = `starter_${type.toLowerCase()}_${parsonsUid++}`;
   if (type === 'LOOP') {
     return { id, type: 'LOOP', count: opts?.count ?? 2, children: opts?.children ?? [] };
   }
   if (type === 'IF') {
-    return { id, type: 'IF', condition: opts?.condition ?? 'GAP', children: opts?.children ?? [] };
+    return {
+      id,
+      type: 'IF',
+      condition: opts?.condition ?? 'GAP',
+      children: opts?.children ?? [],
+      ...(opts?.elseChildren ? { elseChildren: opts.elseChildren } : {})
+    };
   }
   return { id, type };
 }
@@ -474,6 +574,43 @@ export function buildParsonsStarterTemplate(level: LevelDef): ParsonsStarterTemp
       blocks: [pBlk('LOOP', { count: 3, children: [pBlk('MOVE')] })],
       missingCount: 1,
       instruction: 'Starter LOOP 3x ready! Drop 1 more MOVE inside the green LOOP.'
+    };
+  }
+  if (level.id === 13) {
+    return {
+      blocks: [
+        pBlk('LOOP', {
+          count: 4,
+          children: [
+            pBlk('LOOP', {
+              count: 2,
+              children: [
+                pBlk('IF', {
+                  condition: 'HAZARD',
+                  children: [pBlk('WAIT')],
+                  elseChildren: []
+                })
+              ]
+            })
+          ]
+        })
+      ],
+      missingCount: 1,
+      instruction: 'Starter IF [HAZARD] / ELSE ready! Drop MOVE inside the amber ELSE lane.'
+    };
+  }
+  if (level.id === 14) {
+    return {
+      blocks: [pBlk('LOOP', { count: 3, children: [pBlk('CALL_FUNC')] })],
+      missingCount: 2,
+      instruction: 'LOOP 3x calls MY BLOCK! Open the MY BLOCK tray and add MOVE + JUMP.'
+    };
+  }
+  if (level.id === 15 || level.id === 16) {
+    return {
+      blocks: [pBlk('CALL_FUNC'), pBlk('JUMP'), pBlk('CALL_FUNC')],
+      missingCount: 2,
+      instruction: 'Put IF [HAZARD] -> WAIT and MOVE inside MY BLOCK, then add BOOST and calls to reach the gate!'
     };
   }
   if (level.ifUnlocked) {
@@ -520,6 +657,12 @@ function demoForFailure(
   if (sim?.missingPart) {
     return { topic: sim.missingPart };
   }
+  if (sim?.failCode === 'empty_function') {
+    return { topic: 'CALL_FUNC' };
+  }
+  if (sim?.failCode === 'laser_gate' || sim?.failCode === 'patrol_drone') {
+    return level.ifUnlocked ? { topic: 'IF', condition: 'HAZARD' } : { topic: 'WAIT' };
+  }
   if (sim?.failCode === 'gap') {
     return level.ifUnlocked ? { topic: 'IF', condition: 'GAP' } : { topic: 'JUMP' };
   }
@@ -538,12 +681,13 @@ export function computeAdaptiveHint(params: {
   phase: 'build' | 'code' | 'circuit';
   chassis: ChassisGrid;
   program: CodeBlock[];
+  functionBody?: CodeBlock[];
   circuitGrid: CircuitGrid;
   tier: AdaptiveHintTier;
   lastSimResult: SimResult | null;
   failingBlockId: string | null;
 }): AdaptiveHint {
-  const { level, phase, chassis, program, circuitGrid, tier, lastSimResult, failingBlockId } = params;
+  const { level, phase, chassis, program, functionBody = [], circuitGrid, tier, lastSimResult, failingBlockId } = params;
   const info = computeChassisInfo(chassis || createEmptyChassis());
   const plan = findShortestTrackPlan(level);
 
@@ -653,10 +797,34 @@ export function computeAdaptiveHint(params: {
 
   // CODE PHASE
   const demo = demoForFailure(lastSimResult, level);
-  const blkCount = countBlocks(program || []);
-  const ghostPlan = computeGhostPreviewPlan(level, 'code', chassis, program, circuitGrid);
+  const blkCount = countBlocks(program || [], level.functionUnlocked ? functionBody : undefined);
+  const ghostPlan = computeGhostPreviewPlan(level, 'code', chassis, program, circuitGrid, functionBody);
 
   if (tier === 1) {
+    if (lastSimResult?.failCode === 'empty_function') {
+      return {
+        tier: 1,
+        phase,
+        headline: 'Gentle Retry · Empty MY BLOCK',
+        clue: 'Open the fuchsia MY BLOCK tray and snap your reusable combo blocks inside before calling it!'
+      };
+    }
+    if (lastSimResult?.failCode === 'laser_gate') {
+      return {
+        tier: 1,
+        phase,
+        headline: 'Gentle Retry · Timed Laser Barrier',
+        clue: 'That laser cycles every beat! Add WAIT or IF [HAZARD] → WAIT / ELSE → MOVE to cross when it opens.'
+      };
+    }
+    if (lastSimResult?.failCode === 'patrol_drone') {
+      return {
+        tier: 1,
+        phase,
+        headline: 'Gentle Retry · Patrol Drone',
+        clue: 'A Patrol Drone swept that tile! Use Step to see its beat, then time a WAIT, JUMP, or IF [HAZARD] branch.'
+      };
+    }
     if (lastSimResult?.failCode === 'gap') {
       return {
         tier: 1,

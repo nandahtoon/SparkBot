@@ -14,7 +14,8 @@ export function cloneProgram(blocks: ReadonlyArray<CodeBlock>): CodeBlock[] {
     type: blk.type,
     ...(blk.count !== undefined ? { count: blk.count } : {}),
     ...(blk.condition !== undefined ? { condition: blk.condition } : {}),
-    ...(Array.isArray(blk.children) ? { children: cloneProgram(blk.children) } : {})
+    ...(Array.isArray(blk.children) ? { children: cloneProgram(blk.children) } : {}),
+    ...(Array.isArray(blk.elseChildren) ? { elseChildren: cloneProgram(blk.elseChildren) } : {})
   }));
 }
 
@@ -39,6 +40,9 @@ export function areProgramsEqual(
     const ca = ba.children || [];
     const cb = bb.children || [];
     if (!areProgramsEqual(ca, cb)) return false;
+    const ea = ba.elseChildren || [];
+    const eb = bb.elseChildren || [];
+    if (!areProgramsEqual(ea, eb)) return false;
   }
   return true;
 }

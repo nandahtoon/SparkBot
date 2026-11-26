@@ -22,9 +22,285 @@
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #0b1222;
+        color: #f8fafc;
+        overflow: hidden;
+      }
+
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: max(1.5rem, env(safe-area-inset-top)) 1.5rem max(1.5rem, env(safe-area-inset-bottom));
+        background:
+          linear-gradient(rgba(56, 189, 248, 0.045) 1px, transparent 1px) 0 0 / 48px 48px,
+          linear-gradient(90deg, rgba(56, 189, 248, 0.045) 1px, transparent 1px) 0 0 / 48px 48px,
+          radial-gradient(circle at 50% 38%, #1a355b 0%, #0f1f3a 48%, #0b1222 100%);
+        font-family: 'Outfit', 'Avenir Next', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+        opacity: 1;
+        transform: scale(1);
+        transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: opacity, transform;
+      }
+
+      #app-splash.is-hidden {
+        opacity: 0;
+        transform: scale(1.03);
+        pointer-events: none;
+      }
+
+      .splash-stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        max-width: 320px;
+        width: 100%;
+      }
+
+      .splash-emblem-wrap {
+        position: relative;
+        width: 124px;
+        height: 124px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.25rem;
+        animation: splashFloat 2.6s ease-in-out infinite;
+      }
+
+      .splash-orbit {
+        position: absolute;
+        inset: -8px;
+        width: 140px;
+        height: 140px;
+        animation: splashOrbit 24s linear infinite;
+      }
+
+      .splash-bot-svg {
+        width: 112px;
+        height: 112px;
+        border-radius: 28px;
+        box-shadow: 0 20px 48px rgba(2, 6, 23, 0.65), 0 0 36px rgba(56, 189, 248, 0.18);
+      }
+
+      .splash-eye {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: splashBlink 3.8s ease-in-out infinite;
+      }
+
+      .splash-title {
+        margin: 0;
+        font-size: clamp(2.1rem, 6vw, 2.75rem);
+        font-weight: 900;
+        line-height: 1.05;
+        letter-spacing: -0.025em;
+        color: #f8fafc;
+        text-shadow: 0 6px 24px rgba(2, 6, 23, 0.6);
+      }
+
+      .splash-title-accent {
+        color: #fde047;
+      }
+
+      .splash-subtitle {
+        margin: 0.35rem 0 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: #bae6fd;
+        opacity: 0.9;
+      }
+
+      .splash-progress-wrap {
+        width: 224px;
+        margin-top: 1.75rem;
+      }
+
+      .splash-progress-track {
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.2);
+        overflow: hidden;
+      }
+
+      #app-splash-bar-fill {
+        width: 100%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #38bdf8 0%, #fde047 55%, #34d399 100%);
+        transform-origin: left center;
+        transform: scaleX(0.18);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      #app-splash-status {
+        margin: 0.65rem 0 0;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #94a3b8;
+        min-height: 1.25rem;
+      }
+
+      .splash-motto {
+        position: absolute;
+        bottom: max(1.5rem, env(safe-area-inset-bottom));
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: rgba(148, 163, 184, 0.72);
+      }
+
+      @keyframes splashFloat {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-6px); }
+      }
+
+      @keyframes splashOrbit {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      @keyframes splashBlink {
+        0%, 44%, 52%, 100% { transform: scaleY(1); }
+        48% { transform: scaleY(0.12); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .splash-emblem-wrap,
+        .splash-orbit,
+        .splash-eye {
+          animation: none !important;
+        }
+        #app-splash,
+        #app-splash-bar-fill {
+          transition: none !important;
+        }
+      }
+    </style>
   </head>
-  <body data-state="title">
+  <body data-state="title" data-splash="loading">
     <div id="root"></div>
+
+    <!-- Instant Pre-React Branded Splash Screen (prevents blank screen during JS/3D boot) -->
+    <div
+      id="app-splash"
+      role="progressbar"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow="18"
+      aria-label="Loading SparkBot: Engineering Academy"
+    >
+      <div class="splash-stage">
+        <div class="splash-emblem-wrap" aria-hidden="true">
+          <svg class="splash-orbit" viewBox="0 0 140 140" fill="none">
+            <circle
+              cx="70"
+              cy="70"
+              r="65"
+              stroke="rgba(56, 189, 248, 0.35)"
+              stroke-width="1.5"
+              stroke-dasharray="8 8"
+              stroke-linecap="round"
+            />
+            <circle cx="70" cy="5" r="3.5" fill="#fde047" />
+            <circle cx="135" cy="70" r="3" fill="#38bdf8" />
+          </svg>
+
+          <svg class="splash-bot-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <defs>
+              <radialGradient id="sbBg" cx="50%" cy="38%" r="68%">
+                <stop offset="0%" stop-color="#1e3a5f" />
+                <stop offset="60%" stop-color="#0f1d36" />
+                <stop offset="100%" stop-color="#0b1222" />
+              </radialGradient>
+              <linearGradient id="sbBody" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#fde047" />
+                <stop offset="55%" stop-color="#f59e0b" />
+                <stop offset="100%" stop-color="#d97706" />
+              </linearGradient>
+              <linearGradient id="sbVisor" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#1e293b" />
+                <stop offset="100%" stop-color="#090f1d" />
+              </linearGradient>
+              <linearGradient id="sbEye" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#67e8f9" />
+                <stop offset="100%" stop-color="#0ea5e9" />
+              </linearGradient>
+              <linearGradient id="sbRing" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#38bdf8" />
+                <stop offset="50%" stop-color="#fbbf24" />
+                <stop offset="100%" stop-color="#34d399" />
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#sbBg)" />
+            <circle cx="256" cy="256" r="218" fill="none" stroke="url(#sbRing)" stroke-width="10" stroke-opacity="0.72" />
+            <line x1="256" y1="146" x2="256" y2="96" stroke="#94a3b8" stroke-width="14" stroke-linecap="round" />
+            <circle cx="256" cy="82" r="24" fill="#38bdf8" />
+            <circle cx="249" cy="75" r="8" fill="#e0f2fe" />
+            <rect x="92" y="210" width="34" height="72" rx="16" fill="#64748b" stroke="#cbd5e1" stroke-width="5" />
+            <rect x="386" y="210" width="34" height="72" rx="16" fill="#64748b" stroke="#cbd5e1" stroke-width="5" />
+            <rect x="118" y="142" width="276" height="214" rx="54" fill="url(#sbBody)" stroke="#fef08a" stroke-width="8" />
+            <rect x="148" y="176" width="216" height="122" rx="34" fill="url(#sbVisor)" stroke="#38bdf8" stroke-width="6" />
+            <g class="splash-eye">
+              <circle cx="212" cy="236" r="30" fill="url(#sbEye)" />
+              <circle cx="203" cy="226" r="10" fill="#ffffff" />
+            </g>
+            <g class="splash-eye">
+              <circle cx="300" cy="236" r="30" fill="url(#sbEye)" />
+              <circle cx="291" cy="226" r="10" fill="#ffffff" />
+            </g>
+            <path d="M 224 276 Q 256 296 288 276" fill="none" stroke="#34d399" stroke-width="8" stroke-linecap="round" />
+            <rect x="164" y="368" width="184" height="68" rx="26" fill="#1e293b" stroke="#38bdf8" stroke-width="6" />
+            <path d="M 264 380 L 236 406 L 256 406 L 248 426 L 278 398 L 258 398 Z" fill="#fde047" />
+          </svg>
+        </div>
+
+        <h1 class="splash-title">
+          <span class="splash-title-accent">Spark</span>Bot
+        </h1>
+        <p class="splash-subtitle">Engineering Academy</p>
+
+        <div class="splash-progress-wrap">
+          <div class="splash-progress-track">
+            <div id="app-splash-bar-fill"></div>
+          </div>
+          <p id="app-splash-status">Powering up workshop...</p>
+        </div>
+      </div>
+
+      <div class="splash-motto">Build · Code · Launch</div>
+    </div>
+
+    <script>
+      window.__sparkbotSplashStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      window.setTimeout(function () {
+        var el = document.getElementById('app-splash');
+        if (el && !el.classList.contains('is-hidden')) {
+          el.classList.add('is-hidden');
+          document.body.dataset.splash = 'done';
+          window.setTimeout(function () {
+            if (el.parentNode) el.parentNode.removeChild(el);
+          }, 420);
+        }
+      }, 6500);
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

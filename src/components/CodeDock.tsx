@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BookOpen,
+  Brain,
+  Bug,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -9,13 +11,21 @@ import {
   Cpu,
   Diamond,
   Eye,
+  Flag,
+  Focus,
+  Layers,
   Lightbulb,
+  Map as MapIcon,
   MapPin,
+  Maximize2,
   Pause,
   Play,
   Puzzle,
   Redo2,
+  RotateCcw,
   Route,
+  Shield,
+  SlidersHorizontal,
   Square,
   StepForward,
   Trash2,
@@ -25,13 +35,17 @@ import {
 import {
   collectAncestorBlockIds,
   countBlocks,
+  type BossMeta,
   type CodeBlock,
+  type DynamicHazardDef,
   type SensorCondition,
   type SimStepInspection,
   type TileType,
+  type TrackTile,
   type TutorialStep
 } from '../game/engine';
 import type { LivePathPreview } from '../game/pathPreview';
+import type { CodeCameraPreset } from '../three/codeCamera';
 import {
   computeBlockNestingDepth,
   computeMagneticDragPosition,
@@ -43,7 +57,7 @@ import {
   type LogicPathOptimality
 } from '../game/codeFeedback';
 import type { DemoTopic } from './ConceptDemoPopover';
-import { BlockIcon } from './Icons';
+import { BlockIcon, HazardIcon } from './Icons';
 
 function getDropZoneShiftClass(
   state: DropZoneFeedbackState | undefined,
@@ -82,10 +96,17 @@ function getTierBadgeStyle(optimality: LogicPathOptimality): string {
 
 interface CodeDockProps {
   program: CodeBlock[];
+  functionBody?: CodeBlock[];
   parBlocks: number;
   loopUnlocked: boolean;
   ifUnlocked: boolean;
+  elseUnlocked?: boolean;
+  functionUnlocked?: boolean;
+  waitUnlocked?: boolean;
+  hasDynamicHazards?: boolean;
+  bossMeta?: BossMeta | null;
   activeBlockId: string | null;
+  activeCallerBlockId?: string | null;
   simulating: boolean;
   simPaused?: boolean;
   simAwaitingStep?: boolean;
@@ -99,10 +120,13 @@ interface CodeDockProps {
   canRedo?: boolean;
   showPathPreview?: boolean;
   pathPreview?: LivePathPreview | null;
+  predictQuizEnabled?: boolean;
   onChangeProgram: (next: CodeBlock[]) => void;
+  onChangeFunctionBody?: (next: CodeBlock[]) => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onTogglePathPreview?: () => void;
+  onTogglePredictQuiz?: () => void;
   onHoverBlock?: (blockId: string | null) => void;
   onBlockPlaced?: (info: { block: CodeBlock; nestingDepth: number }) => void;
   onRunProgram: () => void;
@@ -112,6 +136,13 @@ interface CodeDockProps {
   onStopSim?: () => void;
   onRequestHint?: () => void;
   onOpenDemo?: (topic: DemoTopic, condition?: SensorCondition) => void;
+  track?: TrackTile[];
+  hazards?: DynamicHazardDef[];
+  codeCameraPreset?: CodeCameraPreset;
+  onCycleCameraPreset?: () => void;
+  onFocusTrackTile?: (tileIndex: number) => void;
+  debugClue?: string | null;
+  onResetDebugCode?: () => void;
 }
 
 interface DragCmdPayload {
@@ -119,6 +150,7 @@ interface DragCmdPayload {
   type: CodeBlock['type'];
   condition?: SensorCondition;
   blockId?: string;
+  sourceTray?: 'main' | 'func';
   x: number;
   y: number;
   displayX: number;
@@ -136,8 +168,18 @@ function makeBlock(type: CodeBlock['type'], condition?: SensorCondition): CodeBl
   uidSeq++;
   const id = `${type.toLowerCase()}_${Date.now()}_${uidSeq}`;
   if (type === 'LOOP') return { id, type: 'LOOP', count: 2, children: [] };
-  if (type === 'IF') return { id, type: 'IF', condition: condition || 'GAP', children: [] };
+  if (type === 'IF') return { id, type: 'IF', condition: condition || 'GAP', children: [], elseChildren: [] };
   return { id, type };
+}
+
+function containsBlockId(list: CodeBlock[], targetId: string): boolean {
+  const baseId = targetId.endsWith(':else') ? targetId.slice(0, -5) : targetId;
+  for (const item of list) {
+    if (item.id === baseId) return true;
+    if (item.children && containsBlockId(item.children, baseId)) return true;
+    if (item.elseChildren && containsBlockId(item.elseChildren, baseId)) return true;
+  }
+  return false;
 }
 
 function removeBlockById(list: CodeBlock[], targetId: string): { next: CodeBlock[]; removed: CodeBlock | null } {
@@ -148,40 +190,58 @@ function removeBlockById(list: CodeBlock[], targetId: string): { next: CodeBlock
       removed = item;
       continue;
     }
+    let nextItem = item;
     if (item.children) {
       const sub = removeBlockById(item.children, targetId);
       if (sub.removed) removed = sub.removed;
-      next.push({ ...item, children: sub.next });
-    } else {
-      next.push(item);
+      nextItem = { ...nextItem, children: sub.next };
     }
+    if (item.elseChildren) {
+      const subElse = removeBlockById(item.elseChildren, targetId);
+      if (subElse.removed) removed = subElse.removed;
+      nextItem = { ...nextItem, elseChildren: subElse.next };
+    }
+    next.push(nextItem);
   }
   return { next, removed };
 }
 
 function insertIntoContainer(list: CodeBlock[], containerId: string | null, blk: CodeBlock): CodeBlock[] {
-  if (!containerId) return [...list, blk];
+  if (!containerId || !containsBlockId(list, containerId)) return [...list, blk];
+  const isElseZone = containerId.endsWith(':else');
+  const baseId = isElseZone ? containerId.slice(0, -5) : containerId;
   return list.map((item) => {
-    if (item.id === containerId) {
+    if (item.id === baseId) {
+      if (isElseZone && item.type === 'IF') {
+        return { ...item, elseChildren: [...(item.elseChildren || []), blk] };
+      }
       return { ...item, children: [...(item.children || []), blk] };
     }
+    let nextItem = item;
     if (item.children) {
-      return { ...item, children: insertIntoContainer(item.children, containerId, blk) };
+      nextItem = { ...nextItem, children: insertIntoContainer(item.children, containerId, blk) };
     }
-    return item;
+    if (item.elseChildren) {
+      nextItem = { ...nextItem, elseChildren: insertIntoContainer(item.elseChildren, containerId, blk) };
+    }
+    return nextItem;
   });
 }
 
 function cycleLoopCount(list: CodeBlock[], targetId: string): CodeBlock[] {
   return list.map((item) => {
     if (item.id === targetId && item.type === 'LOOP') {
-      const nextCount = (item.count || 2) >= 4 ? 2 : (item.count || 2) + 1;
+      const nextCount = (item.count || 2) >= 5 ? 2 : (item.count || 2) + 1;
       return { ...item, count: nextCount };
     }
+    let nextItem = item;
     if (item.children) {
-      return { ...item, children: cycleLoopCount(item.children, targetId) };
+      nextItem = { ...nextItem, children: cycleLoopCount(item.children, targetId) };
     }
-    return item;
+    if (item.elseChildren) {
+      nextItem = { ...nextItem, elseChildren: cycleLoopCount(item.elseChildren, targetId) };
+    }
+    return nextItem;
   });
 }
 
@@ -196,10 +256,17 @@ const TILE_BADGE_STYLE: Record<TileType, string> = {
 
 export const CodeDock: React.FC<CodeDockProps> = ({
   program,
+  functionBody = [],
   parBlocks,
   loopUnlocked,
   ifUnlocked,
+  elseUnlocked = false,
+  functionUnlocked = false,
+  waitUnlocked = false,
+  hasDynamicHazards = false,
+  bossMeta = null,
   activeBlockId,
+  activeCallerBlockId = null,
   simulating,
   simPaused = false,
   simAwaitingStep = false,
@@ -213,10 +280,13 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   canRedo = false,
   showPathPreview = true,
   pathPreview = null,
+  predictQuizEnabled = true,
   onChangeProgram,
+  onChangeFunctionBody,
   onUndo,
   onRedo,
   onTogglePathPreview,
+  onTogglePredictQuiz,
   onHoverBlock,
   onBlockPlaced,
   onRunProgram,
@@ -225,9 +295,19 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   onNextSimStep,
   onStopSim,
   onRequestHint,
-  onOpenDemo
+  onOpenDemo,
+  track = [],
+  hazards = [],
+  codeCameraPreset = 'overview',
+  onCycleCameraPreset,
+  onFocusTrackTile,
+  debugClue = null,
+  onResetDebugCode
 }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [focusedTileIdx, setFocusedTileIdx] = useState<number | null>(null);
+  const [funcTrayOpen, setFuncTrayOpen] = useState(true);
   const [activeContainerId, setActiveContainerId] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragCmdPayload | null>(null);
   const [hoveredDropZone, setHoveredDropZone] = useState<string | null>(null);
@@ -237,6 +317,32 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   dragRef.current = drag;
   const dockRef = useRef<HTMLDivElement | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
+
+  const dynamicHazardTiles = useMemo(() => {
+    const set = new Set<number>();
+    for (const h of hazards) {
+      if (h.kind === 'laser_gate') {
+        set.add(h.tileIndex);
+      } else if (h.kind === 'patrol_drone') {
+        for (let t = h.minTile; t <= h.maxTile; t++) set.add(t);
+      }
+    }
+    return set;
+  }, [hazards]);
+
+  const reachedTiles = useMemo(() => {
+    const set = new Set<number>();
+    if (!pathPreview || pathPreview.segments.length === 0) return set;
+    set.add(0);
+    for (const seg of pathPreview.segments) {
+      set.add(seg.toPos);
+    }
+    return set;
+  }, [pathPreview]);
+
+  useEffect(() => {
+    setFocusedTileIdx(null);
+  }, [track, codeCameraPreset]);
 
   function triggerMagneticSnap(blockId: string, zoneId: string) {
     if (snapTimerRef.current !== null) {
@@ -257,11 +363,40 @@ export const CodeDock: React.FC<CodeDockProps> = ({
     };
   }, []);
 
-  const totalBlocks = countBlocks(program);
-  const ancestorIdSet = useMemo(
-    () => new Set(collectAncestorBlockIds(program, activeBlockId)),
-    [program, activeBlockId]
-  );
+  // Automatically clear stale activeContainerId after Undo/Redo, level switch, or parent deletion
+  useEffect(() => {
+    if (!activeContainerId) return;
+    if (activeContainerId === 'FUNC') {
+      if (!functionUnlocked) setActiveContainerId(null);
+      return;
+    }
+    const stillExists =
+      containsBlockId(program, activeContainerId) ||
+      (functionUnlocked && containsBlockId(functionBody, activeContainerId));
+    if (!stillExists) {
+      setActiveContainerId(null);
+    }
+  }, [activeContainerId, functionBody, functionUnlocked, program]);
+
+  const totalBlocks = countBlocks(program, functionUnlocked ? functionBody : undefined);
+  const ancestorIdSet = useMemo(() => {
+    const mainAnc = collectAncestorBlockIds(program, activeBlockId);
+    const funcAnc = functionBody.length > 0 ? collectAncestorBlockIds(functionBody, activeBlockId) : [];
+    return new Set([...mainAnc, ...funcAnc]);
+  }, [program, functionBody, activeBlockId]);
+
+  const isZoneInFunc = (zoneId: string | null): boolean => {
+    if (!zoneId) return false;
+    if (zoneId === 'FUNC') return true;
+    return containsBlockId(functionBody, zoneId);
+  };
+
+  const blockContainsCallFunc = (blk: CodeBlock): boolean => {
+    if (blk.type === 'CALL_FUNC') return true;
+    if (blk.children?.some(blockContainsCallFunc)) return true;
+    if (blk.elseChildren?.some(blockContainsCallFunc)) return true;
+    return false;
+  };
 
   const tierOptions = useMemo(
     () => ({
@@ -278,7 +413,8 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   );
 
   const hoveredPreview = useMemo(() => {
-    if (!drag || !drag.moved || !hoveredDropZone || hoveredDropZone === 'TRASH') return null;
+    if (!drag || !drag.moved || !hoveredDropZone || hoveredDropZone === 'TRASH' || hoveredDropZone === 'FUNC') return null;
+    if (isZoneInFunc(hoveredDropZone)) return null;
     return previewDropTargetOptimality(program, tierOptions, {
       kind: drag.kind,
       type: drag.type,
@@ -286,7 +422,8 @@ export const CodeDock: React.FC<CodeDockProps> = ({
       blockId: drag.blockId,
       targetZoneId: hoveredDropZone
     });
-  }, [drag, hoveredDropZone, program, tierOptions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag, hoveredDropZone, program, functionBody, tierOptions]);
 
   function resolveZoneFeedback(zoneId: string): {
     state: DropZoneFeedbackState | undefined;
@@ -363,7 +500,11 @@ export const CodeDock: React.FC<CodeDockProps> = ({
       };
     }
 
-    if (directZone && !isDescendantBlockId(program, excludeBlockId, directZone)) {
+    const isSelfDescendant = (zId: string) =>
+      isDescendantBlockId(program, excludeBlockId, zId) ||
+      isDescendantBlockId(functionBody, excludeBlockId, zId);
+
+    if (directZone && !isSelfDescendant(directZone)) {
       const slotEl = findSlotElement(directZone);
       if (slotEl) {
         const snap = computeMagneticDragPosition(
@@ -395,12 +536,16 @@ export const CodeDock: React.FC<CodeDockProps> = ({
     const container = dockRef.current;
     if (container) {
       const slots = Array.from(container.querySelectorAll<HTMLElement>('[data-drop-slot]'));
-      // Prefer inner container slots over ROOT when equidistant
-      slots.sort((a, b) => (a.dataset.dropSlot === 'ROOT' ? 1 : b.dataset.dropSlot === 'ROOT' ? -1 : 0));
+      // Prefer inner container slots over ROOT/FUNC when equidistant
+      slots.sort((a, b) => {
+        const aTop = a.dataset.dropSlot === 'ROOT' || a.dataset.dropSlot === 'FUNC';
+        const bTop = b.dataset.dropSlot === 'ROOT' || b.dataset.dropSlot === 'FUNC';
+        return aTop && !bTop ? 1 : !aTop && bTop ? -1 : 0;
+      });
       let best: { zoneId: string; pullFactor: number; x: number; y: number; scale: number } | null = null;
       for (const slot of slots) {
         const zId = slot.dataset.dropSlot;
-        if (!zId || isDescendantBlockId(program, excludeBlockId, zId)) continue;
+        if (!zId || isSelfDescendant(zId)) continue;
         const snap = computeMagneticDragPosition(
           px,
           py,
@@ -454,7 +599,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
     });
   }
 
-  function handleExistingDown(e: React.PointerEvent, blk: CodeBlock) {
+  function handleExistingDown(e: React.PointerEvent, blk: CodeBlock, sourceTray: 'main' | 'func') {
     if (simulating) return;
     e.stopPropagation();
     e.preventDefault();
@@ -464,6 +609,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
       type: blk.type,
       condition: blk.condition,
       blockId: blk.id,
+      sourceTray,
       x: e.clientX,
       y: e.clientY,
       displayX: e.clientX,
@@ -518,31 +664,37 @@ export const CodeDock: React.FC<CodeDockProps> = ({
     setDrag(null);
     setHoveredDropZone(null);
 
-    if (cur.kind === 'new') {
-      if (cur.moved) {
-        const rawDz = findDropZoneAt(e.clientX, e.clientY);
-        if (rawDz === 'TRASH') return;
-        const dz = rawDz ?? cur.magneticZoneId;
-        const targetContainer = dz && dz !== 'ROOT' ? dz : null;
-        const created = makeBlock(cur.type, cur.condition);
-        const nextProgram = insertIntoContainer(program, targetContainer, created);
+    const placeIntoZone = (created: CodeBlock, targetZone: string | null) => {
+      const destIsFunc = Boolean(functionUnlocked && onChangeFunctionBody && isZoneInFunc(targetZone));
+      // Prevent placing MY BLOCK (CALL_FUNC) inside MY BLOCK subroutine (no recursion)
+      if (destIsFunc && blockContainsCallFunc(created)) {
+        const nextProgram = insertIntoContainer(program, null, created);
         onChangeProgram(nextProgram);
-        triggerMagneticSnap(created.id, targetContainer ?? 'ROOT');
+        triggerMagneticSnap(created.id, 'ROOT');
         onBlockPlaced?.({
           block: created,
           nestingDepth: computeBlockNestingDepth(nextProgram, created.id)
+        });
+        return;
+      }
+
+      if (destIsFunc && onChangeFunctionBody) {
+        const funcContainer = targetZone === 'FUNC' ? null : targetZone;
+        const nextFunc = insertIntoContainer(functionBody, funcContainer, created);
+        onChangeFunctionBody(nextFunc);
+        triggerMagneticSnap(created.id, targetZone ?? 'FUNC');
+        onBlockPlaced?.({
+          block: created,
+          nestingDepth: computeBlockNestingDepth(nextFunc, created.id) + 1
         });
         if (created.type === 'LOOP' || created.type === 'IF') {
           setActiveContainerId(created.id);
         }
       } else {
-        // Tap fallback: append into active container or root
-        const created = makeBlock(cur.type, cur.condition);
-        const canNest = activeContainerId && created.id !== activeContainerId;
-        const targetContainer = canNest ? activeContainerId : null;
-        const nextProgram = insertIntoContainer(program, targetContainer, created);
+        const mainContainer = targetZone && targetZone !== 'ROOT' ? targetZone : null;
+        const nextProgram = insertIntoContainer(program, mainContainer, created);
         onChangeProgram(nextProgram);
-        triggerMagneticSnap(created.id, targetContainer ?? 'ROOT');
+        triggerMagneticSnap(created.id, mainContainer ?? 'ROOT');
         onBlockPlaced?.({
           block: created,
           nestingDepth: computeBlockNestingDepth(nextProgram, created.id)
@@ -551,42 +703,105 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           setActiveContainerId(created.id);
         }
       }
+    };
+
+    if (cur.kind === 'new') {
+      if (cur.moved) {
+        const rawDz = findDropZoneAt(e.clientX, e.clientY);
+        if (rawDz === 'TRASH') return;
+        const dz = rawDz ?? cur.magneticZoneId;
+        const created = makeBlock(cur.type, cur.condition);
+        placeIntoZone(created, dz);
+      } else {
+        // Tap fallback: append into active container/FUNC or ROOT
+        const created = makeBlock(cur.type, cur.condition);
+        const canNest = activeContainerId && created.id !== activeContainerId;
+        placeIntoZone(created, canNest ? activeContainerId : null);
+      }
       return;
     }
 
     if (cur.kind === 'existing' && cur.blockId) {
+      const fromFunc = cur.sourceTray === 'func';
       if (cur.moved) {
         const rawDz = findDropZoneAt(e.clientX, e.clientY);
         if (rawDz === 'TRASH') {
-          const { next } = removeBlockById(program, cur.blockId);
-          if (activeContainerId === cur.blockId) setActiveContainerId(null);
-          onChangeProgram(next);
+          if (fromFunc && onChangeFunctionBody) {
+            const { next } = removeBlockById(functionBody, cur.blockId);
+            if (activeContainerId === cur.blockId || activeContainerId === `${cur.blockId}:else`) {
+              setActiveContainerId(null);
+            }
+            onChangeFunctionBody(next);
+          } else {
+            const { next } = removeBlockById(program, cur.blockId);
+            if (activeContainerId === cur.blockId || activeContainerId === `${cur.blockId}:else`) {
+              setActiveContainerId(null);
+            }
+            onChangeProgram(next);
+          }
           return;
         }
         const dz = rawDz ?? cur.magneticZoneId;
-        if (dz && !isDescendantBlockId(program, cur.blockId, dz)) {
-          const { next, removed } = removeBlockById(program, cur.blockId);
-          if (removed) {
-            const target = dz === 'ROOT' ? null : dz;
-            const nextProgram = insertIntoContainer(next, target, removed);
-            onChangeProgram(nextProgram);
-            triggerMagneticSnap(removed.id, target ?? 'ROOT');
-            onBlockPlaced?.({
-              block: removed,
-              nestingDepth: computeBlockNestingDepth(nextProgram, removed.id)
-            });
+        const isSelfDesc =
+          isDescendantBlockId(program, cur.blockId, dz) ||
+          isDescendantBlockId(functionBody, cur.blockId, dz);
+        if (dz && !isSelfDesc) {
+          const destIsFunc = Boolean(functionUnlocked && onChangeFunctionBody && isZoneInFunc(dz));
+          const removedRes = fromFunc
+            ? removeBlockById(functionBody, cur.blockId)
+            : removeBlockById(program, cur.blockId);
+          if (removedRes.removed) {
+            if (destIsFunc && blockContainsCallFunc(removedRes.removed)) {
+              return;
+            }
+            if (fromFunc && destIsFunc && onChangeFunctionBody) {
+              const funcTarget = dz === 'FUNC' ? null : dz;
+              const nextFunc = insertIntoContainer(removedRes.next, funcTarget, removedRes.removed);
+              onChangeFunctionBody(nextFunc);
+              triggerMagneticSnap(removedRes.removed.id, dz);
+              onBlockPlaced?.({
+                block: removedRes.removed,
+                nestingDepth: computeBlockNestingDepth(nextFunc, removedRes.removed.id) + 1
+              });
+            } else if (!fromFunc && !destIsFunc) {
+              const target = dz === 'ROOT' ? null : dz;
+              const nextProgram = insertIntoContainer(removedRes.next, target, removedRes.removed);
+              onChangeProgram(nextProgram);
+              triggerMagneticSnap(removedRes.removed.id, target ?? 'ROOT');
+              onBlockPlaced?.({
+                block: removedRes.removed,
+                nestingDepth: computeBlockNestingDepth(nextProgram, removedRes.removed.id)
+              });
+            } else if (fromFunc && !destIsFunc && onChangeFunctionBody) {
+              onChangeFunctionBody(removedRes.next);
+              const target = dz === 'ROOT' ? null : dz;
+              const nextProgram = insertIntoContainer(program, target, removedRes.removed);
+              onChangeProgram(nextProgram);
+              triggerMagneticSnap(removedRes.removed.id, target ?? 'ROOT');
+            } else if (!fromFunc && destIsFunc && onChangeFunctionBody) {
+              onChangeProgram(removedRes.next);
+              const funcTarget = dz === 'FUNC' ? null : dz;
+              const nextFunc = insertIntoContainer(functionBody, funcTarget, removedRes.removed);
+              onChangeFunctionBody(nextFunc);
+              triggerMagneticSnap(removedRes.removed.id, dz);
+            }
           }
         }
       } else {
         // Tap existing block
         if (cur.type === 'LOOP' || cur.type === 'IF') {
           if (cur.type === 'LOOP' && activeContainerId === cur.blockId) {
-            const nextProgram = cycleLoopCount(program, cur.blockId);
-            onChangeProgram(nextProgram);
-            onBlockPlaced?.({
-              block: { id: cur.blockId, type: 'LOOP' },
-              nestingDepth: computeBlockNestingDepth(nextProgram, cur.blockId)
-            });
+            if (fromFunc && onChangeFunctionBody) {
+              const nextFunc = cycleLoopCount(functionBody, cur.blockId);
+              onChangeFunctionBody(nextFunc);
+            } else {
+              const nextProgram = cycleLoopCount(program, cur.blockId);
+              onChangeProgram(nextProgram);
+              onBlockPlaced?.({
+                block: { id: cur.blockId, type: 'LOOP' },
+                nestingDepth: computeBlockNestingDepth(nextProgram, cur.blockId)
+              });
+            }
           } else {
             setActiveContainerId(activeContainerId === cur.blockId ? null : cur.blockId);
           }
@@ -595,15 +810,43 @@ export const CodeDock: React.FC<CodeDockProps> = ({
     }
   }
 
-  function renderBlock(blk: CodeBlock) {
+  function renderBlock(blk: CodeBlock, tray: 'main' | 'func' = 'main') {
     const isActive = activeBlockId === blk.id;
+    const isActiveCaller = Boolean(
+      !isActive && blk.type === 'CALL_FUNC' && activeCallerBlockId === blk.id
+    );
     const isFailing = !simulating && !isActive && failingBlockId === blk.id;
     const isAncestor = !isActive && ancestorIdSet.has(blk.id);
     const isContainerFocused = activeContainerId === blk.id;
+    const isElseFocused = activeContainerId === `${blk.id}:else`;
     const isJustSnapped = snappedState?.blockId === blk.id;
+
+    const removeThisBlock = () => {
+      onHoverBlock?.(null);
+      if (tray === 'func' && onChangeFunctionBody) {
+        const { next } = removeBlockById(functionBody, blk.id);
+        if (activeContainerId === blk.id || activeContainerId === `${blk.id}:else`) {
+          setActiveContainerId(null);
+        }
+        onChangeFunctionBody(next);
+      } else {
+        const { next } = removeBlockById(program, blk.id);
+        if (activeContainerId === blk.id || activeContainerId === `${blk.id}:else`) {
+          setActiveContainerId(null);
+        }
+        onChangeProgram(next);
+      }
+    };
 
     if (blk.type === 'LOOP' || blk.type === 'IF') {
       const isLoop = blk.type === 'LOOP';
+      const showElseLane =
+        !isLoop && (elseUnlocked || Boolean(blk.elseChildren && blk.elseChildren.length > 0));
+      const elseZoneId = `${blk.id}:else`;
+      const isElseMagneticTarget =
+        Boolean(drag?.moved && drag.magneticEngaged && hoveredDropZone === elseZoneId);
+      const isElseCaught = snappedState?.zoneId === elseZoneId;
+
       return (
         <div
           key={blk.id}
@@ -613,7 +856,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           data-block-ancestor={isAncestor ? 'true' : 'false'}
           data-just-snapped={isJustSnapped ? 'true' : 'false'}
           data-drop-zone={blk.id}
-          onPointerDown={(e) => handleExistingDown(e, blk)}
+          onPointerDown={(e) => handleExistingDown(e, blk, tray)}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerOver={(e) => {
@@ -634,7 +877,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                 ? 'border-rose-400 bg-rose-500/20 ring-2 ring-rose-400/75 shadow-[0_0_14px_rgba(251,113,133,0.45)]'
                 : isAncestor
                   ? 'border-cyan-300 bg-cyan-500/15 shadow-[0_0_14px_rgba(34,211,238,0.45)]'
-                  : isContainerFocused
+                  : isContainerFocused || isElseFocused
                     ? isLoop
                       ? 'border-emerald-300 bg-emerald-500/20'
                       : 'border-violet-300 bg-violet-500/20'
@@ -661,12 +904,16 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  const nextProgram = cycleLoopCount(program, blk.id);
-                  onChangeProgram(nextProgram);
-                  onBlockPlaced?.({
-                    block: blk,
-                    nestingDepth: computeBlockNestingDepth(nextProgram, blk.id)
-                  });
+                  if (tray === 'func' && onChangeFunctionBody) {
+                    onChangeFunctionBody(cycleLoopCount(functionBody, blk.id));
+                  } else {
+                    const nextProgram = cycleLoopCount(program, blk.id);
+                    onChangeProgram(nextProgram);
+                    onBlockPlaced?.({
+                      block: blk,
+                      nestingDepth: computeBlockNestingDepth(nextProgram, blk.id)
+                    });
+                  }
                 }}
                 aria-label={`Loop count ${blk.count || 2}`}
                 className="tabular rounded bg-emerald-400 px-1 py-0.2 text-[10px] font-black text-slate-950"
@@ -676,72 +923,150 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             )}
           </div>
 
-          {(() => {
-            const innerZone = resolveZoneFeedback(blk.id);
-            const isSlotMagneticTarget =
-              Boolean(drag?.moved && drag.magneticEngaged && hoveredDropZone === blk.id);
-            const isSlotCaught = snappedState?.zoneId === blk.id;
-            const innerShiftClass = simulating
-              ? 'border-slate-500/70 bg-slate-950/60'
-              : getDropZoneShiftClass(innerZone.state, innerZone.isPreview);
-            return (
-              <div
-                data-drop-zone={blk.id}
-                data-drop-slot={blk.id}
-                data-zone-tier={innerZone.state?.complexityTier || 'tier2_structured'}
-                data-zone-optimality={innerZone.state?.optimality || 'idle'}
-                data-zone-reason={innerZone.state?.reason || 'empty'}
-                data-drop-preview={innerZone.isPreview ? 'true' : 'false'}
-                data-magnetic-target={isSlotMagneticTarget ? 'true' : 'false'}
-                className={`flex min-h-[40px] min-w-[44px] items-center gap-1 rounded-lg border border-dashed px-1.5 py-0.5 transition-transform duration-150 ${
-                  isSlotCaught ? 'scale-[1.02] brightness-110' : ''
-                } ${innerShiftClass}`}
-              >
-                {(blk.children || []).length === 0 ? (
-                  isSlotMagneticTarget ? (
-                    <span
-                      aria-hidden="true"
-                      className="anim-magnetic-ghost-slot mx-auto flex h-8 w-8 items-center justify-center rounded-lg border-2 border-dashed border-sky-300/85 bg-sky-400/20 shadow-[0_0_12px_rgba(56,189,248,0.35)]"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-sky-200" />
-                    </span>
-                  ) : (
-                    <span
-                      className={`mx-auto h-2.5 w-2.5 rounded-full transition-colors ${
-                        innerZone.isPreview && innerZone.state?.optimality === 'optimal'
-                          ? 'bg-emerald-300/90'
-                          : innerZone.state?.optimality === 'suboptimal'
-                            ? 'bg-amber-300/80'
-                            : 'bg-slate-600/80'
+          <div className="flex flex-col gap-1">
+            {/* Primary / THEN lane */}
+            {(() => {
+              const innerZone = resolveZoneFeedback(blk.id);
+              const isSlotMagneticTarget =
+                Boolean(drag?.moved && drag.magneticEngaged && hoveredDropZone === blk.id);
+              const isSlotCaught = snappedState?.zoneId === blk.id;
+              const innerShiftClass = simulating
+                ? 'border-slate-500/70 bg-slate-950/60'
+                : getDropZoneShiftClass(innerZone.state, innerZone.isPreview);
+              return (
+                <div className="flex items-center gap-1">
+                  {showElseLane && (
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveContainerId(blk.id);
+                      }}
+                      className={`rounded px-1 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                        isContainerFocused
+                          ? 'bg-emerald-400 text-slate-950'
+                          : 'bg-emerald-500/20 text-emerald-300'
                       }`}
-                    />
-                  )
-                ) : (
-                  <>
-                    {(blk.children || []).map((child) => renderBlock(child))}
-                    {isSlotMagneticTarget && (
-                      <span
-                        aria-hidden="true"
-                        className="anim-magnetic-ghost-slot flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-sky-300/80 bg-sky-400/18 shadow-[0_0_10px_rgba(56,189,248,0.3)]"
-                      >
-                        <span className="h-2 w-2 rounded-full bg-sky-200" />
-                      </span>
+                    >
+                      DO
+                    </button>
+                  )}
+                  <div
+                    data-drop-zone={blk.id}
+                    data-drop-slot={blk.id}
+                    data-zone-tier={innerZone.state?.complexityTier || 'tier2_structured'}
+                    data-zone-optimality={innerZone.state?.optimality || 'idle'}
+                    data-zone-reason={innerZone.state?.reason || 'empty'}
+                    data-drop-preview={innerZone.isPreview ? 'true' : 'false'}
+                    data-magnetic-target={isSlotMagneticTarget ? 'true' : 'false'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveContainerId(blk.id);
+                    }}
+                    className={`flex min-h-[40px] min-w-[44px] items-center gap-1 rounded-lg border border-dashed px-1.5 py-0.5 transition-transform duration-150 ${
+                      isSlotCaught ? 'scale-[1.02] brightness-110' : ''
+                    } ${innerShiftClass}`}
+                  >
+                    {(blk.children || []).length === 0 ? (
+                      isSlotMagneticTarget ? (
+                        <span
+                          aria-hidden="true"
+                          className="anim-magnetic-ghost-slot mx-auto flex h-8 w-8 items-center justify-center rounded-lg border-2 border-dashed border-sky-300/85 bg-sky-400/20 shadow-[0_0_12px_rgba(56,189,248,0.35)]"
+                        >
+                          <span className="h-2 w-2 rounded-full bg-sky-200" />
+                        </span>
+                      ) : (
+                        <span
+                          className={`mx-auto h-2.5 w-2.5 rounded-full transition-colors ${
+                            innerZone.isPreview && innerZone.state?.optimality === 'optimal'
+                              ? 'bg-emerald-300/90'
+                              : innerZone.state?.optimality === 'suboptimal'
+                                ? 'bg-amber-300/80'
+                                : 'bg-slate-600/80'
+                          }`}
+                        />
+                      )
+                    ) : (
+                      <>
+                        {(blk.children || []).map((child) => renderBlock(child, tray))}
+                        {isSlotMagneticTarget && (
+                          <span
+                            aria-hidden="true"
+                            className="anim-magnetic-ghost-slot flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-sky-300/80 bg-sky-400/18 shadow-[0_0_10px_rgba(56,189,248,0.3)]"
+                          >
+                            <span className="h-2 w-2 rounded-full bg-sky-200" />
+                          </span>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Optional ELSE lane (Chapter 3 Finale & Chapter 4) */}
+            {showElseLane && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveContainerId(isElseFocused ? null : elseZoneId);
+                  }}
+                  aria-label="Focus ELSE branch"
+                  className={`rounded px-1 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                    isElseFocused
+                      ? 'bg-amber-400 text-slate-950'
+                      : 'bg-amber-500/20 text-amber-300'
+                  }`}
+                >
+                  ELSE
+                </button>
+                <div
+                  data-drop-zone={elseZoneId}
+                  data-drop-slot={elseZoneId}
+                  data-magnetic-target={isElseMagneticTarget ? 'true' : 'false'}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveContainerId(elseZoneId);
+                  }}
+                  className={`flex min-h-[36px] min-w-[44px] items-center gap-1 rounded-lg border border-dashed px-1.5 py-0.5 transition-all duration-150 ${
+                    isElseCaught ? 'scale-[1.02] brightness-110' : ''
+                  } ${
+                    isElseMagneticTarget || isElseFocused
+                      ? 'border-amber-300 bg-amber-500/20'
+                      : 'border-amber-500/45 bg-slate-950/75'
+                  }`}
+                >
+                  {(blk.elseChildren || []).length === 0 ? (
+                    <span className="mx-auto text-[9px] font-bold text-slate-500">+</span>
+                  ) : (
+                    <>
+                      {(blk.elseChildren || []).map((child) => renderBlock(child, tray))}
+                      {isElseMagneticTarget && (
+                        <span
+                          aria-hidden="true"
+                          className="anim-magnetic-ghost-slot flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-amber-300/80 bg-amber-400/20"
+                        >
+                          <span className="h-2 w-2 rounded-full bg-amber-200" />
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            );
-          })()}
+            )}
+          </div>
 
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              onHoverBlock?.(null);
-              const { next } = removeBlockById(program, blk.id);
-              if (activeContainerId === blk.id) setActiveContainerId(null);
-              onChangeProgram(next);
+              removeThisBlock();
             }}
             aria-label="Remove Block"
             className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-slate-200 hover:bg-rose-500"
@@ -757,16 +1082,20 @@ export const CodeDock: React.FC<CodeDockProps> = ({
         ? 'border-sky-400/80'
         : blk.type === 'JUMP'
           ? 'border-amber-400/80'
-          : 'border-pink-400/80';
+          : blk.type === 'WAIT'
+            ? 'border-cyan-400/80'
+            : blk.type === 'CALL_FUNC'
+              ? 'border-fuchsia-400/85 bg-fuchsia-950/50'
+              : 'border-pink-400/80';
 
     return (
       <div
         key={blk.id}
         data-block-id={blk.id}
-        data-block-active={isActive ? 'true' : 'false'}
+        data-block-active={isActive || isActiveCaller ? 'true' : 'false'}
         data-block-failing={isFailing ? 'true' : 'false'}
         data-just-snapped={isJustSnapped ? 'true' : 'false'}
-        onPointerDown={(e) => handleExistingDown(e, blk)}
+        onPointerDown={(e) => handleExistingDown(e, blk, tray)}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerOver={(e) => {
@@ -778,14 +1107,18 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           if (!simulating) onHoverBlock?.(blk.id);
         }}
         onBlur={() => onHoverBlock?.(null)}
-        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 bg-slate-800 transition-all sm:h-11 sm:w-11 ${
+        className={`relative flex h-10 shrink-0 items-center justify-center rounded-xl border-2 bg-slate-800 transition-all sm:h-11 ${
+          blk.type === 'CALL_FUNC' ? 'min-w-[54px] px-1.5 gap-1' : 'w-10 sm:w-11'
+        } ${
           isJustSnapped ? 'anim-block-magnetic-snap' : ''
         } ${
           isActive
             ? 'scale-105 border-amber-300 bg-amber-400/30 ring-2 ring-amber-300/80 shadow-[0_0_16px_rgba(251,191,36,0.75)]'
-            : isFailing
-              ? 'border-rose-400 bg-rose-500/25 ring-2 ring-rose-400/80 shadow-[0_0_14px_rgba(251,113,133,0.5)]'
-              : border
+            : isActiveCaller
+              ? 'scale-105 border-cyan-300 bg-cyan-500/25 ring-2 ring-cyan-300/80 shadow-[0_0_14px_rgba(34,211,238,0.6)]'
+              : isFailing
+                ? 'border-rose-400 bg-rose-500/25 ring-2 ring-rose-400/80 shadow-[0_0_14px_rgba(251,113,133,0.5)]'
+                : border
         }`}
       >
         {isFailing && (
@@ -798,16 +1131,17 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             #{stepInspection.stepNumber}
           </span>
         )}
-        <BlockIcon type={blk.type} className="h-6 w-6 sm:h-6.5 sm:w-6.5" />
+        <BlockIcon type={blk.type} className="h-5.5 w-5.5 sm:h-6 sm:w-6" />
+        {blk.type === 'CALL_FUNC' && (
+          <span className="text-[9px] font-black uppercase tracking-tight text-fuchsia-200">MY</span>
+        )}
         {!simulating && (
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              onHoverBlock?.(null);
-              const { next } = removeBlockById(program, blk.id);
-              onChangeProgram(next);
+              removeThisBlock();
             }}
             aria-label="Remove Block"
             className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-slate-200 hover:bg-rose-500"
@@ -851,9 +1185,201 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           data-logic-optimality={programTiers.optimality}
           className="pointer-events-auto w-full max-w-4xl rounded-2xl border border-slate-600/80 bg-slate-900/94 px-2 py-1.5 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2"
         >
-          {/* Top Row: Compact Command Palette + Action Controls */}
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-            <div className="no-scrollbar touch-pan-x flex items-center gap-1.5 overflow-x-auto py-0.5 pr-1">
+          {/* Boss Mission Header Banner (Chapter 4 Finale) */}
+          {bossMeta && (
+            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl border border-rose-400/45 bg-rose-950/55 px-2.5 py-1 text-[11px]">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5 shrink-0 text-rose-300" aria-hidden="true" />
+                <span className="font-black uppercase tracking-wider text-rose-200">
+                  BOSS · {bossMeta.name}
+                </span>
+                <span className="hidden truncate text-slate-300 sm:inline">
+                  — {bossMeta.title}
+                </span>
+              </div>
+              <span className="shrink-0 font-bold text-amber-300">
+                {bossMeta.coreCount} Shield Cores
+              </span>
+            </div>
+          )}
+
+          {/* Bug Buster Debug Clue Banner */}
+          {debugClue && (
+            <div
+              data-testid="debug-clue-banner"
+              className="mb-1.5 flex items-center justify-between gap-2 rounded-xl border border-violet-400/60 bg-violet-950/60 px-2.5 py-1.5 text-[11px]"
+            >
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Bug className="h-4 w-4 shrink-0 text-violet-300" aria-hidden="true" />
+                <span className="truncate font-bold text-violet-100">{debugClue}</span>
+              </div>
+              {onResetDebugCode && !simulating && (
+                <button
+                  id="resetDebugCodeBtn"
+                  type="button"
+                  onClick={onResetDebugCode}
+                  aria-label="Reset Starter Buggy Code"
+                  className="flex h-7 shrink-0 items-center gap-1 rounded-lg border border-violet-400/60 bg-violet-500/20 px-2 text-[10px] font-black text-violet-100 hover:bg-violet-500/35 active:scale-95"
+                >
+                  <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Compact Track Mini-Map & 3D View Switcher (See Every Tile & Tap to Inspect in 3D) */}
+          {track.length > 0 && (
+            <div
+              data-testid="track-minimap-strip"
+              className="mb-1 flex items-center gap-1 border-b border-slate-700/60 pb-1"
+            >
+              {onCycleCameraPreset && !simulating && (
+                <button
+                  id="codeCameraViewBtn"
+                  type="button"
+                  onClick={() => {
+                    setFocusedTileIdx(null);
+                    onCycleCameraPreset();
+                  }}
+                  aria-label={`Switch 3D Camera View (Current: ${
+                    codeCameraPreset === 'overview'
+                      ? 'Full Track'
+                      : codeCameraPreset === 'top'
+                        ? 'Top-Down'
+                        : 'Close Bot'
+                  })`}
+                  title="Tap to switch 3D camera (Full / Top / Close) · Drag 3D scene to rotate & pan"
+                  className={`flex h-7 shrink-0 items-center gap-1 rounded-lg border px-2 text-[10px] font-black tracking-wide transition-colors active:scale-95 ${
+                    codeCameraPreset === 'overview'
+                      ? 'border-sky-400/70 bg-sky-500/20 text-sky-200 hover:border-sky-300'
+                      : codeCameraPreset === 'top'
+                        ? 'border-violet-400/70 bg-violet-500/20 text-violet-200 hover:border-violet-300'
+                        : 'border-emerald-400/70 bg-emerald-500/20 text-emerald-200 hover:border-emerald-300'
+                  }`}
+                >
+                  {codeCameraPreset === 'overview' ? (
+                    <Maximize2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  ) : codeCameraPreset === 'top' ? (
+                    <MapIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <Focus className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  )}
+                  <span>
+                    {codeCameraPreset === 'overview'
+                      ? 'Full'
+                      : codeCameraPreset === 'top'
+                        ? 'Top'
+                        : 'Close'}
+                  </span>
+                </button>
+              )}
+
+              <div
+                className="no-scrollbar touch-pan-x flex flex-1 items-center gap-1 overflow-x-auto py-0.5"
+                role="list"
+                aria-label="Course Tile Map"
+              >
+                {track.map((tile, idx) => {
+                  const isStart = idx === 0;
+                  const isGate = idx === track.length - 1 || tile.type === 'gate';
+                  const hasDynHazard = dynamicHazardTiles.has(idx);
+                  const hazardCond: SensorCondition | null =
+                    tile.type === 'gap'
+                      ? 'GAP'
+                      : tile.type === 'mud'
+                        ? 'MUD'
+                        : tile.type === 'ramp'
+                          ? 'RAMP'
+                          : hasDynHazard
+                            ? 'HAZARD'
+                            : null;
+                  const activeTileIdx =
+                    simulating && stepInspection
+                      ? stepInspection.tilePosition
+                      : pathPreview && pathPreview.segments.length > 0
+                        ? pathPreview.endpoint.tileIndex
+                        : 0;
+                  const isEndTarget = idx === activeTileIdx;
+                  const isFailTarget =
+                    !simulating &&
+                    isEndTarget &&
+                    pathPreview?.endpoint.status === 'hazard';
+                  const isReached = !simulating && reachedTiles.has(idx);
+                  const isFocused = focusedTileIdx === idx;
+
+                  const chipTone = isStart
+                    ? 'border-sky-400/65 bg-sky-500/20 text-sky-200'
+                    : isGate
+                      ? 'border-emerald-400/75 bg-emerald-500/20 text-emerald-200'
+                      : tile.type === 'gap'
+                        ? 'border-rose-400/70 bg-rose-500/20 text-rose-200'
+                        : tile.type === 'mud'
+                          ? 'border-amber-400/70 bg-amber-500/20 text-amber-200'
+                          : tile.type === 'ramp'
+                            ? 'border-pink-400/70 bg-pink-500/20 text-pink-200'
+                            : hasDynHazard
+                              ? 'border-fuchsia-400/70 bg-fuchsia-500/20 text-fuchsia-200'
+                              : 'border-slate-700 bg-slate-800/90 text-slate-300';
+
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      role="listitem"
+                      disabled={simulating}
+                      onClick={() => {
+                        setFocusedTileIdx(idx);
+                        onFocusTrackTile?.(idx);
+                      }}
+                      aria-label={`Tile ${idx}: ${
+                        isStart
+                          ? 'Start'
+                          : isGate
+                            ? 'Gate'
+                            : hazardCond || tile.type
+                      }${tile.crystal ? ' with Crystal' : ''}`}
+                      title={`Tile ${idx}${isGate ? ' (Gate)' : hazardCond ? ` (${hazardCond})` : ''}${tile.crystal ? ' · Crystal' : ''} — Tap to look`}
+                      className={`relative flex h-7 min-w-[28px] shrink-0 items-center justify-center gap-0.5 rounded-lg border px-1.5 text-[10px] font-black tabular transition-transform active:scale-95 disabled:pointer-events-none ${chipTone} ${
+                        isFailTarget
+                          ? 'ring-2 ring-rose-400'
+                          : isEndTarget
+                            ? 'ring-2 ring-sky-300'
+                            : isFocused
+                              ? 'ring-2 ring-amber-300'
+                              : ''
+                      }`}
+                    >
+                      {isGate ? (
+                        <Flag className="h-3 w-3 shrink-0 text-emerald-300" aria-hidden="true" />
+                      ) : hazardCond ? (
+                        <HazardIcon cond={hazardCond} className="h-3.5 w-3.5 shrink-0" />
+                      ) : null}
+                      <span>{isStart ? 'S' : idx}</span>
+                      {tile.crystal && (
+                        <Diamond
+                          className="h-2.5 w-2.5 shrink-0 fill-cyan-300 text-cyan-200"
+                          aria-hidden="true"
+                        />
+                      )}
+                      {isReached && !isStart && (
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none absolute inset-x-1 bottom-0.5 h-[2px] rounded-full ${
+                            isFailTarget ? 'bg-rose-400' : 'bg-emerald-300/90'
+                          }`}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Row 2: Command Palette (left) + Primary Step/Run Controls (right) — zero dead space on mobile */}
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+            <div className="no-scrollbar touch-pan-x flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-0.5 pr-1 sm:gap-1.5">
               {(['MOVE', 'JUMP', 'BOOST'] as const).map((cmd) => {
                 const isHint =
                   ghostHelp &&
@@ -868,16 +1394,32 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     onPointerDown={(e) => handlePaletteDown(e, cmd)}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-slate-800 transition-transform active:scale-95 sm:h-11 sm:w-11 ${
+                    className={`flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-xl border bg-slate-800 transition-transform active:scale-95 sm:h-10.5 sm:w-10.5 ${
                       isHint
                         ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_14px_rgba(251,191,36,0.5)]'
                         : 'border-slate-600 hover:border-sky-400'
                     }`}
                   >
-                    <BlockIcon type={cmd} className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
+                    <BlockIcon type={cmd} className="h-5.5 w-5.5 sm:h-6 sm:w-6" />
                   </button>
                 );
               })}
+
+              {waitUnlocked && (
+                <button
+                  id="addWaitBtn"
+                  type="button"
+                  data-add-cmd="WAIT"
+                  aria-label="WAIT 1 Beat"
+                  title="WAIT 1 Beat"
+                  onPointerDown={(e) => handlePaletteDown(e, 'WAIT')}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  className="flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-xl border border-cyan-400/75 bg-slate-800 transition-transform active:scale-95 hover:border-cyan-300 sm:h-10.5 sm:w-10.5"
+                >
+                  <BlockIcon type="WAIT" className="h-5.5 w-5.5 sm:h-6 sm:w-6" />
+                </button>
+              )}
 
               {loopUnlocked && (
                 <button
@@ -887,13 +1429,30 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                   onPointerDown={(e) => handlePaletteDown(e, 'LOOP')}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/75 bg-slate-800 transition-transform active:scale-95 hover:border-emerald-300 sm:h-11 sm:w-11"
+                  className="flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-xl border border-emerald-500/75 bg-slate-800 transition-transform active:scale-95 hover:border-emerald-300 sm:h-10.5 sm:w-10.5"
                 >
-                  <BlockIcon type="LOOP" className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
+                  <BlockIcon type="LOOP" className="h-5.5 w-5.5 sm:h-6 sm:w-6" />
                 </button>
               )}
 
-              {/* Sensor Conditional Blocks: IF [GAP], IF [MUD], IF [RAMP] */}
+              {functionUnlocked && (
+                <button
+                  id="addCallFuncBtn"
+                  type="button"
+                  data-add-cmd="CALL_FUNC"
+                  aria-label="MY BLOCK Subroutine"
+                  title="Call MY BLOCK Subroutine"
+                  onPointerDown={(e) => handlePaletteDown(e, 'CALL_FUNC')}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  className="flex h-9.5 min-w-[50px] shrink-0 items-center justify-center gap-1 rounded-xl border border-fuchsia-400/80 bg-fuchsia-950/45 px-1.5 transition-transform active:scale-95 hover:border-fuchsia-300 sm:h-10.5 sm:min-w-[58px]"
+                >
+                  <BlockIcon type="CALL_FUNC" className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                  <span className="text-[10px] font-black uppercase text-fuchsia-200">MY</span>
+                </button>
+              )}
+
+              {/* Sensor Conditional Blocks: IF [GAP], IF [MUD], IF [RAMP], + IF [HAZARD] */}
               {(ifUnlocked || loopUnlocked) && (
                 <>
                   <button
@@ -905,9 +1464,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     onPointerDown={(e) => handlePaletteDown(e, 'IF', 'GAP')}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
-                    className="flex h-10 min-w-[50px] shrink-0 items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-11 sm:min-w-[58px] sm:px-1.5"
+                    className="flex h-9.5 min-w-[48px] shrink-0 items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-10.5 sm:min-w-[56px] sm:px-1.5"
                   >
-                    <BlockIcon type="IF" condition="GAP" className="scale-90" />
+                    <BlockIcon type="IF" condition="GAP" className="scale-85 sm:scale-90" />
                   </button>
 
                   <button
@@ -919,9 +1478,9 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     onPointerDown={(e) => handlePaletteDown(e, 'IF', 'MUD')}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
-                    className="flex h-10 min-w-[50px] shrink-0 items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-11 sm:min-w-[58px] sm:px-1.5"
+                    className="flex h-9.5 min-w-[48px] shrink-0 items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-10.5 sm:min-w-[56px] sm:px-1.5"
                   >
-                    <BlockIcon type="IF" condition="MUD" className="scale-90" />
+                    <BlockIcon type="IF" condition="MUD" className="scale-85 sm:scale-90" />
                   </button>
 
                   <button
@@ -933,163 +1492,45 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     onPointerDown={(e) => handlePaletteDown(e, 'IF', 'RAMP')}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
-                    className="flex h-10 min-w-[50px] shrink-0 items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-11 sm:min-w-[58px] sm:px-1.5"
+                    className="flex h-9.5 min-w-[48px] shrink-0 items-center justify-center rounded-xl border border-violet-500/80 bg-slate-800 px-1 transition-transform active:scale-95 hover:border-violet-300 sm:h-10.5 sm:min-w-[56px] sm:px-1.5"
                   >
-                    <BlockIcon type="IF" condition="RAMP" className="scale-90" />
+                    <BlockIcon type="IF" condition="RAMP" className="scale-85 sm:scale-90" />
                   </button>
+
+                  {(hasDynamicHazards || waitUnlocked) && (
+                    <button
+                      id="addIfHazardBtn"
+                      type="button"
+                      data-add-cmd="IF"
+                      data-if-cond="HAZARD"
+                      aria-label="IF HAZARD"
+                      title="IF Moving Hazard Ahead"
+                      onPointerDown={(e) => handlePaletteDown(e, 'IF', 'HAZARD')}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      className="flex h-9.5 min-w-[48px] shrink-0 items-center justify-center rounded-xl border border-rose-400/80 bg-rose-950/40 px-1 transition-transform active:scale-95 hover:border-rose-300 sm:h-10.5 sm:min-w-[56px] sm:px-1.5"
+                    >
+                      <BlockIcon type="IF" condition="HAZARD" className="scale-85 sm:scale-90" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
 
-            {/* Right Controls: Block Par Counter, Trash, Guide, Hint, Collapse, Step & Run Buttons */}
-            <div className="flex shrink-0 items-center justify-between gap-1.5 sm:justify-end">
-              <div className="flex flex-wrap items-center gap-1">
-                <div
-                  aria-label={`Blocks ${totalBlocks} of ${parBlocks}`}
-                  className={`flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 tabular-nums text-[11px] font-black sm:h-9 sm:text-xs ${
-                    totalBlocks <= parBlocks
-                      ? 'border border-emerald-500/50 bg-emerald-500/20 text-emerald-300'
-                      : 'border border-amber-500/50 bg-amber-500/20 text-amber-300'
-                  }`}
-                >
-                  <Puzzle className="h-3.5 w-3.5" />
-                  <span>
-                    {totalBlocks}/{parBlocks}
-                  </span>
-                </div>
-
-                {totalBlocks > 0 && (
-                  <div
-                    data-testid="logic-tier-badge"
-                    data-tier-rank={programTiers.tierRank}
-                    data-optimality={programTiers.optimality}
-                    title={`${programTiers.tierLabel} · ${programTiers.hint}`}
-                    aria-label={`${programTiers.tierLabel}, ${programTiers.hint}`}
-                    className={`hidden h-8 items-center gap-1 rounded-lg border px-2 text-[10px] font-extrabold tracking-wide transition-colors md:flex sm:h-9 ${getTierBadgeStyle(
-                      programTiers.optimality
-                    )}`}
-                  >
-                    <span className="tabular font-black">T{programTiers.tierRank}</span>
-                    <span className="opacity-85">· {programTiers.hint}</span>
-                  </div>
-                )}
-
-                {onUndo && (
-                  <button
-                    id="undoCodeBtn"
-                    type="button"
-                    disabled={simulating || !canUndo}
-                    onClick={onUndo}
-                    aria-label="Undo Block Edit"
-                    title="Undo (Ctrl+Z)"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 transition-colors hover:border-sky-400 disabled:pointer-events-none disabled:opacity-35 sm:h-9 sm:w-9"
-                  >
-                    <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                )}
-
-                {onRedo && (
-                  <button
-                    id="redoCodeBtn"
-                    type="button"
-                    disabled={simulating || !canRedo}
-                    onClick={onRedo}
-                    aria-label="Redo Block Edit"
-                    title="Redo (Ctrl+Shift+Z)"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 transition-colors hover:border-sky-400 disabled:pointer-events-none disabled:opacity-35 sm:h-9 sm:w-9"
-                  >
-                    <Redo2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                )}
-
-                {onTogglePathPreview && (
-                  <button
-                    id="togglePathPreviewBtn"
-                    type="button"
-                    disabled={simulating}
-                    onClick={onTogglePathPreview}
-                    aria-pressed={showPathPreview}
-                    aria-label={showPathPreview ? 'Hide 3D Path Preview' : 'Show 3D Path Preview'}
-                    title={showPathPreview ? '3D Path Preview: ON' : '3D Path Preview: OFF'}
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:pointer-events-none disabled:opacity-35 sm:h-9 sm:w-9 ${
-                      showPathPreview
-                        ? 'border-cyan-400/75 bg-cyan-500/20 text-cyan-200 hover:border-cyan-300'
-                        : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-500'
-                    }`}
-                  >
-                    <Route className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  data-drop-zone="TRASH"
-                  disabled={simulating}
-                  onClick={() => {
-                    onHoverBlock?.(null);
-                    setActiveContainerId(null);
-                    onChangeProgram([]);
-                  }}
-                  aria-label="Clear All Blocks"
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 sm:h-9 sm:w-9 ${
-                    drag?.kind === 'existing' && drag.moved
-                      ? 'border-rose-400 bg-rose-500/30 text-rose-200'
-                      : 'border-slate-700 bg-slate-800 text-rose-300 hover:border-rose-400'
-                  }`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-
-                {onOpenDemo && !simulating && (
-                  <button
-                    type="button"
-                    data-demo-cmd="GUIDE"
-                    onClick={() =>
-                      onOpenDemo(ifUnlocked ? 'IF' : loopUnlocked ? 'LOOP' : 'MOVE', ifUnlocked ? 'GAP' : undefined)
-                    }
-                    aria-label="Code Blocks Visual Guide"
-                    title="Blocks Visual Guide"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/70 bg-sky-500/15 text-sky-200 transition-colors hover:border-sky-300 hover:bg-sky-500/25 active:scale-95 sm:h-9 sm:w-9"
-                  >
-                    <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                )}
-
-                {onRequestHint && !simulating && (
-                  <button
-                    id="codeNeedHintBtn"
-                    type="button"
-                    onClick={onRequestHint}
-                    aria-label="Need a Hint"
-                    className="flex h-8 items-center gap-1 rounded-lg border border-amber-400/70 bg-amber-500/15 px-2 text-[11px] font-black text-amber-200 transition-colors hover:border-amber-300 hover:bg-amber-500/25 active:scale-95 sm:h-9"
-                  >
-                    <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    <span className="hidden sm:inline">Hint</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setCollapsed((v) => !v)}
-                  aria-label={collapsed ? 'Expand Code Dock' : 'Collapse Code Dock'}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 sm:h-9 sm:w-9"
-                >
-                  {collapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </button>
-              </div>
-
+            {/* Primary Step & Run Controls (always right beside palette!) */}
+            <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               {!simulating ? (
-                <div className="flex items-center gap-1.5">
+                <>
                   {onStepProgram && (
                     <button
                       id="stepCodeBtn"
                       type="button"
                       onClick={onStepProgram}
                       aria-label="Step-Through Program"
-                      className="flex h-8.5 items-center justify-center gap-1 rounded-xl border border-sky-300/90 bg-gradient-to-b from-sky-400 to-sky-600 px-2.5 text-[11px] font-black text-slate-950 shadow-[0_2px_0_#0369a1] transition-transform active:translate-y-0.5 sm:h-9.5 sm:px-3 sm:text-xs"
+                      className="flex h-9.5 items-center justify-center gap-1 rounded-xl border border-sky-300/90 bg-gradient-to-b from-sky-400 to-sky-600 px-2.5 text-xs font-black text-slate-950 shadow-[0_2px_0_#0369a1] transition-transform active:translate-y-0.5 sm:h-10 sm:px-3"
                     >
-                      <StepForward className="h-3.5 w-3.5 stroke-[2.75] sm:h-4 sm:w-4" />
-                      <span>Step</span>
+                      <StepForward className="h-4 w-4 stroke-[2.75]" />
+                      <span className="hidden sm:inline">Step</span>
                     </button>
                   )}
 
@@ -1098,11 +1539,11 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     type="button"
                     onClick={onRunProgram}
                     aria-label="Run Robot Program"
-                    className="flex h-8.5 min-w-[48px] items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3 text-slate-950 shadow-[0_2px_0_#047857] transition-transform active:translate-y-0.5 sm:h-9.5 sm:min-w-[56px] sm:px-4"
+                    className="flex h-9.5 min-w-[48px] items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3 text-slate-950 shadow-[0_2px_0_#047857] transition-transform active:translate-y-0.5 sm:h-10 sm:min-w-[56px] sm:px-4"
                   >
                     <Play className="h-4.5 w-4.5 fill-slate-950 sm:h-5 sm:w-5" />
                   </button>
-                </div>
+                </>
               ) : (
                 <div className="flex items-center gap-1" role="group" aria-label="Simulation Step Controls">
                   {onToggleSimPause && (
@@ -1163,6 +1604,345 @@ export const CodeDock: React.FC<CodeDockProps> = ({
               )}
             </div>
           </div>
+
+          {/* Row 3: Compact Status + Utility Strip (Block Counter + Live Path Summary + Tools) */}
+          <div className="mt-1 flex items-center justify-between gap-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <div
+                aria-label={`Blocks ${totalBlocks} of ${parBlocks}`}
+                className={`flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 tabular-nums text-[11px] font-black sm:h-8 ${
+                  totalBlocks <= parBlocks
+                    ? 'border border-emerald-500/50 bg-emerald-500/20 text-emerald-300'
+                    : 'border border-amber-500/50 bg-amber-500/20 text-amber-300'
+                }`}
+              >
+                <Puzzle className="h-3 w-3" />
+                <span>
+                  {totalBlocks}/{parBlocks}
+                </span>
+              </div>
+
+              {totalBlocks > 0 && (
+                <div
+                  data-testid="logic-tier-badge"
+                  data-tier-rank={programTiers.tierRank}
+                  data-optimality={programTiers.optimality}
+                  title={`${programTiers.tierLabel} · ${programTiers.hint}`}
+                  aria-label={`${programTiers.tierLabel}, ${programTiers.hint}`}
+                  className={`hidden h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[10px] font-extrabold tracking-wide transition-colors md:flex ${getTierBadgeStyle(
+                    programTiers.optimality
+                  )}`}
+                >
+                  <span className="tabular font-black">T{programTiers.tierRank}</span>
+                  <span className="opacity-85">· {programTiers.hint}</span>
+                </div>
+              )}
+
+              {/* Inline Live Path Outcome Status (replaces separate 5th row!) */}
+              {!simulating && !collapsed && pathPreview && pathPreview.endpoint.status !== 'empty' && (
+                <div
+                  data-testid="live-path-summary"
+                  data-path-status={pathPreview.endpoint.status}
+                  className="flex min-w-0 items-center gap-1 truncate text-[11px] font-bold tracking-tight"
+                >
+                  {pathPreview.endpoint.status === 'win' ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
+                  ) : pathPreview.endpoint.status === 'hazard' ? (
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" aria-hidden="true" />
+                  ) : (
+                    <Compass className="h-3.5 w-3.5 shrink-0 text-sky-300" aria-hidden="true" />
+                  )}
+                  <span
+                    className={`truncate ${
+                      pathPreview.endpoint.status === 'win'
+                        ? 'text-emerald-300'
+                        : pathPreview.endpoint.status === 'hazard'
+                          ? 'text-rose-300'
+                          : 'text-sky-200'
+                    }`}
+                  >
+                    {pathPreview.endpoint.summaryLabel}
+                  </span>
+                  {pathPreview.endpoint.totalCrystals > 0 && (
+                    <span className="inline-flex shrink-0 items-center gap-0.5 tabular-nums text-cyan-300">
+                      <Diamond className="h-2.5 w-2.5 fill-cyan-300/75 text-cyan-300" aria-hidden="true" />
+                      <span>
+                        {pathPreview.endpoint.collectedCrystals}/{pathPreview.endpoint.totalCrystals}
+                      </span>
+                    </span>
+                  )}
+                  <span className="hidden shrink-0 tabular-nums text-slate-400 sm:inline">
+                    · {pathPreview.segments.length} {pathPreview.segments.length === 1 ? 'step' : 'steps'}
+                  </span>
+                  {!showPathPreview && (
+                    <span className="hidden shrink-0 text-slate-500 sm:inline">· 3D route hidden</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right Utility Controls */}
+            <div className="flex shrink-0 items-center gap-1">
+              {/* Mobile-only Tools Toggle */}
+              <button
+                id="mobileCodeToolsBtn"
+                type="button"
+                aria-expanded={mobileToolsOpen}
+                aria-label="Toggle Coding Tools"
+                onClick={() => setMobileToolsOpen((v) => !v)}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors active:scale-95 sm:hidden ${
+                  mobileToolsOpen
+                    ? 'border-sky-300 bg-sky-500/25 text-sky-100'
+                    : 'border-slate-700 bg-slate-800 text-slate-200'
+                }`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+
+              {/* Desktop/Tablet Inline Secondary Tools */}
+              <div className="hidden items-center gap-1 sm:flex">
+                {onUndo && (
+                  <button
+                    id="undoCodeBtn"
+                    type="button"
+                    disabled={simulating || !canUndo}
+                    onClick={onUndo}
+                    aria-label="Undo Block Edit"
+                    title="Undo (Ctrl+Z)"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 transition-colors hover:border-sky-400 disabled:pointer-events-none disabled:opacity-35"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+
+                {onRedo && (
+                  <button
+                    id="redoCodeBtn"
+                    type="button"
+                    disabled={simulating || !canRedo}
+                    onClick={onRedo}
+                    aria-label="Redo Block Edit"
+                    title="Redo (Ctrl+Shift+Z)"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 transition-colors hover:border-sky-400 disabled:pointer-events-none disabled:opacity-35"
+                  >
+                    <Redo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+
+                {onTogglePathPreview && (
+                  <button
+                    id="togglePathPreviewBtn"
+                    type="button"
+                    disabled={simulating}
+                    onClick={onTogglePathPreview}
+                    aria-pressed={showPathPreview}
+                    aria-label={showPathPreview ? 'Hide 3D Path Preview' : 'Show 3D Path Preview'}
+                    title={showPathPreview ? '3D Path Preview: ON' : '3D Path Preview: OFF'}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:pointer-events-none disabled:opacity-35 ${
+                      showPathPreview
+                        ? 'border-cyan-400/75 bg-cyan-500/20 text-cyan-200 hover:border-cyan-300'
+                        : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    <Route className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+
+                {onTogglePredictQuiz && (
+                  <button
+                    id="togglePredictQuizBtn"
+                    type="button"
+                    disabled={simulating}
+                    onClick={onTogglePredictQuiz}
+                    aria-pressed={predictQuizEnabled}
+                    aria-label={predictQuizEnabled ? 'Disable Predict-Before-Run Quiz' : 'Enable Predict-Before-Run Quiz'}
+                    title={predictQuizEnabled ? 'Brain Spark Predict Quiz: ON' : 'Brain Spark Predict Quiz: OFF'}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:pointer-events-none disabled:opacity-35 ${
+                      predictQuizEnabled
+                        ? 'border-fuchsia-400/75 bg-fuchsia-500/20 text-fuchsia-200 hover:border-fuchsia-300'
+                        : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    <Brain className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  data-drop-zone="TRASH"
+                  disabled={simulating}
+                  onClick={() => {
+                    onHoverBlock?.(null);
+                    setActiveContainerId(null);
+                    onChangeProgram([]);
+                    onChangeFunctionBody?.([]);
+                  }}
+                  aria-label="Clear All Blocks"
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 ${
+                    drag?.kind === 'existing' && drag.moved
+                      ? 'border-rose-400 bg-rose-500/30 text-rose-200'
+                      : 'border-slate-700 bg-slate-800 text-rose-300 hover:border-rose-400'
+                  }`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+
+                {onOpenDemo && !simulating && (
+                  <button
+                    type="button"
+                    data-demo-cmd="GUIDE"
+                    onClick={() =>
+                      onOpenDemo(
+                        functionUnlocked
+                          ? 'CALL_FUNC'
+                          : waitUnlocked
+                            ? 'WAIT'
+                            : ifUnlocked
+                              ? 'IF'
+                              : loopUnlocked
+                                ? 'LOOP'
+                                : 'MOVE',
+                        hasDynamicHazards ? 'HAZARD' : ifUnlocked ? 'GAP' : undefined
+                      )
+                    }
+                    aria-label="Code Blocks Visual Guide"
+                    title="Blocks Visual Guide"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/70 bg-sky-500/15 text-sky-200 transition-colors hover:border-sky-300 hover:bg-sky-500/25 active:scale-95"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+
+              {onRequestHint && !simulating && (
+                <button
+                  id="codeNeedHintBtn"
+                  type="button"
+                  onClick={onRequestHint}
+                  aria-label="Need a Hint"
+                  className="flex h-7 w-7 items-center justify-center gap-1 rounded-lg border border-amber-400/70 bg-amber-500/15 text-[11px] font-black text-amber-200 transition-colors hover:border-amber-300 hover:bg-amber-500/25 active:scale-95 sm:h-8 sm:w-auto sm:px-2"
+                >
+                  <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="hidden sm:inline">Hint</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setCollapsed((v) => !v)}
+                aria-label={collapsed ? 'Expand Code Dock' : 'Collapse Code Dock'}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-200 sm:h-8 sm:w-8"
+              >
+                {collapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Collapsible Tools Drawer (< 640px) — keeps phone HUD roomy & finger-friendly */}
+          {mobileToolsOpen && !simulating && (
+            <div
+              data-testid="mobile-code-tools-drawer"
+              className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5 rounded-xl border border-slate-700/80 bg-slate-950/90 p-1.5 sm:hidden"
+            >
+              <div className="flex flex-wrap items-center gap-1.5">
+                {onUndo && (
+                  <button
+                    type="button"
+                    disabled={!canUndo}
+                    onClick={onUndo}
+                    aria-label="Undo"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-35"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                  </button>
+                )}
+                {onRedo && (
+                  <button
+                    type="button"
+                    disabled={!canRedo}
+                    onClick={onRedo}
+                    aria-label="Redo"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-35"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                  </button>
+                )}
+                {onTogglePathPreview && (
+                  <button
+                    type="button"
+                    onClick={onTogglePathPreview}
+                    aria-pressed={showPathPreview}
+                    aria-label="Toggle 3D Path"
+                    className={`flex h-10 items-center gap-1 rounded-xl border px-2.5 text-[11px] font-black ${
+                      showPathPreview
+                        ? 'border-cyan-400/75 bg-cyan-500/20 text-cyan-200'
+                        : 'border-slate-700 bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <Route className="h-4 w-4" />
+                    <span>Path</span>
+                  </button>
+                )}
+                {onTogglePredictQuiz && (
+                  <button
+                    type="button"
+                    onClick={onTogglePredictQuiz}
+                    aria-pressed={predictQuizEnabled}
+                    aria-label="Toggle Predict Quiz"
+                    className={`flex h-10 items-center gap-1 rounded-xl border px-2.5 text-[11px] font-black ${
+                      predictQuizEnabled
+                        ? 'border-fuchsia-400/75 bg-fuchsia-500/20 text-fuchsia-200'
+                        : 'border-slate-700 bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <Brain className="h-4 w-4" />
+                    <span>Quiz</span>
+                  </button>
+                )}
+                {onOpenDemo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileToolsOpen(false);
+                      onOpenDemo(
+                        functionUnlocked
+                          ? 'CALL_FUNC'
+                          : waitUnlocked
+                            ? 'WAIT'
+                            : ifUnlocked
+                              ? 'IF'
+                              : loopUnlocked
+                                ? 'LOOP'
+                                : 'MOVE',
+                        hasDynamicHazards ? 'HAZARD' : ifUnlocked ? 'GAP' : undefined
+                      );
+                    }}
+                    aria-label="Visual Guide"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-sky-400/70 bg-sky-500/15 text-sky-200"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                data-drop-zone="TRASH"
+                onClick={() => {
+                  onHoverBlock?.(null);
+                  setActiveContainerId(null);
+                  onChangeProgram([]);
+                  onChangeFunctionBody?.([]);
+                  setMobileToolsOpen(false);
+                }}
+                aria-label="Clear All Blocks"
+                className="flex h-10 items-center gap-1 rounded-xl border border-rose-400/60 bg-rose-500/15 px-2.5 text-[11px] font-black text-rose-200"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Clear</span>
+              </button>
+            </div>
+          )}
 
           {/* Live Robot State Inspector Bar (visible during Step-Through & Simulation) */}
           {simulating && stepInspection && (
@@ -1227,48 +2007,83 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             </div>
           )}
 
-          {/* Unboxed Inline Live Path Outcome Strip (visible while editing non-empty program) */}
-          {!simulating && !collapsed && pathPreview && pathPreview.endpoint.status !== 'empty' && (
-            <div
-              data-testid="live-path-summary"
-              data-path-status={pathPreview.endpoint.status}
-              className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1 text-[11px] font-bold tracking-tight"
-            >
-              {pathPreview.endpoint.status === 'win' ? (
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
-              ) : pathPreview.endpoint.status === 'hazard' ? (
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" aria-hidden="true" />
-              ) : (
-                <Compass className="h-3.5 w-3.5 shrink-0 text-sky-300" aria-hidden="true" />
-              )}
-              <span
-                className={
-                  pathPreview.endpoint.status === 'win'
-                    ? 'text-emerald-300'
-                    : pathPreview.endpoint.status === 'hazard'
-                      ? 'text-rose-300'
-                      : 'text-sky-200'
-                }
-              >
-                {pathPreview.endpoint.summaryLabel}
-              </span>
-              <span className="tabular-nums text-slate-400">
-                · {pathPreview.segments.length} {pathPreview.segments.length === 1 ? 'step' : 'steps'}
-              </span>
-              {pathPreview.endpoint.totalCrystals > 0 && (
-                <span className="inline-flex items-center gap-1 tabular-nums text-cyan-300">
-                  <span className="text-slate-500">·</span>
-                  <Diamond className="h-3 w-3 fill-cyan-300/75 text-cyan-300" aria-hidden="true" />
-                  <span>
-                    {pathPreview.endpoint.collectedCrystals}/{pathPreview.endpoint.totalCrystals}
-                  </span>
-                </span>
-              )}
-              {!showPathPreview && (
-                <span className="text-slate-500">· 3D route hidden</span>
-              )}
-            </div>
-          )}
+          {/* Live Path Summary moved inline into Row 3 above for a cleaner, shorter mobile dock */}
+
+          {/* Collapsible MY BLOCK Subroutine Tray (Chapter 4 Functions) */}
+          {!collapsed && functionUnlocked && onChangeFunctionBody && (() => {
+            const isFuncFocused = activeContainerId === 'FUNC';
+            const isFuncMagneticTarget = Boolean(
+              drag?.moved && drag.magneticEngaged && hoveredDropZone === 'FUNC'
+            );
+            const isFuncCaught = snappedState?.zoneId === 'FUNC';
+            return (
+              <div className="mt-1.5 rounded-xl border border-fuchsia-400/45 bg-fuchsia-950/25 px-2 py-1">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveContainerId(isFuncFocused ? null : 'FUNC')}
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-fuchsia-200"
+                  >
+                    <Layers className="h-3.5 w-3.5 text-fuchsia-300" aria-hidden="true" />
+                    <span>MY BLOCK Definition</span>
+                    <span className="rounded bg-fuchsia-500/25 px-1.5 py-0.5 text-[9px] text-fuchsia-100">
+                      {countBlocks(functionBody)} {countBlocks(functionBody) === 1 ? 'blk' : 'blks'}
+                    </span>
+                    {isFuncFocused && (
+                      <span className="rounded bg-fuchsia-400 px-1.5 py-0.5 text-[9px] font-black text-slate-950">
+                        Active Target
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFuncTrayOpen((v) => !v)}
+                    aria-label={funcTrayOpen ? 'Collapse MY BLOCK tray' : 'Expand MY BLOCK tray'}
+                    className="text-[10px] font-bold text-fuchsia-300 hover:text-white"
+                  >
+                    {funcTrayOpen ? 'Hide' : 'Edit'}
+                  </button>
+                </div>
+
+                {funcTrayOpen && (
+                  <div
+                    data-drop-zone="FUNC"
+                    data-drop-slot="FUNC"
+                    data-magnetic-target={isFuncMagneticTarget ? 'true' : 'false'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveContainerId('FUNC');
+                    }}
+                    className={`no-scrollbar touch-pan-x mt-1 flex min-h-[46px] items-center gap-1.5 overflow-x-auto rounded-lg border border-dashed px-2 py-1 transition-all duration-150 ${
+                      isFuncCaught ? 'scale-[1.008] brightness-110' : ''
+                    } ${
+                      isFuncMagneticTarget || isFuncFocused
+                        ? 'border-fuchsia-300 bg-fuchsia-500/18'
+                        : 'border-fuchsia-400/40 bg-slate-950/70'
+                    }`}
+                  >
+                    {functionBody.length === 0 ? (
+                      <span className="mx-auto text-[11px] font-bold text-fuchsia-200/70">
+                        Tap here or drop blocks to define MY BLOCK
+                      </span>
+                    ) : (
+                      <>
+                        {functionBody.map((blk) => renderBlock(blk, 'func'))}
+                        {isFuncMagneticTarget && (
+                          <div
+                            aria-hidden="true"
+                            className="anim-magnetic-ghost-slot flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-fuchsia-300/80 bg-fuchsia-400/20"
+                          >
+                            <span className="h-2 w-2 rounded-full bg-fuchsia-200" />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Visual Sequence Rail (Root Drop Zone with Subtle Tiered Color-Shifting & Magnetic Snap Feedback) */}
           {!collapsed && (() => {
@@ -1294,7 +2109,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                 }}
                 onPointerLeave={() => onHoverBlock?.(null)}
                 onClick={() => setActiveContainerId(null)}
-                className={`no-scrollbar touch-pan-x mt-1.5 flex min-h-[50px] items-center gap-1.5 overflow-x-auto rounded-xl border border-dashed px-2 py-1 transition-transform duration-150 sm:min-h-[56px] sm:px-2.5 sm:py-1.5 ${
+                className={`no-scrollbar touch-pan-x mt-1 flex min-h-[48px] items-center gap-1.5 overflow-x-auto rounded-xl border border-dashed px-2 py-1 transition-transform duration-150 sm:mt-1.5 sm:min-h-[54px] sm:px-2.5 sm:py-1.5 ${
                   isRootCaught ? 'scale-[1.008] brightness-110' : ''
                 } ${rootShiftClass}`}
               >
@@ -1315,7 +2130,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                   )
                 ) : (
                   <>
-                    {program.map((blk) => renderBlock(blk))}
+                    {program.map((blk) => renderBlock(blk, 'main'))}
                     {isRootMagneticTarget && (
                       <div
                         aria-hidden="true"

@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
+  Brain,
   Bug,
   Cpu,
   Crown,
   Eye,
   Flame,
+  GitBranch,
+  Layers,
   Lock,
   Mountain,
   Repeat,
@@ -50,7 +53,10 @@ const PILLAR_META: Record<
   sensors: { label: 'Smart Sensors', Icon: Eye, accent: 'text-violet-300' },
   optics: { label: 'Laser Optics', Icon: Cpu, accent: 'text-cyan-300' },
   debugging: { label: 'Bug Detective', Icon: Bug, accent: 'text-rose-300' },
-  logic: { label: 'Digital Logic', Icon: ToggleRight, accent: 'text-fuchsia-300' }
+  logic: { label: 'Digital Logic', Icon: ToggleRight, accent: 'text-fuchsia-300' },
+  branching: { label: 'IF / ELSE Branching', Icon: GitBranch, accent: 'text-amber-300' },
+  functions: { label: 'Functions & Reuse', Icon: Layers, accent: 'text-indigo-300' },
+  prediction: { label: 'Predict & Timing', Icon: Brain, accent: 'text-sky-300' }
 };
 
 export const TrophyShelfModal: React.FC<TrophyShelfModalProps> = ({
@@ -131,7 +137,7 @@ export const TrophyShelfModal: React.FC<TrophyShelfModalProps> = ({
                 className="inline-flex items-center gap-1.5 text-amber-300 tabular text-base font-black"
               >
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                <span>{totalTiers}/{maxTiers} STEM Tiers</span>
+                <span>{totalTiers}/{maxTiers}</span>
               </div>
             </div>
           </div>
@@ -150,33 +156,33 @@ export const TrophyShelfModal: React.FC<TrophyShelfModalProps> = ({
           </button>
         </div>
 
-        {/* Segmented Tab Switch: Mastery Badges vs STEM Field Cards */}
+        {/* Segmented Tab Switch: Badges vs Field Cards */}
         <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-950/80 p-1.5">
           <button
             id="trophyTabBadgesBtn"
             type="button"
             onClick={() => setTab('badges')}
-            className={`flex h-10 items-center justify-center gap-1.5 rounded-xl text-xs font-black transition-colors ${
+            className={`flex h-11 items-center justify-center gap-1.5 rounded-xl text-xs font-black transition-colors ${
               tab === 'badges'
                 ? 'bg-amber-400 text-slate-950'
                 : 'text-slate-300 hover:text-white'
             }`}
           >
             <Trophy className="h-4 w-4" aria-hidden="true" />
-            <span>8 STEM Badges</span>
+            <span>Badges</span>
           </button>
           <button
             id="trophyTabFactsBtn"
             type="button"
             onClick={() => setTab('facts')}
-            className={`flex h-10 items-center justify-center gap-1.5 rounded-xl text-xs font-black transition-colors tabular-nums ${
+            className={`flex h-11 items-center justify-center gap-1.5 rounded-xl text-xs font-black transition-colors tabular-nums ${
               tab === 'facts'
                 ? 'bg-sky-400 text-slate-950'
                 : 'text-slate-300 hover:text-white'
             }`}
           >
             <BookOpen className="h-4 w-4" aria-hidden="true" />
-            <span>STEM Field Cards ({unlockedSet.size}/{STEM_FACT_CARDS.length})</span>
+            <span>Cards {unlockedSet.size}/{STEM_FACT_CARDS.length}</span>
           </button>
         </div>
 
@@ -334,40 +340,30 @@ export const TrophyShelfModal: React.FC<TrophyShelfModalProps> = ({
                             ? `Stop reading ${card.title}`
                             : `Listen to ${card.title}`
                         }
-                        className={`flex h-9 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl border px-2 text-[11px] font-black transition-transform active:scale-95 ${
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 transition-transform active:scale-95 ${
                           isSpeakingCard
                             ? 'border-rose-400 bg-rose-500/20 text-rose-100'
-                            : 'border-slate-600 bg-slate-900 text-sky-200 hover:border-sky-400'
+                            : 'border-sky-400/70 bg-sky-500/15 text-sky-200 hover:border-sky-300'
                         }`}
                       >
                         {isSpeakingCard ? (
-                          <>
-                            <Square className="h-3 w-3 fill-current" aria-hidden="true" />
-                            <span>Stop</span>
-                          </>
+                          <Square className="h-4 w-4 fill-current" aria-hidden="true" />
                         ) : (
-                          <>
-                            <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            <span>Listen</span>
-                          </>
+                          <Volume2 className="h-4.5 w-4.5" aria-hidden="true" />
                         )}
                       </button>
                     )}
                   </div>
 
                   {isUnlocked ? (
-                    <>
-                      <p className="text-xs font-medium leading-relaxed text-slate-200">
-                        {card.summary}
-                      </p>
-                      <div className="rounded-xl border border-emerald-400/35 bg-emerald-950/30 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200">
-                        Real World: {card.realWorldExample}
-                      </div>
-                    </>
+                    <div className="rounded-xl border border-emerald-400/35 bg-emerald-950/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-200">
+                      {card.realWorldExample}
+                    </div>
                   ) : (
-                    <p className="text-xs font-medium text-slate-400">
-                      Complete {card.unlockedByLabel} to collect this real-world STEM science card.
-                    </p>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                      <Lock className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+                      <span>{card.unlockedByLabel}</span>
+                    </div>
                   )}
                 </article>
               );

@@ -2,21 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowLeftRight,
-  Blocks,
   Bug,
-  Cable,
   Check,
-  Compass,
+  Clock,
   Cpu,
   Gamepad2,
   Heart,
+  Layers,
   Lightbulb,
   Maximize2,
   Minimize2,
   Play,
   Plus,
-  Rocket,
   RotateCcw,
+  RotateCw,
   Sparkles,
   Star,
   StepForward,
@@ -37,9 +36,7 @@ import {
   ARCADE_GAMES,
   computeConnectReward,
   computeSpaceShooterReward,
-  computeWallBreakerReward,
   createConnectPuzzle,
-  createWallBreakerLayout,
   DIR_BOTTOM,
   DIR_LEFT,
   DIR_RIGHT,
@@ -51,8 +48,7 @@ import {
   type ArcadeGameId,
   type ConnectPuzzleState,
   type ConnectTile,
-  type SpaceEnemy,
-  type WallBrick
+  type SpaceEnemy
 } from '../game/arcadeGames';
 import {
   BUG_DETECTIVE_PUZZLES,
@@ -71,12 +67,16 @@ import {
   type LogicGatePuzzle
 } from '../game/educationalMiniGames';
 import { derivePlanetCapabilities, PLANET_EQUIPMENT_META } from '../game/planetAdventure';
+import type { DroneId } from '../game/shopAndQuests';
 import { SFX } from '../game/audio';
 import { BlockIcon, PartIcon } from './Icons';
+import { ArcadeSceneArt } from './KidVisualArt';
+import { WallBreakerCanvasGame } from './WallBreakerCanvasGame';
 
 interface GameRoomModalProps {
   visible: boolean;
   activeCharacter: BotCharacterId;
+  equippedDroneId?: DroneId | null;
   totalBolts: number;
   hasNextLevel: boolean;
   chassisInfo?: ChassisInfo;
@@ -104,433 +104,8 @@ export interface GameRoomRoundSummary {
   detail: string;
 }
 
-/* ============================================================================
- * Mini-Game 1: WALL BREAKER (Full-Screen Dynamic Retina HTML5 Canvas)
- * ========================================================================== */
-const WallBreakerGame: React.FC<{
-  accentColor: string;
-  onFinish: (score: number, bolts: number, won: boolean, detail: string) => void;
-}> = ({ accentColor, onFinish }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [hud, setHud] = useState({ score: 0, lives: 3, timeLeft: 45, remaining: 21, stage: 1 });
-  const finishRef = useRef(onFinish);
-  finishRef.current = onFinish;
+/* Wall Breaker mini-game is implemented in ./WallBreakerCanvasGame.tsx */
 
-  useEffect(() => {
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let arenaW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
-    let arenaH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
-    let dpr = Math.min(2, window.devicePixelRatio || 1);
-
-    const configureCanvas = (w: number, h: number) => {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    configureCanvas(arenaW, arenaH);
-
-    const getPaddleW = (w: number) => Math.max(92, Math.min(168, w * 0.24));
-    const getPaddleY = (h: number) => h - Math.max(44, Math.min(72, h * 0.085));
-    const getSpeedScale = (w: number, h: number) => Math.max(0.88, Math.min(1.45, Math.hypot(w, h) / 840));
-
-    let paddleW = getPaddleW(arenaW);
-    const paddleH = 14;
-    let paddleY = getPaddleY(arenaH);
-    let paddleX = arenaW / 2;
-    let speedScale = getSpeedScale(arenaW, arenaH);
-
-    let bricks: WallBrick[] = createWallBreakerLayout(arenaW, arenaH, 1);
-    const ballR = 9;
-    let ballX = arenaW / 2;
-    let ballY = paddleY - 16;
-    let ballVx = 215 * speedScale;
-    let ballVy = -265 * speedScale;
-
-    let score = 0;
-    let lives = 3;
-    let timeLeft = 45;
-    let stage = 1;
-    let ended = false;
-    let hudTimer = 0;
-
-    const drops: Array<{ x: number; y: number; vy: number }> = [];
-    const sparks: Array<{ x: number; y: number; vx: number; vy: number; life: number; color: string }> = [];
-    const keys = { left: false, right: false };
-
-    const handleResize = () => {
-      const nextW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
-      const nextH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
-      if (Math.abs(nextW - arenaW) < 2 && Math.abs(nextH - arenaH) < 2) return;
-      const sx = nextW / Math.max(1, arenaW);
-      const sy = nextH / Math.max(1, arenaH);
-      arenaW = nextW;
-      arenaH = nextH;
-      configureCanvas(arenaW, arenaH);
-
-      paddleW = getPaddleW(arenaW);
-      paddleY = getPaddleY(arenaH);
-      speedScale = getSpeedScale(arenaW, arenaH);
-      paddleX = Math.max(paddleW / 2 + 8, Math.min(arenaW - paddleW / 2 - 8, paddleX * sx));
-      ballX = Math.max(ballR + 8, Math.min(arenaW - ballR - 8, ballX * sx));
-      ballY = Math.max(ballR + 8, Math.min(paddleY - ballR - 6, ballY * sy));
-
-      for (const b of bricks) {
-        b.x *= sx;
-        b.y *= sy;
-        b.w *= sx;
-        b.h *= sy;
-      }
-      for (const d of drops) {
-        d.x *= sx;
-        d.y *= sy;
-      }
-    };
-
-    const ro = new ResizeObserver(handleResize);
-    ro.observe(container);
-
-    const spawnSparks = (x: number, y: number, color: string, count = 8) => {
-      for (let i = 0; i < count; i++) {
-        const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-        const spd = 70 + Math.random() * 140;
-        sparks.push({ x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, life: 0.42, color });
-      }
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
-      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = false;
-      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = false;
-    };
-    const onPointerMove = (e: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * arenaW;
-      paddleX = Math.max(paddleW / 2 + 8, Math.min(arenaW - paddleW / 2 - 8, relX));
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('pointermove', onPointerMove);
-    canvas.addEventListener('pointerdown', onPointerMove);
-
-    let last = performance.now();
-    let rafId = 0;
-
-    const finishRound = (won: boolean, detail: string) => {
-      if (ended) return;
-      ended = true;
-      const bolts = computeWallBreakerReward(score, won);
-      if (won) SFX.laserSolved();
-      finishRef.current(score, bolts, won, detail);
-    };
-
-    const loop = (now: number) => {
-      const dt = Math.min(0.04, (now - last) / 1000);
-      last = now;
-      if (ended) return;
-
-      timeLeft = Math.max(0, timeLeft - dt);
-      if (timeLeft <= 0) {
-        finishRound(score >= 120, `Smashed ${score} pts before time ran out`);
-        return;
-      }
-
-      const paddleSpeed = Math.max(440, arenaW * 0.72);
-      if (keys.left) paddleX -= paddleSpeed * dt;
-      if (keys.right) paddleX += paddleSpeed * dt;
-      paddleX = Math.max(paddleW / 2 + 8, Math.min(arenaW - paddleW / 2 - 8, paddleX));
-
-      ballX += ballVx * dt;
-      ballY += ballVy * dt;
-
-      // Arena wall bounces
-      if (ballX - ballR < 8) {
-        ballX = 8 + ballR;
-        ballVx = Math.abs(ballVx);
-        SFX.uiTick();
-      } else if (ballX + ballR > arenaW - 8) {
-        ballX = arenaW - 8 - ballR;
-        ballVx = -Math.abs(ballVx);
-        SFX.uiTick();
-      }
-      if (ballY - ballR < 40) {
-        ballY = 40 + ballR;
-        ballVy = Math.abs(ballVy);
-        SFX.uiTick();
-      }
-
-      // Paddle bounce
-      if (
-        ballVy > 0 &&
-        ballY + ballR >= paddleY - paddleH / 2 &&
-        ballY - ballR <= paddleY + paddleH / 2 &&
-        ballX >= paddleX - paddleW / 2 - ballR &&
-        ballX <= paddleX + paddleW / 2 + ballR
-      ) {
-        const hitOffset = (ballX - paddleX) / (paddleW / 2);
-        const maxSpd = 460 * speedScale;
-        const speed = Math.min(maxSpd, Math.hypot(ballVx, ballVy) * 1.015);
-        const angle = hitOffset * 1.05;
-        ballVx = Math.sin(angle) * speed;
-        ballVy = -Math.cos(angle) * speed;
-        ballY = paddleY - paddleH / 2 - ballR - 1;
-        spawnSparks(ballX, paddleY - 6, accentColor, 6);
-        SFX.mirror();
-      }
-
-      // Brick collisions
-      for (let i = bricks.length - 1; i >= 0; i--) {
-        const b = bricks[i];
-        const nearX = Math.max(b.x, Math.min(ballX, b.x + b.w));
-        const nearY = Math.max(b.y, Math.min(ballY, b.y + b.h));
-        const dx = ballX - nearX;
-        const dy = ballY - nearY;
-        if (dx * dx + dy * dy <= ballR * ballR) {
-          if (Math.abs(dx) > Math.abs(dy)) ballVx = -ballVx;
-          else ballVy = -ballVy;
-
-          b.hp -= 1;
-          spawnSparks(nearX, nearY, b.color, b.hp <= 0 ? 12 : 6);
-          if (b.hp <= 0) {
-            score += b.points;
-            SFX.crystal();
-            if (b.hasBonusBolt) {
-              drops.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, vy: 155 * speedScale });
-            }
-            bricks.splice(i, 1);
-          } else {
-            score += 5;
-            SFX.click();
-          }
-          break;
-        }
-      }
-
-      // Bonus bolt pickups
-      for (let i = drops.length - 1; i >= 0; i--) {
-        const d = drops[i];
-        d.y += d.vy * dt;
-        if (
-          Math.abs(d.x - paddleX) <= paddleW / 2 + 14 &&
-          Math.abs(d.y - paddleY) <= paddleH + 12
-        ) {
-          score += 30;
-          spawnSparks(d.x, d.y, '#fde047', 10);
-          SFX.crystal();
-          drops.splice(i, 1);
-        } else if (d.y > arenaH + 20) {
-          drops.splice(i, 1);
-        }
-      }
-
-      // Missed ball
-      if (ballY - ballR > arenaH + 14) {
-        lives -= 1;
-        if (lives <= 0) {
-          finishRound(score >= 120, 'Reactor wall challenge complete');
-          return;
-        }
-        ballX = paddleX;
-        ballY = paddleY - 16;
-        ballVx = (Math.random() < 0.5 ? -1 : 1) * 205 * speedScale;
-        ballVy = -265 * speedScale;
-        SFX.chirpConfused();
-      }
-
-      // Cleared all bricks
-      if (bricks.length === 0) {
-        if (stage === 1) {
-          stage = 2;
-          score += 60;
-          bricks = createWallBreakerLayout(arenaW, arenaH, 2);
-          ballX = paddleX;
-          ballY = paddleY - 16;
-          ballVy = -280 * speedScale;
-          SFX.laserSolved();
-        } else {
-          score += 100;
-          finishRound(true, 'Smashed both reactor walls!');
-          return;
-        }
-      }
-
-      // Update sparks
-      for (let i = sparks.length - 1; i >= 0; i--) {
-        const sp = sparks[i];
-        sp.x += sp.vx * dt;
-        sp.y += sp.vy * dt;
-        sp.life -= dt;
-        if (sp.life <= 0) sparks.splice(i, 1);
-      }
-
-      // Render full-screen arena
-      ctx.fillStyle = '#070e20';
-      ctx.fillRect(0, 0, arenaW, arenaH);
-
-      // Subtle engineering blueprint grid
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.07)';
-      ctx.lineWidth = 1;
-      for (let gx = 40; gx < arenaW; gx += 40) {
-        ctx.beginPath();
-        ctx.moveTo(gx, 0);
-        ctx.lineTo(gx, arenaH);
-        ctx.stroke();
-      }
-      for (let gy = 40; gy < arenaH; gy += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, gy);
-        ctx.lineTo(arenaW, gy);
-        ctx.stroke();
-      }
-
-      // Top boundary line below floating HUD
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(8, 40);
-      ctx.lineTo(arenaW - 8, 40);
-      ctx.stroke();
-
-      // Draw bricks
-      for (const b of bricks) {
-        ctx.fillStyle = b.color;
-        ctx.beginPath();
-        ctx.roundRect(b.x, b.y, b.w, b.h, 6);
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(255,255,255,0.22)';
-        ctx.fillRect(b.x + 4, b.y + 3, b.w - 8, 4);
-
-        if (b.maxHp > 1 && b.hp === 2) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
-        } else if (b.maxHp > 1 && b.hp === 1) {
-          ctx.strokeStyle = '#0f172a';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(b.x + b.w * 0.35, b.y + 2);
-          ctx.lineTo(b.x + b.w * 0.5, b.y + b.h * 0.55);
-          ctx.lineTo(b.x + b.w * 0.65, b.y + b.h - 2);
-          ctx.stroke();
-        }
-      }
-
-      // Draw bolt drops
-      for (const d of drops) {
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.arc(d.x, d.y, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('⚡', d.x, d.y + 1);
-      }
-
-      // Draw paddle
-      ctx.fillStyle = accentColor;
-      ctx.beginPath();
-      ctx.roundRect(paddleX - paddleW / 2, paddleY - paddleH / 2, paddleW, paddleH, 8);
-      ctx.fill();
-      ctx.fillStyle = '#e0f2fe';
-      ctx.beginPath();
-      ctx.roundRect(paddleX - paddleW * 0.32, paddleY - 3, paddleW * 0.64, 5, 3);
-      ctx.fill();
-
-      // Draw plasma ball
-      ctx.save();
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 16;
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Draw sparks
-      for (const sp of sparks) {
-        ctx.globalAlpha = Math.max(0, sp.life / 0.42);
-        ctx.fillStyle = sp.color;
-        ctx.fillRect(sp.x - 2.5, sp.y - 2.5, 5, 5);
-      }
-      ctx.globalAlpha = 1;
-
-      hudTimer += dt;
-      if (hudTimer >= 0.12) {
-        hudTimer = 0;
-        setHud({ score, lives, timeLeft: Math.ceil(timeLeft), remaining: bricks.length, stage });
-      }
-      rafId = requestAnimationFrame(loop);
-    };
-
-    rafId = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(rafId);
-      ro.disconnect();
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      canvas.removeEventListener('pointermove', onPointerMove);
-      canvas.removeEventListener('pointerdown', onPointerMove);
-    };
-  }, [accentColor]);
-
-  return (
-    <div ref={containerRef} className="relative h-full w-full flex-1 overflow-hidden bg-[#070e20]">
-      {/* Floating Translucent HUD */}
-      <div className="pointer-events-none absolute inset-x-3 top-1.5 z-10 flex items-center justify-between text-xs font-bold text-slate-200 sm:inset-x-5 sm:text-sm tabular-nums">
-        <div className="flex items-center gap-2.5 sm:gap-4">
-          <span>
-            Score <strong className="text-amber-300">{hud.score}</strong>
-          </span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span>
-            Wall <strong className="text-sky-300">{hud.stage}/2</strong>
-          </span>
-          <span className="hidden text-slate-600 sm:inline" aria-hidden="true">·</span>
-          <span className="hidden sm:inline">
-            Blocks <strong className="text-sky-300">{hud.remaining}</strong>
-          </span>
-        </div>
-        <div className="flex items-center gap-2.5 sm:gap-4">
-          <div className="flex items-center gap-1" aria-label={`${hud.lives} lives left`}>
-            {[0, 1, 2].map((i) => (
-              <Heart
-                key={i}
-                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${i < hud.lives ? 'fill-rose-500 text-rose-400' : 'text-slate-700'}`}
-              />
-            ))}
-          </div>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span>{hud.timeLeft}s</span>
-        </div>
-      </div>
-
-      <canvas
-        ref={canvasRef}
-        data-testid="wall-breaker-canvas"
-        className="block h-full w-full cursor-none touch-none"
-      />
-
-      <p className="pointer-events-none safe-bottom absolute inset-x-0 bottom-1.5 text-center text-[11px] font-medium text-slate-400/80">
-        Slide finger, move mouse, or press A / D to bounce the plasma orb
-      </p>
-    </div>
-  );
-};
 
 /* ============================================================================
  * Mini-Game 2: POWER CONNECT (Full-Screen Tactile Conduit Rotation Puzzle)
@@ -627,17 +202,20 @@ const PowerConnectGame: React.FC<{
 
   return (
     <div className="safe-bottom flex h-full w-full flex-1 flex-col items-center justify-between gap-2 overflow-hidden bg-slate-950 px-3 py-3 sm:px-6 sm:py-4">
-      <div className="flex w-full max-w-xl items-center justify-between text-xs font-bold text-slate-200 sm:text-sm tabular-nums">
-        <span>
-          Board <strong className="text-cyan-300">{boardIdx + 1} / 3</strong>
+      <div className="flex w-full max-w-xl items-center justify-between gap-2 tabular-nums">
+        <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 text-sm font-black text-cyan-300">
+          <Layers className="h-4 w-4 text-cyan-400" aria-hidden="true" />
+          <span>{boardIdx + 1}/3</span>
         </span>
-        <span className="text-slate-600" aria-hidden="true">·</span>
-        <span>
-          Cores <strong className="text-emerald-300">{puzzle.poweredCores}/{puzzle.totalCores}</strong>
+        <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-950/50 px-3 text-sm font-black text-emerald-300">
+          <Zap className="h-4 w-4 fill-emerald-300 text-emerald-300" aria-hidden="true" />
+          <span>
+            {puzzle.poweredCores}/{puzzle.totalCores}
+          </span>
         </span>
-        <span className="text-slate-600" aria-hidden="true">·</span>
-        <span>
-          Taps <strong className="text-amber-300">{moves}</strong>
+        <span className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 text-sm font-black text-amber-300">
+          <RotateCw className="h-4 w-4 text-amber-300" aria-hidden="true" />
+          <span>{moves}</span>
         </span>
       </div>
 
@@ -689,9 +267,18 @@ const PowerConnectGame: React.FC<{
         </div>
       </div>
 
-      <p className="text-center text-xs font-medium text-slate-400">
-        Tap conduit tiles to rotate them until power flows from the battery to every green core.
-      </p>
+      {/* Visual Icon Flow Cue — Zero Reading Needed */}
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/80 px-3.5 py-1.5" aria-hidden="true">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-400 text-slate-950">
+          <Zap className="h-3.5 w-3.5 fill-slate-950" />
+        </span>
+        <span className="h-0.5 w-4 rounded bg-cyan-400" />
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-cyan-400/60 bg-slate-800 text-cyan-300">
+          <RotateCw className="h-3.5 w-3.5" />
+        </span>
+        <span className="h-0.5 w-4 rounded bg-cyan-400" />
+        <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-emerald-200 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.65)]" />
+      </div>
     </div>
   );
 };
@@ -1125,33 +712,38 @@ const SpaceShooterGame: React.FC<{
 
   return (
     <div ref={containerRef} className="relative h-full w-full flex-1 overflow-hidden bg-[#050a1a]">
-      {/* Floating Translucent HUD */}
-      <div className="pointer-events-none absolute inset-x-3 top-1.5 z-10 flex items-center justify-between text-xs font-bold text-slate-200 sm:inset-x-5 sm:text-sm tabular-nums">
-        <div className="flex items-center gap-2.5 sm:gap-3.5">
-          <span>
-            Score <strong className="text-emerald-300">{hud.score}</strong>
+      {/* Floating Commercial Icon HUD — Zero Reading Needed */}
+      <div className="pointer-events-none absolute inset-x-2.5 top-2 z-10 flex items-center justify-between gap-2 sm:inset-x-4 tabular-nums">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 px-2.5 text-xs font-black text-emerald-300 sm:text-sm">
+            <Trophy className="h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />
+            <span>{hud.score}</span>
           </span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span>
-            Wave <strong className="text-sky-300">{hud.wave}/4</strong>
+          <span className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 px-2.5 text-xs font-black text-sky-300 sm:text-sm">
+            <Layers className="h-3.5 w-3.5 text-sky-300" aria-hidden="true" />
+            <span>{hud.wave}/4</span>
           </span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="flex items-center gap-1 text-amber-300">
-            <Star className="h-3.5 w-3.5 fill-amber-400" />
-            {hud.stars}
+          <span className="inline-flex h-8 items-center gap-1 rounded-xl border border-amber-400/40 bg-slate-950/80 px-2.5 text-xs font-black text-amber-300 sm:text-sm">
+            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-300" aria-hidden="true" />
+            <span>{hud.stars}</span>
           </span>
         </div>
-        <div className="flex items-center gap-2.5 sm:gap-3.5">
-          <div className="flex items-center gap-1" aria-label={`${hud.shields} shields left`}>
+        <div className="flex items-center gap-1.5">
+          <div
+            className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 px-2"
+            aria-label={`${hud.shields} shields left`}
+          >
             {[0, 1, 2].map((i) => (
               <Heart
                 key={i}
-                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${i < hud.shields ? 'fill-emerald-400 text-emerald-300' : 'text-slate-700'}`}
+                className={`h-4 w-4 ${i < hud.shields ? 'fill-emerald-400 text-emerald-300' : 'text-slate-700'}`}
               />
             ))}
           </div>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span>{hud.timeLeft}s</span>
+          <span className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 px-2.5 text-xs font-black text-slate-200 sm:text-sm">
+            <Clock className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+            <span>{hud.timeLeft}</span>
+          </span>
         </div>
       </div>
 
@@ -1161,25 +753,21 @@ const SpaceShooterGame: React.FC<{
         className="block h-full w-full cursor-crosshair touch-none"
       />
 
-      {/* Compact Floating Turbo Burst Button for Touch Play */}
+      {/* Chunky 3D Tactile Turbo Burst Button */}
       <button
         type="button"
         onClick={() => burstTriggerRef.current?.()}
         disabled={!hud.burstReady}
         aria-label="Fire 3-Way Turbo Burst"
-        className={`safe-bottom absolute right-3 bottom-3 z-10 flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-black shadow-lg backdrop-blur-sm transition-transform active:scale-95 sm:right-5 sm:bottom-4 ${
+        className={`safe-bottom absolute right-3 bottom-3 z-10 flex h-12 items-center gap-1.5 rounded-2xl border-2 px-4 text-sm font-black transition-all active:translate-y-0.5 sm:right-5 sm:bottom-4 ${
           hud.burstReady
-            ? 'border-sky-300 bg-sky-500/90 text-slate-950'
-            : 'border-slate-700 bg-slate-900/80 text-slate-500'
+            ? 'border-sky-200 bg-gradient-to-b from-sky-400 to-sky-600 text-slate-950 shadow-[0_4px_0_#0369a1]'
+            : 'border-slate-700 bg-slate-900/85 text-slate-500'
         }`}
       >
-        <Sparkles className="h-4 w-4" aria-hidden="true" />
-        <span>Burst</span>
+        <Sparkles className="h-4.5 w-4.5" aria-hidden="true" />
+        <span>×3</span>
       </button>
-
-      <p className="pointer-events-none safe-bottom absolute bottom-1.5 left-3 hidden text-[11px] font-medium text-slate-400/80 sm:block">
-        Slide or A / D to steer · Tap or Space for 3-way turbo laser burst
-      </p>
     </div>
   );
 };
@@ -1930,19 +1518,10 @@ const LogicGateLabGame: React.FC<{
 /* ============================================================================
  * Main Full-Screen Arcade Game Room Hub & Player
  * ========================================================================== */
-const GAME_ICON: Record<ArcadeGameId, React.ReactNode> = {
-  bug_detective: <Bug className="h-6 w-6 text-sky-300" />,
-  logic_gate_lab: <ToggleRight className="h-6 w-6 text-violet-300" />,
-  break_wall: <Blocks className="h-6 w-6 text-amber-300" />,
-  connect_nodes: <Cable className="h-6 w-6 text-cyan-300" />,
-  robot_run: <Zap className="h-6 w-6 text-fuchsia-300" />,
-  space_shooter: <Rocket className="h-6 w-6 text-emerald-300" />,
-  planet_adventure: <Compass className="h-6 w-6 text-teal-300" />
-};
-
 export const GameRoomModal: React.FC<GameRoomModalProps> = ({
   visible,
   activeCharacter,
+  equippedDroneId = null,
   totalBolts,
   hasNextLevel,
   chassisInfo,
@@ -2040,8 +1619,8 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
       data-fullscreen="true"
       className="fixed inset-0 z-50 flex h-dvh w-screen flex-col overflow-hidden bg-slate-950"
     >
-      {/* Slim Full-Width Header Bar */}
-      <header className="safe-top flex shrink-0 items-center justify-between gap-2 border-b border-slate-800/90 bg-slate-900/95 px-2.5 py-2 backdrop-blur-md sm:px-4">
+      {/* Slim Full-Width Commercial Header Bar (>= 40-44px touch targets) */}
+      <header className="safe-top flex shrink-0 items-center justify-between gap-2 border-b border-slate-800/90 bg-slate-900/95 px-2.5 py-2 sm:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {view !== 'HUB' && (
             <button
@@ -2054,29 +1633,26 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                 setSummary(null);
               }}
               aria-label="Back to Game Room"
-              className="flex h-8 shrink-0 items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-2 text-xs font-bold text-slate-200 hover:border-sky-400 active:scale-95 sm:h-9 sm:px-2.5"
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border-2 border-slate-700 bg-slate-800 px-3 text-xs font-black text-slate-100 hover:border-sky-400 active:scale-95"
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span className="sm:hidden">Games</span>
-              <span className="hidden sm:inline">All Games</span>
+              <ArrowLeft className="h-4 w-4" />
+              <span>Games</span>
             </button>
           )}
-          <Gamepad2 className="h-4.5 w-4.5 shrink-0 text-amber-300 sm:h-5 sm:w-5" aria-hidden="true" />
-          <h2 className="truncate text-xs font-black tracking-tight text-white sm:text-base">
-            {view === 'PLAYING' && activeCard ? activeCard.title : 'Mission Game Room'}
+          <Gamepad2 className="h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+          <h2 className="truncate text-sm font-black tracking-tight text-white sm:text-base">
+            {view === 'PLAYING' && activeCard ? activeCard.title : 'Arcade'}
           </h2>
         </div>
 
-        <div className="hidden shrink-0 items-center gap-2.5 text-xs font-bold text-slate-300 md:flex tabular-nums">
-          <span>{charDef.name}</span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="flex items-center gap-1 text-amber-300">
-            <Zap className="h-3.5 w-3.5 fill-amber-400" aria-hidden="true" />
-            {totalBolts} Bolts
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <span
+            aria-label={`${totalBolts} Bolts`}
+            className="tabular flex h-10 items-center gap-1 rounded-xl border border-amber-400/50 bg-amber-500/15 px-2.5 text-xs font-black text-amber-200 sm:text-sm"
+          >
+            <Zap className="h-4 w-4 fill-amber-300 text-amber-300" aria-hidden="true" />
+            <span>{totalBolts}</span>
           </span>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5">
           {view === 'PLAYING' && activeGame && (
             <button
               type="button"
@@ -2085,9 +1661,9 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                 setRunKey((k) => k + 1);
               }}
               aria-label="Restart Mini-Game"
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95"
             >
-              <RotateCcw className="h-4 w-4" />
+              <RotateCcw className="h-4.5 w-4.5" />
             </button>
           )}
           {canBrowserFullscreen && (
@@ -2096,7 +1672,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
               data-testid="gameroom-fullscreen-btn"
               onClick={toggleBrowserFullscreen}
               aria-label={isNativeFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-sky-300 hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+              className="hidden h-10 w-10 items-center justify-center rounded-xl border-2 border-slate-700 bg-slate-800 text-sky-300 hover:border-sky-400 active:scale-95 sm:flex"
             >
               {isNativeFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
@@ -2108,11 +1684,11 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                 SFX.click();
                 onNextLevel();
               }}
-              className="flex h-8 items-center gap-1 whitespace-nowrap rounded-xl border border-emerald-300/80 bg-emerald-500 px-2.5 text-xs font-black text-slate-950 transition-transform hover:bg-emerald-400 active:scale-95 sm:h-9 sm:px-3"
+              aria-label="Next Mission"
+              className="flex h-10 items-center gap-1 whitespace-nowrap rounded-xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3 text-xs font-black text-slate-950 shadow-[0_3px_0_#047857] active:translate-y-0.5"
             >
               <Play className="h-3.5 w-3.5 fill-slate-950" />
-              <span className="sm:hidden">Next</span>
-              <span className="hidden sm:inline">Next Mission</span>
+              <span>Next</span>
             </button>
           )}
           <button
@@ -2122,9 +1698,9 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
               onClose();
             }}
             aria-label="Close Game Room"
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95 sm:h-9 sm:w-9"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400 active:scale-95"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
       </header>
@@ -2163,9 +1739,10 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
           )}
 
           {activeGame === 'break_wall' && (
-            <WallBreakerGame
+            <WallBreakerCanvasGame
               key={runKey}
-              accentColor={charDef.accentCss}
+              activeCharacter={activeCharacter}
+              equippedDroneId={equippedDroneId}
               onFinish={(score, bolts, won, detail) =>
                 handleRoundFinish('break_wall', 'Wall Breaker', score, bolts, won, detail)
               }
@@ -2194,24 +1771,102 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
       ) : (
         <div className="touch-pan-y safe-bottom flex-1 overflow-y-auto px-3 py-3.5 sm:px-6 sm:py-5">
           {view === 'HUB' && (
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 sm:gap-5">
-              {/* STEM Lab Mini-Games Section */}
-              <div className="flex flex-col gap-2.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div>
-                    <h3 className="text-xs font-black uppercase tracking-wider text-sky-300">
-                      STEM Lab Mini-Games · Debugging & Logic
-                    </h3>
-                    <p className="mt-0.5 text-xs font-medium text-slate-300">
-                      Practice finding code bugs and wiring digital logic gates with {charDef.name}.
-                    </p>
-                  </div>
-                  <span className="text-xs font-bold text-slate-400 tabular-nums">
-                    {EDUCATIONAL_MINI_GAMES.length} Lab Challenges
-                  </span>
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+              {/* Action Arcade Cartridges First — Visual Scene Cards (Zero Reading Needed!) */}
+              <section className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 px-1">
+                  <Gamepad2 className="h-5 w-5 text-amber-300" aria-hidden="true" />
+                  <h3 className="text-sm font-black tracking-tight text-white">Action Games</h3>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {ARCADE_GAMES.map((game) => {
+                    const isPlanetCard = game.id === 'planet_adventure';
+                    return (
+                      <button
+                        key={game.id}
+                        type="button"
+                        data-arcade-game={game.id}
+                        onClick={() => handleSelectGame(game.id)}
+                        aria-label={`Play ${game.title}`}
+                        className={`group relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-700/90 bg-slate-900 p-2 text-left transition-all hover:-translate-y-0.5 hover:border-sky-400/80 active:scale-[0.98] ${
+                          isPlanetCard ? 'col-span-2 sm:col-span-2' : ''
+                        }`}
+                      >
+                        {/* Hand-Crafted Game Scene Cover */}
+                        <div className="relative w-full overflow-hidden rounded-2xl border border-slate-800">
+                          <ArcadeSceneArt
+                            gameId={game.id}
+                            className="h-24 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] sm:h-28"
+                          />
+                          <span className="tabular absolute right-2 top-2 inline-flex items-center gap-0.5 rounded-xl bg-slate-950/85 px-2 py-0.5 text-[11px] font-black text-amber-300">
+                            <Zap className="h-3 w-3 fill-amber-300 text-amber-300" aria-hidden="true" />
+                            +{game.baseBolts}
+                          </span>
+                        </div>
+
+                        {/* Equipment Icon Row for Planet Expedition */}
+                        {isPlanetCard && planetCaps && (
+                          <div
+                            data-testid="planet-card-loadout"
+                            className="mt-2 flex flex-wrap items-center gap-1.5 px-1"
+                          >
+                            {PLANET_EQUIPMENT_META.map((item) => {
+                              const unlocked =
+                                item.part === 'treads'
+                                  ? planetCaps.hasTreads
+                                  : item.part === 'thrusters'
+                                    ? planetCaps.hasThrusters
+                                    : item.part === 'booster'
+                                      ? planetCaps.hasBooster
+                                      : item.part === 'laser'
+                                        ? planetCaps.hasLaser
+                                        : planetCaps.hasMagnet;
+                              return (
+                                <span
+                                  key={item.part}
+                                  data-loadout-part={item.part}
+                                  data-loadout-unlocked={unlocked ? 'true' : 'false'}
+                                  aria-label={`${item.label} ${unlocked ? 'ready' : 'locked'}`}
+                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-xl border ${
+                                    unlocked
+                                      ? 'border-emerald-400/80 bg-emerald-500/20 text-emerald-200'
+                                      : 'border-slate-700 bg-slate-950 text-slate-500 opacity-55'
+                                  }`}
+                                >
+                                  <PartIcon id={item.part} className="h-4.5 w-4.5" />
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Bold Title + Chunky Play Badge */}
+                        <div className="mt-2 flex items-center justify-between gap-2 px-1 pb-0.5">
+                          <h4 className="truncate text-sm font-black text-white sm:text-base">
+                            {game.title}
+                          </h4>
+                          <span
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-950 shadow-md transition-transform group-hover:scale-105"
+                            style={{ backgroundColor: game.accentHex }}
+                          >
+                            <Play className="h-4 w-4 fill-slate-950" />
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* STEM Brain Lab Visual Cartridges */}
+              <section className="flex flex-col gap-3 border-t border-slate-800 pt-4">
+                <div className="flex items-center gap-2 px-1">
+                  <Cpu className="h-5 w-5 text-sky-300" aria-hidden="true" />
+                  <h3 className="text-sm font-black tracking-tight text-white">STEM Lab</h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   {EDUCATIONAL_MINI_GAMES.map((game) => (
                     <button
                       key={game.id}
@@ -2219,179 +1874,82 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                       data-arcade-game={game.id}
                       onClick={() => handleSelectGame(game.id)}
                       aria-label={`Play ${game.title}`}
-                      className="group flex flex-col justify-between gap-2.5 rounded-2xl border border-slate-700/90 bg-slate-900/90 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-sky-400/70 hover:bg-slate-800/90 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99] sm:p-4"
+                      className="group relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-700/90 bg-slate-900 p-2 text-left transition-all hover:-translate-y-0.5 hover:border-sky-400/80 active:scale-[0.98]"
                     >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950"
-                          style={{ boxShadow: `0 0 20px ${game.accentHex}22` }}
-                        >
-                          {GAME_ICON[game.id]}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-sm font-black text-white group-hover:text-sky-200 sm:text-base">
-                            {game.title}
-                          </h4>
-                          <p className="mt-0.5 text-xs leading-relaxed text-slate-300">
-                            {game.subtitle}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 border-t border-slate-800 pt-2">
-                        <span className="truncate text-[11px] font-medium text-slate-400">
-                          {game.controlsHint}
+                      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-800">
+                        <ArcadeSceneArt
+                          gameId={game.id}
+                          className="h-24 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] sm:h-28"
+                        />
+                        <span className="tabular absolute right-2 top-2 inline-flex items-center gap-0.5 rounded-xl bg-slate-950/85 px-2 py-0.5 text-[11px] font-black text-amber-300">
+                          <Zap className="h-3 w-3 fill-amber-300 text-amber-300" aria-hidden="true" />
+                          +{game.baseBolts}
                         </span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2 px-1 pb-0.5">
+                        <h4 className="truncate text-sm font-black text-white sm:text-base">
+                          {game.title}
+                        </h4>
                         <span
-                          className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-950 shadow-md transition-transform group-hover:scale-105"
                           style={{ backgroundColor: game.accentHex }}
                         >
-                          <Play className="h-3 w-3 fill-slate-950" />
-                          <span>Play</span>
+                          <Play className="h-4 w-4 fill-slate-950" />
                         </span>
                       </div>
                     </button>
                   ))}
                 </div>
-              </div>
-
-              {/* Action Arcade Games Section */}
-              <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-800 pt-4">
-                <p className="text-xs font-black uppercase tracking-wider text-amber-300">
-                  Arcade Action Games · Full-Screen Play
-                </p>
-                <span className="text-xs font-bold text-slate-400 tabular-nums">
-                  {ARCADE_GAMES.length} Action Games Ready
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {ARCADE_GAMES.map((game) => {
-                  const isPlanetCard = game.id === 'planet_adventure';
-                  return (
-                    <button
-                      key={game.id}
-                      type="button"
-                      data-arcade-game={game.id}
-                      onClick={() => handleSelectGame(game.id)}
-                      aria-label={`Play ${game.title}`}
-                      className={`group flex flex-col justify-between gap-2.5 rounded-2xl border border-slate-700/90 bg-slate-900/90 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-800/90 focus-visible:outline-2 focus-visible:outline-sky-400 active:scale-[0.99] sm:p-4 ${
-                        isPlanetCard ? 'sm:col-span-2' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950"
-                          style={{ boxShadow: `0 0 20px ${game.accentHex}22` }}
-                        >
-                          {GAME_ICON[game.id]}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h3 className="text-sm font-black text-white group-hover:text-sky-200 sm:text-base">
-                              {game.title}
-                            </h3>
-                            {isPlanetCard && (
-                              <span className="text-[11px] font-black text-teal-300">
-                                3D Equipment Adventure
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-xs leading-relaxed text-slate-300">
-                            {game.subtitle}
-                          </p>
-                          {isPlanetCard && planetCaps && (
-                            <div
-                              data-testid="planet-card-loadout"
-                              className="mt-2 flex flex-wrap items-center gap-1.5"
-                            >
-                              {PLANET_EQUIPMENT_META.map((item) => {
-                                const unlocked =
-                                  item.part === 'treads'
-                                    ? planetCaps.hasTreads
-                                    : item.part === 'thrusters'
-                                      ? planetCaps.hasThrusters
-                                      : item.part === 'booster'
-                                        ? planetCaps.hasBooster
-                                        : item.part === 'laser'
-                                          ? planetCaps.hasLaser
-                                          : planetCaps.hasMagnet;
-                                return (
-                                  <span
-                                    key={item.part}
-                                    data-loadout-part={item.part}
-                                    data-loadout-unlocked={unlocked ? 'true' : 'false'}
-                                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-bold ${
-                                      unlocked
-                                        ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-200'
-                                        : 'border-slate-700 bg-slate-950/70 text-slate-500'
-                                    }`}
-                                  >
-                                    <PartIcon id={item.part} className="h-3.5 w-3.5" />
-                                    <span>{item.label}</span>
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-3 border-t border-slate-800 pt-2">
-                        <span className="truncate text-[11px] font-medium text-slate-400">
-                          {game.controlsHint}
-                        </span>
-                        <span
-                          className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-black text-slate-950 transition-transform group-hover:scale-105"
-                          style={{ backgroundColor: game.accentHex }}
-                        >
-                          <Play className="h-3 w-3 fill-slate-950" />
-                          <span>Play</span>
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              </section>
             </div>
           )}
 
           {view === 'ROUND_SUMMARY' && summary && (
             <div
               data-testid="game-room-summary"
-              className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-4 py-8 text-center"
+              className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-5 py-6 text-center"
             >
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-300/60 bg-amber-400/15 text-amber-300">
-                {summary.won ? <Trophy className="h-9 w-9" /> : <Check className="h-9 w-9" />}
-              </div>
-              <div>
-                <h3 className="text-2xl font-black text-white">
-                  {summary.won ? `${summary.title} Clear!` : `${summary.title} Complete`}
-                </h3>
-                <p className="mt-1 text-sm text-slate-300">{summary.detail}</p>
-              </div>
-
-              <div className="flex items-center gap-6 rounded-2xl border border-slate-700 bg-slate-900/90 px-6 py-3.5 text-sm font-bold tabular-nums">
-                <div className="flex flex-col items-center">
-                  <span className="text-[11px] font-medium text-slate-400">Score</span>
-                  <span className="text-xl font-black text-sky-300">{summary.score}</span>
-                </div>
-                <div className="h-8 w-px bg-slate-800" aria-hidden="true" />
-                <div className="flex flex-col items-center">
-                  <span className="text-[11px] font-medium text-slate-400">Reward</span>
-                  <span className="flex items-center gap-1 text-xl font-black text-amber-300">
-                    <Zap className="h-4 w-4 fill-amber-400" />+{summary.boltsEarned}
-                  </span>
-                </div>
+              {/* 3 Big Visual Stars */}
+              <div className="flex items-center gap-2.5">
+                {[1, 2, 3].map((s) => {
+                  const earned = summary.won ? 3 : summary.score >= 120 ? 2 : 1;
+                  return (
+                    <Star
+                      key={s}
+                      className={`${s === 2 ? '-translate-y-2 h-14 w-14' : 'h-11 w-11'} ${
+                        s <= earned
+                          ? 'fill-amber-400 text-amber-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.65)]'
+                          : 'fill-slate-800 text-slate-700'
+                      }`}
+                    />
+                  );
+                })}
               </div>
 
-              <div className="flex w-full flex-wrap items-center justify-center gap-3 pt-2">
+              <h3 className="text-2xl font-black text-white">{summary.title}</h3>
+
+              {/* Visual Score + Bolts Tiles */}
+              <div className="grid w-full grid-cols-2 gap-3 tabular-nums">
+                <div className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-sky-400/50 bg-slate-900 py-4">
+                  <Trophy className="h-6 w-6 text-sky-300" aria-hidden="true" />
+                  <span className="text-2xl font-black text-white">{summary.score}</span>
+                </div>
+                <div className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-amber-400/60 bg-amber-500/12 py-4">
+                  <Zap className="h-6 w-6 fill-amber-300 text-amber-300" aria-hidden="true" />
+                  <span className="text-2xl font-black text-amber-300">+{summary.boltsEarned}</span>
+                </div>
+              </div>
+
+              {/* Big Chunky 3D Tactile Buttons */}
+              <div className="grid w-full grid-cols-2 gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => handleSelectGame(summary.gameId)}
-                  className="flex h-11 items-center gap-2 rounded-xl border border-sky-400/80 bg-sky-500 px-5 text-sm font-black text-slate-950 hover:bg-sky-400 active:scale-95"
+                  aria-label="Play Again"
+                  className="flex h-14 items-center justify-center gap-2 rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-base font-black text-slate-950 shadow-[0_4px_0_#047857] active:translate-y-0.5"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  <span>Play Again</span>
+                  <RotateCcw className="h-5 w-5" />
+                  <span>Replay</span>
                 </button>
                 <button
                   type="button"
@@ -2402,10 +1960,11 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                     setActiveGame(null);
                     setSummary(null);
                   }}
-                  className="flex h-11 items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-5 text-sm font-bold text-white hover:border-slate-400 active:scale-95"
+                  aria-label="Switch Game"
+                  className="flex h-14 items-center justify-center gap-2 rounded-2xl border-2 border-slate-600 bg-slate-800 text-base font-black text-white hover:border-sky-400 active:scale-95"
                 >
-                  <Gamepad2 className="h-4 w-4 text-amber-300" />
-                  <span>Switch Game</span>
+                  <Gamepad2 className="h-5 w-5 text-amber-300" />
+                  <span>Games</span>
                 </button>
               </div>
             </div>

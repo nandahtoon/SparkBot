@@ -66,6 +66,7 @@ import {
   PARTS,
   SAVE_KEY,
   type BlockType,
+  type BossMeta,
   type BotThemeDef,
   type BotThemeId,
   type ChassisGrid,
@@ -77,10 +78,14 @@ import {
   type CircuitTraceResult,
   type CodeBlock,
   type DailyState,
+  type DynamicHazardDef,
+  type HazardTickSnapshot,
+  type LaserBarrierHazard,
   type LevelDef,
   type PartDef,
   type PartId,
   type PartTooltipInfo,
+  type PatrolDroneHazard,
   type SandboxMissionDraft,
   type SaveProfile,
   type SensorCondition,
@@ -90,6 +95,13 @@ import {
   type TileType,
   type TrackTile
 } from './types';
+import {
+  detectHazardAheadForNextTick,
+  evaluateAllHazardsAtTick,
+  evaluateHazardAtTick,
+  getBlockingHazardAtTile,
+  levelHasDynamicHazards
+} from './hazards';
 
 export {
   DEFAULT_AUDIO_SETTINGS,
@@ -150,6 +162,11 @@ export {
   type GhostPreviewPlan,
   type SimStepInspection,
   type TutorialStep,
+  detectHazardAheadForNextTick,
+  evaluateAllHazardsAtTick,
+  evaluateHazardAtTick,
+  getBlockingHazardAtTile,
+  levelHasDynamicHazards,
   SAVE_KEY,
   MAGBOT_PASSES_KEY,
   MAGBOT_BOLTS_KEY,
@@ -163,6 +180,7 @@ export {
   normalizeBotTheme,
   parseNonNegInt,
   type BlockType,
+  type BossMeta,
   type BotThemeDef,
   type BotThemeId,
   type ChassisGrid,
@@ -174,10 +192,14 @@ export {
   type CircuitTraceResult,
   type CodeBlock,
   type DailyState,
+  type DynamicHazardDef,
+  type HazardTickSnapshot,
+  type LaserBarrierHazard,
   type LevelDef,
   type PartDef,
   type PartId,
   type PartTooltipInfo,
+  type PatrolDroneHazard,
   type SandboxMissionDraft,
   type SaveProfile,
   type SensorCondition,
@@ -839,6 +861,7 @@ function hasBlockTypeInProgram(blocks: CodeBlock[], target: BlockType): boolean 
   for (const b of blocks || []) {
     if (b.type === target) return true;
     if (b.children && hasBlockTypeInProgram(b.children, target)) return true;
+    if (b.elseChildren && hasBlockTypeInProgram(b.elseChildren, target)) return true;
   }
   return false;
 }
@@ -848,11 +871,18 @@ export function recordSkillMastery(
   level: LevelDef,
   chassis: ChassisGrid,
   program: CodeBlock[],
-  sim: SimResult
+  sim: SimResult,
+  functionBody: CodeBlock[] = []
 ): { next: SkillStats; upgradedPillars: StemPillarId[] } {
   const cur: SkillStats = { ...defaultSkillStats(), ...(prevStats || {}) };
   const info = computeChassisInfo(chassis);
-  const blkCount = countBlocks(program);
+  const blkCount = countBlocks(program, functionBody);
+  const usedIf =
+    hasBlockTypeInProgram(program, 'IF') || hasBlockTypeInProgram(functionBody, 'IF');
+  const usedLoop =
+    hasBlockTypeInProgram(program, 'LOOP') || hasBlockTypeInProgram(functionBody, 'LOOP');
+  const usedFunc = Boolean(sim.usedFunctionCall && functionBody.length > 0);
+  const usedElse = Boolean(sim.usedElseBranch);
 
   const next: SkillStats = {
     chassisBuilds: cur.chassisBuilds + (info.cost <= level.budget && info.hasDrive ? 1 : 0),
@@ -868,20 +898,33 @@ export function recordSkillMastery(
       cur.mudCleared +
       (sim.status === 'win' && level.track.some((t) => t.type === 'mud') && info.hasTreads ? 1 : 0),
     loopsCompressed:
-      cur.loopsCompressed +
-      (sim.status === 'win' && hasBlockTypeInProgram(program, 'LOOP') && blkCount <= level.parBlocks
-        ? 1
-        : 0),
+      cur.loopsCompressed + (sim.status === 'win' && usedLoop && blkCount <= level.parBlocks ? 1 : 0),
     sensorsUsed:
       cur.sensorsUsed +
       (sim.status === 'win' &&
-      hasBlockTypeInProgram(program, 'IF') &&
+      usedIf &&
       sim.events.some((ev) => ev.action === 'SCAN' && ev.scanMatch)
         ? 1
         : 0),
     circuitsSolved: cur.circuitsSolved + 1,
     ...(cur.bugsDebugged !== undefined ? { bugsDebugged: cur.bugsDebugged } : {}),
-    ...(cur.logicGatesSolved !== undefined ? { logicGatesSolved: cur.logicGatesSolved } : {})
+    ...(cur.logicGatesSolved !== undefined ? { logicGatesSolved: cur.logicGatesSolved } : {}),
+    ...(cur.functionsUsed !== undefined || usedFunc
+      ? { functionsUsed: parseNonNegInt(cur.functionsUsed) + (sim.status === 'win' && usedFunc ? 1 : 0) }
+      : {}),
+    ...(cur.elseBranchesUsed !== undefined || usedElse
+      ? {
+          elseBranchesUsed:
+            parseNonNegInt(cur.elseBranchesUsed) + (sim.status === 'win' && usedElse ? 1 : 0)
+        }
+      : {}),
+    ...(cur.predictionsCorrect !== undefined ? { predictionsCorrect: cur.predictionsCorrect } : {}),
+    ...(cur.bossesDefeated !== undefined || level.isBoss
+      ? {
+          bossesDefeated:
+            parseNonNegInt(cur.bossesDefeated) + (sim.status === 'win' && level.isBoss ? 1 : 0)
+        }
+      : {})
   };
 
   const beforeBadges = computeStemSkillBadges(cur);
@@ -931,6 +974,7 @@ export function defaultSaveProfile(): SaveProfile {
     streakShields: 0,
     unlockedFactIds: [],
     adaptiveHintsEnabled: true,
+    predictQuizEnabled: true,
     sandbox: {
       name: 'My Custom Lab',
       budget: 120,

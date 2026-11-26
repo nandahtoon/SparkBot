@@ -360,9 +360,10 @@ export const BONUS_LEVELS: LevelDef[] = [
     id: 12,
     isBonus: true,
     ifUnlocked: true,
+    elseUnlocked: true,
     name: 'Starport Finale',
-    ageLabel: 'Bonus · Master',
-    brief: 'Combine everything! Pair IF [GAP] -> JUMP and IF [RAMP] -> BOOST inside LOOP 2x to sail past gaps, ramps, and mud!',
+    ageLabel: 'Bonus · Ages 8–10',
+    brief: 'Combine everything! Pair IF/ELSE sensor logic inside LOOPs to sail past gaps, ramps, and mud!',
     budget: 135,
     parBudget: 115,
     parBlocks: 6,
@@ -391,6 +392,183 @@ export const BONUS_LEVELS: LevelDef[] = [
       { r: 1, c: 2, type: 'wall', rot: 0 },
       { r: 3, c: 2, type: 'wall', rot: 0 },
       { r: 4, c: 4, type: 'wall', rot: 0 }
+    ])
+  },
+  // ---------- CHAPTER 4: CITADEL OF MOTION (Ages 9–12) ----------
+  {
+    id: 13,
+    isBonus: true,
+    loopUnlocked: true,
+    ifUnlocked: true,
+    elseUnlocked: true,
+    waitUnlocked: true,
+    functionUnlocked: false,
+    name: 'Rhythm Crossing',
+    ageLabel: 'Ch. 4 · Ages 9–11',
+    brief: 'Timed Laser Barriers pulse on every step! Use IF [HAZARD] -> WAIT ELSE -> MOVE inside a LOOP to glide through safely.',
+    budget: 95,
+    parBudget: 60,
+    parBlocks: 6,
+    hazards: [
+      { id: 'hz_13_laser_1', kind: 'laser_gate', tileIndex: 2, period: 2, activeOffset: 0 },
+      { id: 'hz_13_laser_2', kind: 'laser_gate', tileIndex: 4, period: 2, activeOffset: 1 }
+    ],
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 1, type: 'splitter', rot: 1 },
+      { r: 0, c: 1, type: 'mirror', rot: 1 },
+      { r: 0, c: 4, type: 'core', rot: 0 },
+      { r: 2, c: 3, type: 'mirror', rot: 0 },
+      { r: 4, c: 3, type: 'mirror', rot: 1 },
+      { r: 4, c: 4, type: 'core', rot: 0 },
+      { r: 1, c: 2, type: 'wall', rot: 0 },
+      { r: 3, c: 2, type: 'wall', rot: 0 }
+    ])
+  },
+  {
+    id: 14,
+    isBonus: true,
+    loopUnlocked: true,
+    ifUnlocked: true,
+    elseUnlocked: true,
+    waitUnlocked: true,
+    functionUnlocked: true,
+    name: 'Patrol Corridor',
+    ageLabel: 'Ch. 4 · Ages 9–12',
+    brief: 'Patrol Drones sweep the corridor! Build a reusable MY BLOCK routine (MOVE + JUMP) and call it 3 times to dodge every drone.',
+    budget: 110,
+    parBudget: 85,
+    parBlocks: 5,
+    hazards: [
+      { id: 'hz_14_drone_1', kind: 'patrol_drone', minTile: 3, maxTile: 4, startTile: 4, startDir: -1 },
+      { id: 'hz_14_drone_2', kind: 'patrol_drone', minTile: 6, maxTile: 7, startTile: 7, startDir: -1 }
+    ],
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'gap', crystal: false },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'gap', crystal: false },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'gap', crystal: false },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 2, type: 'splitter', rot: 0 },
+      { r: 4, c: 2, type: 'mirror', rot: 0 },
+      { r: 4, c: 4, type: 'core', rot: 0 },
+      { r: 2, c: 4, type: 'mirror', rot: 1 },
+      { r: 0, c: 4, type: 'core', rot: 0 },
+      { r: 1, c: 2, type: 'wall', rot: 0 },
+      { r: 3, c: 3, type: 'wall', rot: 0 }
+    ])
+  },
+  {
+    id: 15,
+    isBonus: true,
+    loopUnlocked: true,
+    ifUnlocked: true,
+    elseUnlocked: true,
+    waitUnlocked: true,
+    functionUnlocked: true,
+    name: 'Dual-Hazard Gauntlet',
+    ageLabel: 'Ch. 4 · Ages 10–12',
+    brief: 'Combine MY BLOCK smart stepping (IF [HAZARD] -> WAIT, MOVE) with BOOST over ramps and JUMP over gaps!',
+    budget: 130,
+    parBudget: 115,
+    parBlocks: 10,
+    hazards: [
+      { id: 'hz_15_laser_1', kind: 'laser_gate', tileIndex: 2, period: 2, activeOffset: 0 },
+      { id: 'hz_15_drone_1', kind: 'patrol_drone', minTile: 6, maxTile: 7, startTile: 6, startDir: 1 },
+      { id: 'hz_15_laser_2', kind: 'laser_gate', tileIndex: 9, period: 2, activeOffset: 0 }
+    ],
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'ramp', crystal: true },
+      { type: 'mud', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'gap', crystal: false },
+      { type: 'normal', crystal: false },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 1, type: 'splitter', rot: 1 },
+      { r: 0, c: 1, type: 'mirror', rot: 1 },
+      { r: 0, c: 4, type: 'core', rot: 0 },
+      { r: 2, c: 3, type: 'splitter', rot: 0 },
+      { r: 2, c: 4, type: 'core', rot: 0 },
+      { r: 4, c: 3, type: 'mirror', rot: 1 },
+      { r: 4, c: 0, type: 'core', rot: 0 },
+      { r: 1, c: 3, type: 'wall', rot: 0 },
+      { r: 3, c: 1, type: 'wall', rot: 0 }
+    ])
+  },
+  {
+    id: 16,
+    isBonus: true,
+    isBoss: true,
+    loopUnlocked: true,
+    ifUnlocked: true,
+    elseUnlocked: true,
+    waitUnlocked: true,
+    functionUnlocked: true,
+    name: 'Overload Sentinel',
+    ageLabel: 'BOSS · Ages 10–12',
+    brief: 'Boss Rescue! Program MY BLOCK with IF [HAZARD] -> WAIT, navigate Patrol Drones & Laser Gates, then shatter all 3 Sentinel Shield Cores!',
+    budget: 140,
+    parBudget: 125,
+    parBlocks: 10,
+    bossMeta: {
+      name: 'Overload Sentinel',
+      title: 'Citadel Guardian',
+      coreCount: 3,
+      introLine: 'The Overload Sentinel locked the Citadel with rhythmic lasers and patrol drones! Use MY BLOCK, IF/ELSE, and your Front Laser to stabilize all 3 Shield Cores!',
+      defeatLine: 'All 3 Sentinel Shield Cores stabilized! The Citadel of Motion is free!'
+    },
+    hazards: [
+      { id: 'hz_16_laser_1', kind: 'laser_gate', tileIndex: 1, period: 2, activeOffset: 1 },
+      { id: 'hz_16_drone_1', kind: 'patrol_drone', minTile: 4, maxTile: 5, startTile: 4, startDir: 1 },
+      { id: 'hz_16_laser_2', kind: 'laser_gate', tileIndex: 8, period: 2, activeOffset: 0 },
+      { id: 'hz_16_drone_2', kind: 'patrol_drone', minTile: 9, maxTile: 10, startTile: 10, startDir: -1 }
+    ],
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'gap', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'ramp', crystal: true },
+      { type: 'mud', crystal: false },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 1, type: 'splitter', rot: 1 },
+      { r: 0, c: 1, type: 'mirror', rot: 1 },
+      { r: 0, c: 3, type: 'splitter', rot: 0 },
+      { r: 0, c: 4, type: 'core', rot: 0 },
+      { r: 4, c: 3, type: 'mirror', rot: 1 },
+      { r: 4, c: 4, type: 'core', rot: 0 },
+      { r: 2, c: 4, type: 'core', rot: 0 },
+      { r: 1, c: 2, type: 'wall', rot: 0 },
+      { r: 3, c: 2, type: 'wall', rot: 0 }
     ])
   }
 ];

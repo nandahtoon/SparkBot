@@ -121,8 +121,11 @@ export function isDescendantBlockId(
   candidateId: string | null | undefined
 ): boolean {
   if (!ancestorId || !candidateId) return false;
-  if (ancestorId === candidateId) return true;
-  const ancestors = collectAncestorBlockIds(program, candidateId);
+  const baseCandidate = candidateId.endsWith(':else')
+    ? candidateId.slice(0, -5)
+    : candidateId;
+  if (ancestorId === baseCandidate) return true;
+  const ancestors = collectAncestorBlockIds(program, baseCandidate);
   return ancestors.includes(ancestorId);
 }
 
@@ -245,7 +248,7 @@ export function classifyBlockComplexityTier(
   nestingDepth: number
 ): BlockTierClassification {
   const depth = Math.max(0, Math.floor(nestingDepth));
-  const isControl = blockType === 'LOOP' || blockType === 'IF';
+  const isControl = blockType === 'LOOP' || blockType === 'IF' || blockType === 'CALL_FUNC';
 
   if (depth >= 2 || (depth >= 1 && isControl)) {
     return {
@@ -264,7 +267,7 @@ export function classifyBlockComplexityTier(
   return {
     tierRank: 1,
     complexityTier: 'tier1_linear',
-    weight: blockType === 'MOVE' ? 1 : 2
+    weight: blockType === 'MOVE' || blockType === 'WAIT' ? 1 : 2
   };
 }
 
@@ -427,6 +430,17 @@ export function evaluateProgramLogicTiers(
         if (children.length > 0) {
           walk(children, childDepth);
         }
+        if (blk.type === 'IF' && blk.elseChildren && blk.elseChildren.length > 0) {
+          zoneStates[`${blk.id}:else`] = {
+            zoneId: `${blk.id}:else`,
+            tierRank: Math.min(3, Math.max(2, childDepth + 1)) as 1 | 2 | 3,
+            complexityTier: childDepth >= 2 ? 'tier3_nested' : 'tier2_structured',
+            optimality: totalBlocks <= safePar ? 'optimal' : 'balanced',
+            reason: totalBlocks <= safePar ? 'within_par_structured' : 'near_par',
+            hint: 'ELSE branch'
+          };
+          walk(blk.elseChildren, childDepth);
+        }
       }
     }
   };
@@ -509,27 +523,41 @@ function removeBlockForPreview(list: CodeBlock[], targetId: string): { next: Cod
       removed = item;
       continue;
     }
+    let nextItem = item;
     if (item.children) {
       const sub = removeBlockForPreview(item.children, targetId);
       if (sub.removed) removed = sub.removed;
-      next.push({ ...item, children: sub.next });
-    } else {
-      next.push(item);
+      nextItem = { ...nextItem, children: sub.next };
     }
+    if (item.elseChildren) {
+      const subElse = removeBlockForPreview(item.elseChildren, targetId);
+      if (subElse.removed) removed = subElse.removed;
+      nextItem = { ...nextItem, elseChildren: subElse.next };
+    }
+    next.push(nextItem);
   }
   return { next, removed };
 }
 
 function insertBlockForPreview(list: CodeBlock[], containerId: string | null, blk: CodeBlock): CodeBlock[] {
   if (!containerId) return [...list, blk];
+  const isElseZone = containerId.endsWith(':else');
+  const baseId = isElseZone ? containerId.slice(0, -5) : containerId;
   return list.map((item) => {
-    if (item.id === containerId) {
+    if (item.id === baseId) {
+      if (isElseZone && item.type === 'IF') {
+        return { ...item, elseChildren: [...(item.elseChildren || []), blk] };
+      }
       return { ...item, children: [...(item.children || []), blk] };
     }
+    let nextItem = item;
     if (item.children) {
-      return { ...item, children: insertBlockForPreview(item.children, containerId, blk) };
+      nextItem = { ...nextItem, children: insertBlockForPreview(item.children, containerId, blk) };
     }
-    return item;
+    if (item.elseChildren) {
+      nextItem = { ...nextItem, elseChildren: insertBlockForPreview(item.elseChildren, containerId, blk) };
+    }
+    return nextItem;
   });
 }
 
@@ -610,12 +638,24 @@ export function classifyCodeBlockFeedback(
     };
   }
 
-  // Conditional sensor logic: IF [GAP / MUD / RAMP]
+  // Conditional sensor logic: IF [GAP / MUD / RAMP / HAZARD]
   if (blockType === 'IF') {
     const condColor =
-      condition === 'MUD' ? 0xf59e0b : condition === 'RAMP' ? 0xf472b6 : 0x22d3ee;
+      condition === 'MUD'
+        ? 0xf59e0b
+        : condition === 'RAMP'
+          ? 0xf472b6
+          : condition === 'HAZARD'
+            ? 0xfb7185
+            : 0x22d3ee;
     const condCss =
-      condition === 'MUD' ? '#f59e0b' : condition === 'RAMP' ? '#f472b6' : '#22d3ee';
+      condition === 'MUD'
+        ? '#f59e0b'
+        : condition === 'RAMP'
+          ? '#f472b6'
+          : condition === 'HAZARD'
+            ? '#fb7185'
+            : '#22d3ee';
     return {
       tier: 'conditional',
       tierRank: tierInfo.tierRank,
@@ -635,7 +675,49 @@ export function classifyCodeBlockFeedback(
     };
   }
 
-  // Iterative loop container: LOOP 2x/3x/4x
+  // Reusable subroutine call: MY BLOCK
+  if (blockType === 'CALL_FUNC') {
+    return {
+      tier: 'loop',
+      tierRank: tierInfo.tierRank,
+      complexityTier: tierInfo.complexityTier,
+      mood: 'happy',
+      duration: 1.2,
+      sparkColorHex: 0xe879f9,
+      puffColorHex: 0xf5d0fe,
+      sparkCount: 12,
+      puffCount: 4,
+      voicePhrase: 'proud',
+      voiceMood: 'proud',
+      voiceEmote: 'stars',
+      voiceSyllables: 2,
+      voiceAriaLabel: 'Robot triggers reusable subroutine block',
+      accentCss: '#e879f9'
+    };
+  }
+
+  // Timed pause block: WAIT
+  if (blockType === 'WAIT') {
+    return {
+      tier: 'simple',
+      tierRank: tierInfo.tierRank,
+      complexityTier: tierInfo.complexityTier,
+      mood: 'scan',
+      duration: 0.82,
+      sparkColorHex: 0x22d3ee,
+      puffColorHex: 0xcffafe,
+      sparkCount: 8,
+      puffCount: 2,
+      voicePhrase: null,
+      voiceMood: 'playful',
+      voiceEmote: 'curious',
+      voiceSyllables: 1,
+      voiceAriaLabel: 'Robot waits one timing beat',
+      accentCss: '#22d3ee'
+    };
+  }
+
+  // Iterative loop container: LOOP 2x/3x/4x/5x
   if (blockType === 'LOOP') {
     return {
       tier: 'loop',

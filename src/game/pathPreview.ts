@@ -7,6 +7,7 @@ import {
 import type {
   ChassisGrid,
   CodeBlock,
+  HazardTickSnapshot,
   LevelDef,
   PartId,
   SensorCondition,
@@ -17,8 +18,10 @@ import type {
 export interface PathPreviewSegment {
   index: number;
   blockId: string;
+  callerBlockId?: string | null;
   ancestorBlockIds: string[];
-  action: 'MOVE' | 'JUMP' | 'BOOST';
+  action: 'MOVE' | 'JUMP' | 'BOOST' | 'WAIT';
+  tick: number;
   fromPos: number;
   toPos: number;
   fromZ: number;
@@ -26,18 +29,22 @@ export interface PathPreviewSegment {
   arcHeight: number;
   status: 'ok' | 'fail' | 'fall' | 'stuck';
   newCrystals: number[];
+  hazardSnapshots?: HazardTickSnapshot[];
 }
 
 export interface PathPreviewScan {
   index: number;
   blockId: string;
+  callerBlockId?: string | null;
   ancestorBlockIds: string[];
+  tick: number;
   atPos: number;
   scanTile: number;
   atZ: number;
   scanZ: number;
   condition: SensorCondition;
   matched: boolean;
+  branchTaken?: 'then' | 'else' | 'skip';
 }
 
 export type PathPreviewOutcomeStatus = 'empty' | 'win' | 'short' | 'hazard';
@@ -76,18 +83,26 @@ function formatMissingPartSummary(
 export function buildLivePathPreview(
   level: LevelDef,
   chassis: ChassisGrid,
-  program: CodeBlock[]
+  program: CodeBlock[],
+  functionBody: CodeBlock[] = []
 ): LivePathPreview {
   const track = level.track;
   const gateIndex = Math.max(0, track.length - 1);
-  const simResult = simulateProgram(level, chassis, program);
+  const simResult = simulateProgram(level, chassis, program, functionBody);
   const ancestorCache = new Map<string, string[]>();
 
-  const getAncestors = (blockId: string): string[] => {
-    const cached = ancestorCache.get(blockId);
+  const getAncestors = (blockId: string, callerBlockId?: string | null): string[] => {
+    const cacheKey = `${blockId}|${callerBlockId || ''}`;
+    const cached = ancestorCache.get(cacheKey);
     if (cached) return cached;
-    const found = collectAncestorBlockIds(program, blockId);
-    ancestorCache.set(blockId, found);
+    const found = collectAncestorBlockIds(program, blockId, functionBody);
+    if (callerBlockId) {
+      const callerAnc = collectAncestorBlockIds(program, callerBlockId);
+      const merged = Array.from(new Set([...found, callerBlockId, ...callerAnc]));
+      ancestorCache.set(cacheKey, merged);
+      return merged;
+    }
+    ancestorCache.set(cacheKey, found);
     return found;
   };
 
@@ -96,26 +111,34 @@ export function buildLivePathPreview(
   let lastActionSegment: PathPreviewSegment | null = null;
 
   for (const ev of simResult.events) {
-    const ancestorBlockIds = getAncestors(ev.blockId);
+    const ancestorBlockIds = getAncestors(ev.blockId, ev.callerBlockId);
     if (ev.action === 'SCAN') {
       const scanTile = ev.scanTile ?? Math.min(ev.fromPos + 1, gateIndex);
       scans.push({
         index: scans.length,
         blockId: ev.blockId,
+        callerBlockId: ev.callerBlockId,
         ancestorBlockIds,
+        tick: ev.tick ?? 0,
         atPos: ev.fromPos,
         scanTile,
         atZ: getTrackBotStopZ(track, ev.fromPos),
         scanZ: getTrackBotStopZ(track, scanTile),
         condition: ev.condition || 'GAP',
-        matched: Boolean(ev.scanMatch)
+        matched: Boolean(ev.scanMatch),
+        branchTaken: ev.branchTaken
       });
       continue;
     }
 
     const fromZ = getTrackBotStopZ(track, ev.fromPos);
     let toZ = getTrackBotStopZ(track, ev.toPos);
-    if (ev.fromPos === ev.toPos && ev.status === 'fail' && ev.fromPos < gateIndex) {
+    if (
+      ev.action !== 'WAIT' &&
+      ev.fromPos === ev.toPos &&
+      ev.status === 'fail' &&
+      ev.fromPos < gateIndex
+    ) {
       // Blocked before moving (e.g. missing part on start/tile): project short directional stub
       toZ = clampTrackBotZBeforeClosedGate(track, fromZ - 0.95, false);
     }
@@ -124,15 +147,18 @@ export function buildLivePathPreview(
     const seg: PathPreviewSegment = {
       index: segments.length,
       blockId: ev.blockId,
+      callerBlockId: ev.callerBlockId,
       ancestorBlockIds,
       action: ev.action,
+      tick: ev.tick ?? segments.length + 1,
       fromPos: ev.fromPos,
       toPos: ev.toPos,
       fromZ,
       toZ,
       arcHeight,
       status: ev.status,
-      newCrystals: Array.isArray(ev.newCrystals) ? [...ev.newCrystals] : []
+      newCrystals: Array.isArray(ev.newCrystals) ? [...ev.newCrystals] : [],
+      hazardSnapshots: ev.hazardSnapshots
     };
     segments.push(seg);
     lastActionSegment = seg;
@@ -146,20 +172,23 @@ export function buildLivePathPreview(
   if (
     simResult.events.length === 0 ||
     simResult.failCode === 'empty' ||
-    simResult.failCode === 'empty_container'
+    simResult.failCode === 'empty_container' ||
+    simResult.failCode === 'empty_function'
   ) {
     endpointStatus = 'empty';
     endpointTile = 0;
     endpointZ = getTrackBotStopZ(track, 0);
     summaryLabel =
-      simResult.failCode === 'empty_container'
-        ? 'Empty Loop or IF block'
-        : 'Add blocks to preview route';
+      simResult.failCode === 'empty_function'
+        ? 'Add blocks to MY BLOCK tray'
+        : simResult.failCode === 'empty_container'
+          ? 'Empty Loop or IF block'
+          : 'Add blocks to preview route';
   } else if (simResult.status === 'win') {
     endpointStatus = 'win';
     endpointTile = gateIndex;
     endpointZ = getTrackBotStopZ(track, gateIndex);
-    summaryLabel = 'Reaches Gate';
+    summaryLabel = level.isBoss ? 'Reaches Boss Sentinel!' : 'Reaches Gate';
   } else if (simResult.failCode === 'short') {
     endpointStatus = 'short';
     endpointTile = simResult.finalPos;
@@ -178,7 +207,11 @@ export function buildLivePathPreview(
     }
     endpointZ = getTrackBotStopZ(track, endpointTile);
 
-    if (simResult.failCode === 'gap') {
+    if (simResult.failCode === 'laser_gate') {
+      summaryLabel = `Laser Barrier at Tile ${endpointTile}`;
+    } else if (simResult.failCode === 'patrol_drone') {
+      summaryLabel = `Patrol Drone at Tile ${endpointTile}`;
+    } else if (simResult.failCode === 'gap') {
       summaryLabel = `Gap at Tile ${endpointTile}`;
     } else if (simResult.failCode === 'mud') {
       summaryLabel = `Mud at Tile ${endpointTile}`;
@@ -210,11 +243,15 @@ export function buildLivePathPreview(
 }
 
 export function isPreviewItemHighlighted(
-  item: { blockId: string; ancestorBlockIds: ReadonlyArray<string> },
+  item: { blockId: string; callerBlockId?: string | null; ancestorBlockIds: ReadonlyArray<string> },
   hoveredBlockId: string | null
 ): boolean {
   if (!hoveredBlockId) return false;
-  return item.blockId === hoveredBlockId || item.ancestorBlockIds.includes(hoveredBlockId);
+  return (
+    item.blockId === hoveredBlockId ||
+    item.callerBlockId === hoveredBlockId ||
+    item.ancestorBlockIds.includes(hoveredBlockId)
+  );
 }
 
 export function samplePathSegmentPointInto(

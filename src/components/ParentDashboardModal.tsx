@@ -28,8 +28,10 @@ interface ParentDashboardModalProps {
   save: SaveProfile;
   adaptiveHintsEnabled: boolean;
   challengeTimerEnabled: boolean;
+  predictQuizEnabled?: boolean;
   onToggleAdaptiveHints: () => void;
   onToggleChallengeTimer: () => void;
+  onTogglePredictQuiz?: () => void;
   onClose: () => void;
 }
 
@@ -40,8 +42,10 @@ export const ParentDashboardModal: React.FC<ParentDashboardModalProps> = ({
   save,
   adaptiveHintsEnabled,
   challengeTimerEnabled,
+  predictQuizEnabled = true,
   onToggleAdaptiveHints,
   onToggleChallengeTimer,
+  onTogglePredictQuiz,
   onClose
 }) => {
   const [unlocked, setUnlocked] = useState(false);
@@ -180,7 +184,7 @@ export const ParentDashboardModal: React.FC<ParentDashboardModalProps> = ({
                 Grown-Ups · Learning Progress
               </h2>
               <p className="truncate text-xs font-medium text-slate-400">
-                {report.profileName} · Local device summary (Ages 6–11 STEM Academy)
+                {report.profileName} · Local device summary (Ages 6–12 STEM Academy)
               </p>
             </div>
           </div>
@@ -483,6 +487,34 @@ export const ParentDashboardModal: React.FC<ParentDashboardModalProps> = ({
                       {challengeTimerEnabled ? 'On' : 'Off'}
                     </button>
                   </div>
+
+                  {onTogglePredictQuiz && (
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/75 px-3.5 py-2.5 sm:col-span-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Sparkles className="h-4 w-4 shrink-0 text-violet-300" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-black text-white">Predict-Before-Run Quiz</div>
+                          <div className="truncate text-[11px] text-slate-400">
+                            Quick visual prediction check before running new missions
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={predictQuizEnabled}
+                        aria-label="Toggle Predict-Before-Run Quiz"
+                        onClick={onTogglePredictQuiz}
+                        className={`h-9 shrink-0 rounded-xl border px-3 text-xs font-black uppercase transition-transform active:scale-95 ${
+                          predictQuizEnabled
+                            ? 'border-violet-300 bg-violet-500/20 text-violet-200'
+                            : 'border-slate-700 bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {predictQuizEnabled ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/75 px-4 py-3">

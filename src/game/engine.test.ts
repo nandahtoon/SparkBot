@@ -1301,12 +1301,20 @@ test('trackSurface keeps robot flush on top of inclined pink ramps, mud basins, 
     { type: 'gate', crystal: false }
   ];
 
-  // Workshop turntable & flat tiles sit at y = 0, pitchX = 0
+  // Workshop turntable sits at y = 0, pitchX = 0; Tile 0 aligns with the blue Start pad (TRACK_START_Z)
   const workshop = TrackSurface.sampleTrackSurfaceAtZ(track, 0);
   assert.equal(workshop.y, 0);
   assert.equal(workshop.pitchX, 0);
 
+  const startZ = TrackSurface.getTrackTileCenterZ(0);
+  assert.equal(startZ, TrackSurface.TRACK_START_Z);
+  assert.equal(TrackSurface.getTrackBotStopZ(track, 0), TrackSurface.TRACK_START_Z);
+
   const normalZ = TrackSurface.getTrackTileCenterZ(1);
+  assert.ok(
+    Math.abs(Math.abs(normalZ - startZ) - TrackSurface.TRACK_TILE_SPACING) < 1e-6,
+    'First MOVE step from Tile 0 to Tile 1 must span exactly 1 tile spacing'
+  );
   const normalSurf = TrackSurface.sampleTrackSurfaceAtZ(track, normalZ);
   assert.equal(normalSurf.y, 0);
   assert.equal(normalSurf.pitchX, 0);

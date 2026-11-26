@@ -98,6 +98,7 @@ export interface RobotRig {
   setTheme: (theme: BotThemeId) => void;
   applyPaintConfig: (config: PaintBoothConfig) => void;
   setCharacter: (charId: BotCharacterId) => void;
+  setAccessory: (accessoryId: import('../game/shopAndQuests').AccessoryId | null) => void;
   injectImpact: (strength: number, pitchKick?: number, rollKick?: number) => void;
   setQualityBudget: (budget: GraphicsQualityBudget) => void;
   dispose: () => void;
@@ -1189,6 +1190,104 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     joyHearts.push(hm);
   }
   headGroup.add(happySparkleGroup);
+
+  // Bolt Shop 3D Head Accessories (Explorer Cap, Holo Visor, Orbital Halo, Star Crown)
+  const shopAccessoryRoot = new THREE.Group();
+  headGroup.add(shopAccessoryRoot);
+
+  // 1. Explorer Cap
+  const accExplorerCap = new THREE.Group();
+  const capDomeMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.42, metalness: 0.15 });
+  const capTrimMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.35, metalness: 0.25 });
+  const capDome = new THREE.Mesh(
+    new THREE.SphereGeometry(0.42, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    capDomeMat
+  );
+  capDome.position.set(0, 0.3, -0.02);
+  const capBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.46, 0.05, 18, 1, false, -0.7, 1.4), capTrimMat);
+  capBrim.position.set(0, 0.33, 0.16);
+  capBrim.rotation.x = 0.18;
+  const capBadge = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), capTrimMat);
+  capBadge.position.set(0, 0.48, 0.35);
+  accExplorerCap.add(capDome, capBrim, capBadge);
+  accExplorerCap.visible = false;
+  shopAccessoryRoot.add(accExplorerCap);
+
+  // 2. Holo Visor
+  const accHoloVisor = new THREE.Group();
+  const holoShieldMat = new THREE.MeshStandardMaterial({
+    color: 0x22d3ee,
+    emissive: 0x06b6d4,
+    emissiveIntensity: 0.75,
+    transparent: true,
+    opacity: 0.65,
+    roughness: 0.12,
+    metalness: 0.3
+  });
+  const holoShield = new THREE.Mesh(new RoundedBoxGeometry(0.86, 0.24, 0.14, 2, 0.05), holoShieldMat);
+  holoShield.position.set(0, 0.12, 0.38);
+  const holoFrameMat = new THREE.MeshStandardMaterial({ color: 0xc084fc, emissive: 0xa855f7, emissiveIntensity: 0.4, roughness: 0.25, metalness: 0.6 });
+  const holoBar = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.035, 0.06), holoFrameMat);
+  holoBar.position.set(0, 0.24, 0.39);
+  accHoloVisor.add(holoShield, holoBar);
+  accHoloVisor.visible = false;
+  shopAccessoryRoot.add(accHoloVisor);
+
+  // 3. Orbital Halo
+  const accAntennaHalo = new THREE.Group();
+  const haloMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 0.85,
+    roughness: 0.2,
+    metalness: 0.65
+  });
+  const haloRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.032, 10, 28), haloMat);
+  haloRing.rotation.x = Math.PI / 2;
+  haloRing.position.set(0, 0.78, -0.02);
+  const haloOrb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xf472b6 })
+  );
+  haloOrb.position.set(0.42, 0.78, -0.02);
+  accAntennaHalo.add(haloRing, haloOrb);
+  accAntennaHalo.visible = false;
+  shopAccessoryRoot.add(accAntennaHalo);
+
+  // 4. Star Crown
+  const accStarCrown = new THREE.Group();
+  const crownGoldMat = new THREE.MeshPhysicalMaterial({
+    color: 0xfbbf24,
+    emissive: 0xb45309,
+    emissiveIntensity: 0.28,
+    roughness: 0.18,
+    metalness: 0.88,
+    clearcoat: 0.8
+  });
+  const crownBand = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.3, 0.12, 16), crownGoldMat);
+  crownBand.position.set(0, 0.42, -0.02);
+  accStarCrown.add(crownBand);
+  for (let i = 0; i < 5; i++) {
+    const ang = (i / 5) * Math.PI * 2;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.2, 4), crownGoldMat);
+    spike.position.set(Math.sin(ang) * 0.26, 0.56, Math.cos(ang) * 0.26 - 0.02);
+    accStarCrown.add(spike);
+  }
+  const crownGem = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.07, 0),
+    new THREE.MeshBasicMaterial({ color: 0xfb7185 })
+  );
+  crownGem.position.set(0, 0.46, 0.3);
+  accStarCrown.add(crownGem);
+  accStarCrown.visible = false;
+  shopAccessoryRoot.add(accStarCrown);
+
+  function setAccessory(accessoryId: import('../game/shopAndQuests').AccessoryId | null) {
+    accExplorerCap.visible = accessoryId === 'explorer_cap';
+    accHoloVisor.visible = accessoryId === 'holo_visor';
+    accAntennaHalo.visible = accessoryId === 'antenna_halo';
+    accStarCrown.visible = accessoryId === 'star_crown';
+  }
 
   // 3D Mechanic Wrench + Glowing Bolt Socket Ring (shown during equipment installation)
   const mechanicToolGroup = new THREE.Group();
@@ -2478,6 +2577,9 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
 
     // Secondary antenna spring whip inertia
     headGroup.rotation.set(headPitch, headYaw, headRoll);
+    if (accAntennaHalo.visible) {
+      accAntennaHalo.rotation.y = p.time * 1.9;
+    }
     if (antennaStem.visible) {
       const baseAntZ = activeCharacter === 'sprout' ? 0.34 : 0;
       antennaStem.rotation.x = kin.antennaWhipX * 0.65;
@@ -2965,6 +3067,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     setTheme,
     applyPaintConfig,
     setCharacter,
+    setAccessory,
     injectImpact,
     setQualityBudget,
     dispose

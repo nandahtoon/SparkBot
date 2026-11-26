@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ArrowDown,
   ArrowRight,
   BookOpen,
   Camera,
@@ -10,7 +11,9 @@ import {
   Lightbulb,
   Paintbrush,
   Palette,
+  Plus,
   Smile,
+  Sparkles,
   X,
   Zap
 } from 'lucide-react';
@@ -178,13 +181,19 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   }, [hoveredPart]);
 
   useEffect(() => {
-    if (collapsed || dragState?.moved) {
+    if (collapsed || dragState?.moved || suppressInlineGuide) {
       setHoveredPart(null);
     }
-  }, [collapsed, dragState?.moved]);
+  }, [collapsed, dragState?.moved, suppressInlineGuide]);
+
+  useEffect(() => {
+    if (lastPlacement) {
+      setHoveredPart(null);
+    }
+  }, [lastPlacement]);
 
   function showPartTooltip(el: HTMLElement, part: PartId) {
-    if (dragRef.current?.moved) return;
+    if (dragRef.current?.moved || suppressInlineGuide) return;
     const rect = el.getBoundingClientRect();
     setHoveredPart({
       part,
@@ -199,7 +208,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   const readyForCode = info.hasDrive && info.hasFrontLaser;
   const visibleSlots = slotPoints.filter((sp) => sp.visible);
   const activeTooltip =
-    !collapsed && !dragState?.moved && hoveredPart
+    !suppressInlineGuide && !collapsed && !dragState?.moved && hoveredPart
       ? {
           ...hoveredPart,
           plan: computePartBuildPlan(hoveredPart.part, chassis, level)
@@ -222,6 +231,9 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   function handlePartPointerDown(e: React.PointerEvent, part: PartId) {
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (e.pointerType !== 'mouse') {
+      setHoveredPart(null);
+    }
     const nextDrag = {
       part,
       x: e.clientX,
@@ -342,8 +354,9 @@ export const BuildDock: React.FC<BuildDockProps> = ({
               className={`pointer-events-auto absolute flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-150 sm:h-11 sm:w-11 ${ringStyle}`}
             >
               {isGuideTargetSlot && guide.nextStep && !sp.part && (
-                <span className="pointer-events-none absolute -top-7 whitespace-nowrap rounded-lg border border-amber-300 bg-slate-950/95 px-2 py-0.5 text-[10px] font-black text-amber-200 shadow-lg">
-                  Attach Here
+                <span className="pointer-events-none absolute -top-9 flex items-center gap-0.5 rounded-xl border-2 border-amber-300 bg-slate-950/95 px-1.5 py-0.5 text-amber-200 shadow-lg">
+                  <PartIcon id={guide.nextStep.part} className="h-4 w-4" />
+                  <ArrowDown className="h-3.5 w-3.5 stroke-[3] text-amber-300" aria-hidden="true" />
                 </span>
               )}
               {sp.part ? (
@@ -617,13 +630,13 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                 onClick={onProceedToCode}
                 disabled={!readyForCode}
                 aria-label="Proceed to 3D Coding"
-                className={`flex h-8 min-w-[42px] shrink-0 items-center justify-center rounded-xl border px-2.5 shadow-md transition-transform active:scale-95 sm:min-w-[54px] sm:px-3 ${
+                className={`flex h-10 min-w-[52px] shrink-0 items-center justify-center rounded-xl border-2 px-3 shadow-md transition-all active:translate-y-0.5 sm:min-w-[60px] ${
                   readyForCode
-                    ? 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_3px_0_#047857]'
+                    ? 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_4px_0_#047857]'
                     : 'border-slate-700 bg-slate-800 text-slate-500 opacity-50'
                 }`}
               >
-                <ArrowRight className="h-4.5 w-4.5 stroke-[3]" />
+                <ArrowRight className="h-5 w-5 stroke-[3]" />
               </button>
             </div>
           </div>
@@ -700,30 +713,39 @@ export const BuildDock: React.FC<BuildDockProps> = ({
             </div>
           )}
 
-          {/* Ultra-Slim Single-Line Equipment Guide Strip */}
+          {/* Visual Icon-First Equipment Guide Strip (Zero Reading Required) */}
           {!collapsed && guideActive && !suppressInlineGuide && (
             <div
               data-testid="build-equipment-hint"
               data-next-part={guide.nextStep?.part || 'ready'}
-              className={`mt-1.5 flex items-center justify-between gap-2 rounded-xl border px-2.5 py-1 ${
+              className={`mt-1.5 flex items-center justify-between gap-2 rounded-xl border px-2.5 py-1.5 ${
                 guide.allRecommendedEquipped
                   ? 'border-emerald-400/55 bg-emerald-950/35'
                   : 'border-amber-400/45 bg-slate-950/85'
               }`}
             >
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                <Lightbulb
-                  className={`h-3.5 w-3.5 shrink-0 ${
-                    guide.allRecommendedEquipped ? 'text-emerald-300' : 'text-amber-300'
-                  }`}
-                  aria-hidden="true"
-                />
-                <span className="truncate text-[11px] font-extrabold text-white sm:text-xs">
-                  {guide.headline}
-                </span>
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                {guide.nextStep ? (
+                  <>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-amber-300/60 bg-amber-400/15">
+                      <PartIcon id={guide.nextStep.part} className="h-5 w-5" />
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                    <span className="truncate text-xs font-black text-white">
+                      {guide.nextStep.name}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300">
+                      <Check className="h-4 w-4 stroke-[3]" aria-hidden="true" />
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+                  </>
+                )}
               </div>
 
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1.5">
                 {guide.nextStep ? (
                   <button
                     type="button"
@@ -734,22 +756,26 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                       onPlacePart(step.part, step.targetSlot[0], step.targetSlot[1]);
                       onSelectPart(null);
                     }}
-                    className="flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-amber-200 bg-amber-400 px-2 text-[11px] font-black text-slate-950 shadow-sm transition-transform hover:bg-amber-300 active:scale-95"
+                    className="flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl border-2 border-amber-200 bg-gradient-to-b from-amber-300 to-amber-500 px-2.5 text-xs font-black text-slate-950 shadow-[0_3px_0_#b45309] transition-all active:translate-y-0.5"
                   >
-                    <PartIcon id={guide.nextStep.part} className="h-3.5 w-3.5" />
-                    <span>Attach</span>
+                    <Plus className="h-3.5 w-3.5 stroke-[3]" aria-hidden="true" />
+                    <PartIcon id={guide.nextStep.part} className="h-4 w-4" />
                   </button>
                 ) : (
-                  <span className="inline-flex h-6 items-center gap-1 rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-2 text-[10px] font-black text-emerald-200">
-                    <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />
-                    Ready
-                  </span>
+                  <button
+                    type="button"
+                    onClick={onProceedToCode}
+                    aria-label="Go to Coding"
+                    className="flex h-8 shrink-0 items-center gap-1 rounded-xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3 text-xs font-black text-slate-950 shadow-[0_3px_0_#047857] active:translate-y-0.5"
+                  >
+                    <ArrowRight className="h-4 w-4 stroke-[3]" aria-hidden="true" />
+                  </button>
                 )}
                 <button
                   type="button"
                   onClick={() => setShowGuide(false)}
                   aria-label="Hide Build Hint"
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -779,10 +805,16 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                   <div
                     key={pid}
                     className="relative shrink-0 pt-1"
-                    onMouseEnter={(e) => showPartTooltip(e.currentTarget, pid)}
-                    onMouseLeave={() =>
-                      setHoveredPart((prev) => (prev?.part === pid ? null : prev))
-                    }
+                    onPointerEnter={(e) => {
+                      if (e.pointerType === 'mouse') {
+                        showPartTooltip(e.currentTarget, pid);
+                      }
+                    }}
+                    onPointerLeave={(e) => {
+                      if (e.pointerType === 'mouse') {
+                        setHoveredPart((prev) => (prev?.part === pid ? null : prev));
+                      }
+                    }}
                   >
                     <button
                       type="button"
@@ -791,7 +823,11 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                       aria-describedby={
                         activeTooltip?.part === pid ? `part-tooltip-${pid}` : undefined
                       }
-                      onFocus={(e) => showPartTooltip(e.currentTarget, pid)}
+                      onFocus={(e) => {
+                        if (e.currentTarget.matches(':focus-visible')) {
+                          showPartTooltip(e.currentTarget, pid);
+                        }
+                      }}
                       onBlur={() =>
                         setHoveredPart((prev) => (prev?.part === pid ? null : prev))
                       }
@@ -807,8 +843,11 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                       }`}
                     >
                       {isGuideNext && !isSelected && (
-                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded border border-amber-200 bg-amber-400 px-1 py-px text-[8px] font-black leading-none text-slate-950 shadow">
-                          Next
+                        <span
+                          aria-hidden="true"
+                          className="absolute -top-2 left-1/2 flex h-4.5 w-4.5 -translate-x-1/2 items-center justify-center rounded-full border border-amber-100 bg-amber-400 text-slate-950 shadow"
+                        >
+                          <Sparkles className="h-2.5 w-2.5" />
                         </span>
                       )}
                       <PartIcon id={pid} className="h-6 w-6 sm:h-7 sm:w-7" />

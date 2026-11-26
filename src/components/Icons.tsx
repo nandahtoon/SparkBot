@@ -106,6 +106,17 @@ export const HazardIcon: React.FC<{ cond: SensorCondition; className?: string }>
       </svg>
     );
   }
+  if (cond === 'HAZARD') {
+    return (
+      <svg viewBox="0 0 32 32" fill="none" className={className} aria-hidden="true">
+        <rect x="4" y="6" width="5" height="20" rx="2" fill="#475569" stroke="#94a3b8" strokeWidth="1.5" />
+        <rect x="23" y="6" width="5" height="20" rx="2" fill="#475569" stroke="#94a3b8" strokeWidth="1.5" />
+        <line x1="9" y1="12" x2="23" y2="12" stroke="#fb7185" strokeWidth="2.8" strokeLinecap="round" />
+        <line x1="9" y1="20" x2="23" y2="20" stroke="#f59e0b" strokeWidth="2.8" strokeLinecap="round" />
+        <circle cx="16" cy="16" r="3" fill="#fde047" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 32 32" fill="none" className={className} aria-hidden="true">
       <polygon points="4,26 28,10 28,26" fill="#be185d" stroke="#f472b6" strokeWidth="2.2" strokeLinejoin="round" />
@@ -138,6 +149,23 @@ export const BlockIcon: React.FC<{
     return (
       <svg viewBox="0 0 40 40" fill="none" className={className} aria-hidden="true">
         <path d="M22 5L9 22h10l-2 13 14-18H21l1-12Z" fill="#f472b6" stroke="#fdf2f8" strokeWidth="1.8" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (type === 'WAIT') {
+    return (
+      <svg viewBox="0 0 40 40" fill="none" className={className} aria-hidden="true">
+        <circle cx="20" cy="20" r="13" stroke="#22d3ee" strokeWidth="3.5" fill="#0f172a" />
+        <path d="M20 12v8l5 3" stroke="#fde047" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (type === 'CALL_FUNC') {
+    return (
+      <svg viewBox="0 0 40 40" fill="none" className={className} aria-hidden="true">
+        <rect x="6" y="9" width="28" height="22" rx="6" fill="#312e81" stroke="#818cf8" strokeWidth="3" />
+        <path d="M14 25V15h6m-6 5h5" stroke="#c7d2fe" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M23 18l5 7m0-7-5 7" stroke="#38bdf8" strokeWidth="2.6" strokeLinecap="round" />
       </svg>
     );
   }

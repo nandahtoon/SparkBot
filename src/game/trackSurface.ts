@@ -44,7 +44,7 @@ const RAMP_DZ_MAX = RAMP_HALF_LEN * COS_RAMP + RAMP_HALF_THICK * SIN_RAMP + 0.06
 const RAMP_CLEARANCE_Y = 0.015;
 
 export function getTrackTileCenterZ(tileIndex: number): number {
-  return tileIndex === 0 ? 0 : TRACK_START_Z - tileIndex * TRACK_TILE_SPACING;
+  return TRACK_START_Z - tileIndex * TRACK_TILE_SPACING;
 }
 
 export function getGateTileIndex(track: ReadonlyArray<TrackTile> | null | undefined): number {
@@ -67,6 +67,8 @@ export function getCircuitBoardZ(track: ReadonlyArray<TrackTile> | null | undefi
 
 /**
  * Computes the world Z coordinate where the 3D robot should stand for a given track tile.
+ * Tile 0 places the robot directly on the glowing blue Start tile (`TRACK_START_Z`) so every
+ * MOVE is an exact 1-tile step (`TRACK_TILE_SPACING`) and every JUMP is an exact 2-tile leap.
  * On the final `gate` tile, stops cleanly in front of the closed gate doors & circuit board
  * so the robot never penetrates the end wall.
  */
@@ -74,7 +76,7 @@ export function getTrackBotStopZ(
   track: ReadonlyArray<TrackTile> | null | undefined,
   tileIndex: number
 ): number {
-  if (tileIndex <= 0) return 0;
+  if (tileIndex <= 0) return TRACK_START_Z;
   if (!track || track.length === 0) {
     return getTrackTileCenterZ(tileIndex);
   }

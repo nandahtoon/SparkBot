@@ -117,47 +117,46 @@ export const PlanetAdventureHud: React.FC<PlanetAdventureHudProps> = ({
 
         <div
           data-testid="planet-gate-status"
-          className={`flex h-8 items-center gap-1 rounded-xl border px-2 text-[11px] font-black tracking-wide shadow-lg backdrop-blur-sm sm:h-9 sm:px-2.5 sm:text-xs ${
+          aria-label={metrics.gateUnlocked ? 'Gate Open' : 'Gate Locked'}
+          className={`flex h-9 w-9 items-center justify-center rounded-xl border-2 shadow-lg ${
             metrics.gateUnlocked
-              ? 'border-emerald-400 bg-emerald-500/25 text-emerald-200'
-              : 'border-slate-600/90 bg-slate-900/90 text-slate-300'
+              ? 'border-emerald-300 bg-emerald-500/30 text-emerald-200'
+              : 'border-slate-600/90 bg-slate-900/90 text-amber-300'
           }`}
         >
           {metrics.gateUnlocked ? (
-            <DoorOpen className="h-3.5 w-3.5 text-emerald-300 sm:h-4 sm:w-4" />
+            <DoorOpen className="h-4.5 w-4.5 text-emerald-200" />
           ) : (
-            <Lock className="h-3.5 w-3.5 text-amber-300 sm:h-4 sm:w-4" />
+            <Lock className="h-4.5 w-4.5 text-amber-300" />
           )}
-          <span>{metrics.gateUnlocked ? 'Gate Open' : 'Locked'}</span>
         </div>
 
         <div
           data-testid="planet-waypoint-compass"
-          className="flex h-8 items-center gap-1 rounded-xl border border-teal-400/75 bg-slate-900/90 px-2 text-[11px] font-bold text-teal-200 shadow-lg backdrop-blur-sm tabular-nums sm:h-9 sm:px-2.5 sm:text-xs"
+          className="flex h-9 items-center gap-1.5 rounded-xl border-2 border-teal-400/75 bg-slate-900/95 px-2.5 text-xs font-black text-teal-200 shadow-lg tabular-nums"
         >
-          <Compass className="h-3.5 w-3.5 text-teal-300" />
-          <span className="max-w-[78px] truncate sm:max-w-none">{metrics.objectiveLabel}</span>
+          <Compass className="h-4 w-4 text-teal-300" />
           <span
-            className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-teal-500/25 text-teal-200"
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-teal-500/25 text-teal-200"
             style={{ transform: `rotate(${compassDeg}deg)` }}
             aria-hidden="true"
           >
-            <ArrowUp className="h-3 w-3 stroke-[3]" />
+            <ArrowUp className="h-3.5 w-3.5 stroke-[3]" />
           </span>
           <span className="text-teal-300">{metrics.objectiveDistance}m</span>
         </div>
 
         <div
           aria-label={`Scrap Bolts ${metrics.boltsCollected}`}
-          className="flex h-8 items-center gap-1 rounded-xl border border-amber-400/80 bg-slate-900/90 px-2 tabular-nums text-xs font-black text-amber-300 shadow-lg backdrop-blur-sm sm:h-9"
+          className="flex h-9 items-center gap-1 rounded-xl border-2 border-amber-400/80 bg-slate-900/95 px-2.5 tabular-nums text-xs font-black text-amber-300 shadow-lg"
         >
-          <Zap className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+          <Zap className="h-4 w-4 fill-amber-400 text-amber-400" />
           <span>{metrics.boltsCollected}</span>
         </div>
 
         <div
           aria-label={`Time ${formatSec(metrics.elapsedSeconds)}`}
-          className="hidden h-8 items-center rounded-xl border border-slate-600 bg-slate-900/90 px-2 tabular-nums text-[11px] font-bold text-slate-300 shadow-lg backdrop-blur-sm sm:flex sm:h-9"
+          className="hidden h-9 items-center rounded-xl border border-slate-600 bg-slate-900/95 px-2.5 tabular-nums text-xs font-black text-slate-300 shadow-lg sm:flex"
         >
           {formatSec(metrics.elapsedSeconds)}
         </div>
@@ -167,10 +166,9 @@ export const PlanetAdventureHud: React.FC<PlanetAdventureHudProps> = ({
           data-testid="planet-exit-btn"
           onClick={onExit}
           aria-label="Exit to Game Room"
-          className="pointer-events-auto flex h-8 items-center gap-1 rounded-xl border border-slate-600 bg-slate-900/90 px-2 text-[11px] font-bold text-slate-200 shadow-lg backdrop-blur-sm hover:border-rose-400 hover:text-white active:scale-95 sm:h-9 sm:px-2.5 sm:text-xs"
+          className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-xl border-2 border-slate-600 bg-slate-900/95 text-rose-300 shadow-lg hover:border-rose-400 active:scale-95"
         >
-          <LogOut className="h-3.5 w-3.5 text-rose-300" />
-          <span>Exit</span>
+          <LogOut className="h-4.5 w-4.5" />
         </button>
       </div>
 
@@ -207,64 +205,63 @@ export const PlanetAdventureHud: React.FC<PlanetAdventureHudProps> = ({
           })}
         </div>
 
-        {/* Touch & Action Controls */}
+        {/* Touch & Action Controls (>= 48px Commercial Tactile Targets) */}
         <div className="flex items-end justify-between gap-2">
           {/* Directional Pad (3D Planet Ground Steering) */}
-          <div className="pointer-events-auto grid shrink-0 grid-cols-3 gap-1">
+          <div className="pointer-events-auto grid shrink-0 grid-cols-3 gap-1.5">
             <div />
             <button
               type="button"
               {...bindDir('up')}
               aria-label="Move Forward"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-400/80 bg-slate-900/90 text-teal-200 shadow-lg backdrop-blur-sm active:scale-90 sm:h-11 sm:w-11"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-teal-400/85 bg-slate-900/95 text-teal-200 shadow-lg active:scale-90"
             >
-              <ArrowUp className="h-4 w-4 stroke-[2.75] sm:h-5 sm:w-5" />
+              <ArrowUp className="h-6 w-6 stroke-[2.75]" />
             </button>
             <div />
             <button
               type="button"
               {...bindDir('left')}
               aria-label="Move Left"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-400/80 bg-slate-900/90 text-teal-200 shadow-lg backdrop-blur-sm active:scale-90 sm:h-11 sm:w-11"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-teal-400/85 bg-slate-900/95 text-teal-200 shadow-lg active:scale-90"
             >
-              <ArrowLeft className="h-4 w-4 stroke-[2.75] sm:h-5 sm:w-5" />
+              <ArrowLeft className="h-6 w-6 stroke-[2.75]" />
             </button>
             <button
               type="button"
               {...bindDir('down')}
               aria-label="Move Backward"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-400/80 bg-slate-900/90 text-teal-200 shadow-lg backdrop-blur-sm active:scale-90 sm:h-11 sm:w-11"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-teal-400/85 bg-slate-900/95 text-teal-200 shadow-lg active:scale-90"
             >
-              <ArrowDown className="h-4 w-4 stroke-[2.75] sm:h-5 sm:w-5" />
+              <ArrowDown className="h-6 w-6 stroke-[2.75]" />
             </button>
             <button
               type="button"
               {...bindDir('right')}
               aria-label="Move Right"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-400/80 bg-slate-900/90 text-teal-200 shadow-lg backdrop-blur-sm active:scale-90 sm:h-11 sm:w-11"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-teal-400/85 bg-slate-900/95 text-teal-200 shadow-lg active:scale-90"
             >
-              <ArrowRight className="h-4 w-4 stroke-[2.75] sm:h-5 sm:w-5" />
+              <ArrowRight className="h-6 w-6 stroke-[2.75]" />
             </button>
           </div>
 
-          {/* Right-Side Equipment Ability & Jump Buttons */}
-          <div className="pointer-events-auto flex shrink-0 items-end gap-1.5 sm:gap-2">
+          {/* Right-Side Tactile 3D Equipment Ability & Jump Buttons */}
+          <div className="pointer-events-auto flex shrink-0 items-end gap-2">
             <button
               type="button"
               data-testid="planet-laser-btn"
               onClick={onLaser}
               disabled={!caps.hasLaser}
               aria-label={caps.hasLaser ? 'Fire Plasma Laser' : 'Laser Locked (Not Equipped)'}
-              className={`flex h-9 items-center gap-1 rounded-xl border px-2 text-[11px] font-black shadow-xl backdrop-blur-sm transition-transform active:scale-90 sm:h-11 sm:px-3 sm:text-xs ${
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl transition-all active:translate-y-0.5 ${
                 laserReady
-                  ? 'border-cyan-300 bg-cyan-500/90 text-slate-950'
+                  ? 'border-cyan-200 bg-gradient-to-b from-cyan-400 to-cyan-600 text-slate-950 shadow-[0_4px_0_#0e7490]'
                   : caps.hasLaser
                     ? 'border-cyan-500/60 bg-slate-900/90 text-cyan-300 opacity-85'
                     : 'cursor-not-allowed border-slate-700 bg-slate-900/75 text-slate-500'
               }`}
             >
-              <Crosshair className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span>Laser</span>
+              <Crosshair className="h-5 w-5 stroke-[2.75]" />
             </button>
 
             <button
@@ -273,16 +270,15 @@ export const PlanetAdventureHud: React.FC<PlanetAdventureHudProps> = ({
               onClick={onBoost}
               disabled={!caps.hasBooster}
               aria-label={caps.hasBooster ? 'Activate Turbo Booster' : 'Booster Locked (Not Equipped)'}
-              className={`flex h-9 items-center gap-1 rounded-xl border px-2 text-[11px] font-black shadow-xl backdrop-blur-sm transition-transform active:scale-90 sm:h-11 sm:px-3 sm:text-xs ${
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl transition-all active:translate-y-0.5 ${
                 boostReady
-                  ? 'border-pink-300 bg-pink-500/90 text-slate-950'
+                  ? 'border-pink-200 bg-gradient-to-b from-pink-400 to-fuchsia-600 text-slate-950 shadow-[0_4px_0_#86198f]'
                   : caps.hasBooster
                     ? 'border-pink-500/60 bg-slate-900/90 text-pink-300 opacity-85'
                     : 'cursor-not-allowed border-slate-700 bg-slate-900/75 text-slate-500'
               }`}
             >
-              <Flame className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span>Boost</span>
+              <Flame className="h-5 w-5 stroke-[2.75]" />
             </button>
 
             <button
@@ -290,12 +286,12 @@ export const PlanetAdventureHud: React.FC<PlanetAdventureHudProps> = ({
               data-testid="planet-jump-btn"
               onClick={onJump}
               aria-label={caps.hasThrusters ? 'Thruster Jump or Double Jump' : 'Jump'}
-              className="flex h-10 w-12 flex-col items-center justify-center rounded-xl border-2 border-amber-300 bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 shadow-[0_3px_0_#b45309] active:translate-y-0.5 sm:h-12 sm:w-16 sm:rounded-2xl"
+              className="flex h-14 w-16 flex-col items-center justify-center rounded-2xl border-2 border-amber-200 bg-gradient-to-b from-amber-300 to-amber-500 text-slate-950 shadow-[0_4px_0_#b45309] active:translate-y-0.5"
             >
-              <ArrowUp className="h-4 w-4 stroke-[3] sm:h-5 sm:w-5" />
-              <span className="text-[9px] font-black uppercase tracking-tight">
-                {caps.hasThrusters ? 'Jet x2' : 'Hop'}
-              </span>
+              <ArrowUp className="h-6 w-6 stroke-[3]" />
+              {caps.hasThrusters && (
+                <span className="text-[10px] font-black leading-none">×2</span>
+              )}
             </button>
           </div>
         </div>

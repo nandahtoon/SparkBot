@@ -46,32 +46,38 @@ import {
   type LogicGateKind
 } from './educationalMiniGames';
 
-test('3-chapter story campaign covers Levels 1–12 with progressive age bands', () => {
-  assert.equal(STORY_CHAPTERS.length, 3);
+test('4-chapter story campaign covers Levels 1–16 with progressive Ages 6–12 bands', () => {
+  assert.equal(STORY_CHAPTERS.length, 4);
   assert.equal(STORY_CHAPTERS[0].ageBand, 'Ages 6–8');
   assert.equal(STORY_CHAPTERS[1].ageBand, 'Ages 7–9');
   assert.equal(STORY_CHAPTERS[2].ageBand, 'Ages 8–11');
+  assert.equal(STORY_CHAPTERS[3].ageBand, 'Ages 9–12');
 
   const covered = STORY_CHAPTERS.flatMap((c) => c.levelIds);
   assert.deepEqual(covered, [...LEVELS, ...BONUS_LEVELS].map((l) => l.id));
   assert.equal(getStoryChapterForLevel(1).id, 1);
   assert.equal(getStoryChapterForLevel(5).id, 2);
   assert.equal(getStoryChapterForLevel(11).id, 3);
+  assert.equal(getStoryChapterForLevel(13).id, 4);
+  assert.equal(getStoryChapterForLevel(16).id, 4);
 });
 
-test('STEM Fact Cards registry has 10 cards and lookup helpers work', () => {
-  assert.equal(STEM_FACT_CARDS.length, 10);
+test('STEM Fact Cards registry has 14 cards and lookup helpers work', () => {
+  assert.equal(STEM_FACT_CARDS.length, 14);
   const lvl1Facts = getUnlockedFactCardsForLevel(1);
   assert.ok(lvl1Facts.some((f) => f.id === 'wheels_friction'));
   assert.ok(lvl1Facts.some((f) => f.id === 'optics_reflection'));
   assert.equal(getFactCardById('debugging_mindset')?.triggerMiniGame, 'bug_detective');
   assert.equal(getFactCardById('digital_logic_gates')?.triggerMiniGame, 'logic_gate_lab');
+  assert.ok(getUnlockedFactCardsForLevel(13).some((f) => f.id === 'branching_if_else'));
+  assert.ok(getUnlockedFactCardsForLevel(14).some((f) => f.id === 'functions_abstraction'));
+  assert.ok(getUnlockedFactCardsForLevel(16).some((f) => f.id === 'boss_systems_engineering'));
 });
 
-test('8-Pillar Academy Mastery computes Exploring, Practicing, Mastered across all 8 pillars', () => {
-  assert.equal(ACADEMY_PILLARS.length, 8);
+test('11-Pillar Academy Mastery computes Exploring, Practicing, Mastered across all 11 pillars', () => {
+  assert.equal(ACADEMY_PILLARS.length, 11);
   const empty = computeAcademySkillBadges({});
-  assert.equal(empty.length, 8);
+  assert.equal(empty.length, 11);
   assert.ok(empty.every((b) => b.tier === 0 && b.stageLabel === 'Not Started'));
 
   const progressed = computeAcademySkillBadges({
@@ -82,7 +88,10 @@ test('8-Pillar Academy Mastery computes Exploring, Practicing, Mastered across a
     sensorsUsed: 6,
     circuitsSolved: 8,
     bugsDebugged: 4,
-    logicGatesSolved: 3
+    logicGatesSolved: 3,
+    elseBranchesUsed: 3,
+    functionsUsed: 1,
+    predictionsCorrect: 6
   });
   const byId = Object.fromEntries(progressed.map((b) => [b.id, b]));
   assert.equal(byId.chassis.tier, 3);
@@ -93,6 +102,9 @@ test('8-Pillar Academy Mastery computes Exploring, Practicing, Mastered across a
   assert.equal(byId.mud.stageLabel, 'Exploring');
   assert.equal(byId.debugging.tier, 2);
   assert.equal(byId.logic.tier, 2);
+  assert.equal(byId.branching.tier, 2);
+  assert.equal(byId.functions.tier, 1);
+  assert.equal(byId.prediction.tier, 3);
 });
 
 test('Bug Detective: all 6 starter programs fail and expected kid repairs pass simulation', () => {
@@ -331,7 +343,7 @@ test('Learning telemetry & Parent Progress Report build and serialize offline JS
   const jsonStr = serializeParentProgressJson(report);
   const parsed = JSON.parse(jsonStr);
   assert.equal(parsed.profileName, 'Nova');
-  assert.equal(parsed.pillars.length, 8);
+  assert.equal(parsed.pillars.length, 11);
 });
 
 test('Milestone unlock detector celebrates strictly when a new STEM Fact Card or Badge tier unlocks', () => {

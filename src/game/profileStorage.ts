@@ -22,6 +22,10 @@ import {
   normalizeLearningTelemetry,
   normalizeStreakShields
 } from './educationStrategy';
+import {
+  normalizePlayerLoadout,
+  normalizeQuestCounters
+} from './shopAndQuests';
 
 export const DEFAULT_PROFILE_NAME = 'Cadet Engineer';
 export const MAX_PROFILE_NAME_LENGTH = 24;
@@ -120,6 +124,17 @@ export function normalizeSaveProfileData(parsed: Partial<SaveProfile> | null | u
     adaptiveHintsEnabled:
       parsed.adaptiveHintsEnabled === undefined ? true : Boolean(parsed.adaptiveHintsEnabled),
     learningTelemetry: normalizeLearningTelemetry(parsed.learningTelemetry),
+    loadout: normalizePlayerLoadout(parsed.loadout),
+    debugCompleted:
+      parsed.debugCompleted && typeof parsed.debugCompleted === 'object'
+        ? Object.fromEntries(
+            Object.entries(parsed.debugCompleted).filter(([, v]) => Boolean(v))
+          )
+        : {},
+    questCounters: normalizeQuestCounters(parsed.questCounters),
+    claimedQuestIds: Array.isArray(parsed.claimedQuestIds)
+      ? Array.from(new Set(parsed.claimedQuestIds.filter((x): x is string => typeof x === 'string')))
+      : [],
     sandbox: parsed.sandbox ? { ...base.sandbox, ...parsed.sandbox } : base.sandbox
   };
 }

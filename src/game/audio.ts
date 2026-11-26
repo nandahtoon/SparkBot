@@ -758,6 +758,32 @@ class SoundEngine {
     this.speakWallE(phrase, pitchScale, variant);
   }
 
+  public droneChirp(variant = 0) {
+    // High-pitched playful Helper Drone chirp (distinct from SparkBot's warmer voice!)
+    this.speakWallE(variant % 2 === 0 ? 'giggle' : 'excited', 1.48, variant);
+  }
+
+  public shopBuy() {
+    this.filteredTone('sfx', 587.33, 740, 0.08, 'triangle', 0.14, 3400, 0);
+    this.filteredTone('sfx', 783.99, 987.77, 0.09, 'triangle', 0.15, 3600, 0.075);
+    this.filteredTone('sfx', 1174.66, 1318.5, 0.16, 'sine', 0.15, 4200, 0.15);
+    this.speakWallE('celebrate', 1.18, 1);
+  }
+
+  public questClaim() {
+    this.filteredTone('sfx', 523.25, 659.25, 0.08, 'sine', 0.14, 3400, 0);
+    this.filteredTone('sfx', 659.25, 783.99, 0.09, 'sine', 0.14, 3600, 0.07);
+    this.filteredTone('sfx', 1046.5, 1318.5, 0.18, 'triangle', 0.16, 4200, 0.14);
+    this.speakWallE('proud', 1.12, 0);
+  }
+
+  public bugSquashed() {
+    this.filteredTone('sfx', 440, 587.33, 0.07, 'triangle', 0.14, 3200, 0);
+    this.filteredTone('sfx', 659.25, 880, 0.08, 'triangle', 0.15, 3600, 0.07);
+    this.filteredTone('sfx', 1174.66, 1567.98, 0.22, 'sine', 0.16, 4400, 0.15);
+    this.speakWallE('celebrate', 1.24, 2);
+  }
+
   public setGlide(active: boolean) {
     const gainScale = this.getChannelOutputGain('sfx');
     if (gainScale <= 0.001 || !active) {
