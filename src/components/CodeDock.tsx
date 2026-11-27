@@ -95,6 +95,7 @@ function getTierBadgeStyle(optimality: LogicPathOptimality): string {
 }
 
 interface CodeDockProps {
+  junior?: boolean;
   program: CodeBlock[];
   functionBody?: CodeBlock[];
   parBlocks: number;
@@ -255,6 +256,7 @@ const TILE_BADGE_STYLE: Record<TileType, string> = {
 };
 
 export const CodeDock: React.FC<CodeDockProps> = ({
+  junior = false,
   program,
   functionBody = [],
   parBlocks,
@@ -1380,7 +1382,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           {/* Row 2: Command Palette (left) + Primary Step/Run Controls (right) — zero dead space on mobile */}
           <div className="flex items-center justify-between gap-1.5 sm:gap-2">
             <div className="no-scrollbar touch-pan-x flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-0.5 pr-1 sm:gap-1.5">
-              {(['MOVE', 'JUMP', 'BOOST'] as const).map((cmd) => {
+              {(junior ? (['MOVE'] as const) : (['MOVE', 'JUMP', 'BOOST'] as const)).map((cmd) => {
                 const isHint =
                   ghostHelp &&
                   tutorialStep?.targetType === 'cmd' &&
@@ -1394,13 +1396,14 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     onPointerDown={(e) => handlePaletteDown(e, cmd)}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
-                    className={`flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-xl border bg-slate-800 transition-transform active:scale-95 sm:h-10.5 sm:w-10.5 ${
+                    className={`flex shrink-0 items-center justify-center rounded-xl border bg-slate-800 transition-transform active:scale-95 ${junior ? 'min-h-12 min-w-16 gap-1 px-2' : 'h-9.5 w-9.5 sm:h-10.5 sm:w-10.5'} ${
                       isHint
                         ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_14px_rgba(251,191,36,0.5)]'
                         : 'border-slate-600 hover:border-sky-400'
                     }`}
                   >
                     <BlockIcon type={cmd} className="h-5.5 w-5.5 sm:h-6 sm:w-6" />
+                    {junior && <span className="text-xs font-bold text-sky-100">Move</span>}
                   </button>
                 );
               })}
@@ -1521,7 +1524,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               {!simulating ? (
                 <>
-                  {onStepProgram && (
+                  {onStepProgram && !junior && (
                     <button
                       id="stepCodeBtn"
                       type="button"
@@ -1539,9 +1542,10 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                     type="button"
                     onClick={onRunProgram}
                     aria-label="Run Robot Program"
-                    className="flex h-9.5 min-w-[48px] items-center justify-center rounded-xl border border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3 text-slate-950 shadow-[0_2px_0_#047857] transition-transform active:translate-y-0.5 sm:h-10 sm:min-w-[56px] sm:px-4"
+                    className={`flex items-center justify-center gap-1 rounded-xl border border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 px-3 text-slate-950 shadow-[0_2px_0_#047857] transition-transform active:translate-y-0.5 ${junior ? "min-h-12 min-w-20" : "h-9.5 min-w-[48px] sm:h-10 sm:min-w-[56px] sm:px-4"}`}
                   >
                     <Play className="h-4.5 w-4.5 fill-slate-950 sm:h-5 sm:w-5" />
+                    {junior && <span className="font-black">Run</span>}
                   </button>
                 </>
               ) : (

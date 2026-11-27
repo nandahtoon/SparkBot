@@ -13,9 +13,9 @@ test('Junior guided entry is a separate accessible action and keeps normal story
   assert.match(title, /aria-label="Daily Challenge"/);
   assert.match(title, /onStartMission\(\)/);
   assert.match(title, /onStartDaily\(\)/);
-  assert.match(app, /onStartJunior=\{handleReplayTutorial\}/);
-  const replay = app.slice(app.indexOf('const handleReplayTutorial ='), app.indexOf('const launchSimulation ='));
-  assert.match(replay, /beginLevel\(LEVELS\[0\], false\)/);
+  assert.match(app, /onStartJunior=\{handleStartJunior\}/);
+  const replay = app.slice(app.indexOf('const handleStartJunior ='), app.indexOf('const launchSimulation ='));
+  assert.match(replay, /beginLevel\(LEVELS\[0\], false, true\)/);
   assert.match(replay, /setTutorialForceActive\(true\)/);
   assert.doesNotMatch(replay, /setSave\(|localStorage\.clear/);
 });

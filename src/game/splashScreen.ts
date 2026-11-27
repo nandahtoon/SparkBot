@@ -12,7 +12,7 @@ export function clampSplashProgress(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-export function updateSplashProgress(percent: number, statusLabel?: string): void {
+export function updateSplashProgress(percent: number): void {
   if (typeof document === 'undefined' || dismissed) return;
   const clamped = clampSplashProgress(percent);
   highestProgress = Math.max(highestProgress, clamped);
@@ -27,12 +27,6 @@ export function updateSplashProgress(percent: number, statusLabel?: string): voi
     splash.setAttribute('aria-valuenow', String(highestProgress));
   }
 
-  if (statusLabel) {
-    const statusEl = document.getElementById('app-splash-status');
-    if (statusEl) {
-      statusEl.textContent = statusLabel;
-    }
-  }
 }
 
 export function dismissSplashScreen(options?: { minVisibleMs?: number }): void {
@@ -48,10 +42,6 @@ export function dismissSplashScreen(options?: { minVisibleMs?: number }): void {
   const bar = document.getElementById('app-splash-bar-fill');
   if (bar) {
     bar.style.transform = 'scaleX(1)';
-  }
-  const statusEl = document.getElementById('app-splash-status');
-  if (statusEl) {
-    statusEl.textContent = 'Ready!';
   }
   splash.setAttribute('aria-valuenow', '100');
 

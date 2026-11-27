@@ -9,6 +9,8 @@ import { SPEECH, useReadAloud } from '../game/readAloud';
 import { BlockIcon, PartIcon } from './Icons';
 
 interface GuidedTutorialOverlayProps {
+  junior?: boolean;
+  muted?: boolean;
   step: MissionTutorialStepDef | null;
   onAcknowledgeStep: (stepId: MissionTutorialStepDef['id']) => void;
   onSkip: () => void;
@@ -47,6 +49,8 @@ function expandRect(rect: RectBox, pad: number): RectBox {
 }
 
 export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
+  junior = false,
+  muted = false,
   step,
   onAcknowledgeStep,
   onSkip
@@ -137,6 +141,14 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [step, onSkip]);
+
+  const spokenHint = step?.actionHint;
+  const spokenStepId = step?.id;
+  useEffect(() => {
+    if (!junior || muted || !spokenHint || !spokenStepId) return;
+    SPEECH.speak(spokenHint, `junior_${spokenStepId}`);
+    return () => SPEECH.stop();
+  }, [junior, muted, spokenHint, spokenStepId]);
 
   if (!step) return null;
 
@@ -434,7 +446,7 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
                   SPEECH.toggleSpeak(`${step.title}. ${step.body}`, `tut_${step.id}`)
                 }
                 aria-label="Listen to Step"
-                className={`flex h-8 w-8 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
+                className={`flex min-h-11 min-w-11 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
                   speech.speaking && speech.activeId === `tut_${step.id}`
                     ? 'border-rose-400 bg-rose-500/20 text-rose-200'
                     : 'border-slate-700 bg-slate-800 text-sky-300 hover:border-sky-400'
@@ -457,7 +469,7 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
                   onAcknowledgeStep(step.id);
                 }}
                 aria-label={step.manualNextLabel || 'Next'}
-                className={`flex h-8 shrink-0 items-center justify-center rounded-xl border px-2.5 text-xs font-black text-slate-950 shadow-sm transition-all active:translate-y-0.5 ${
+                className={`flex min-h-11 shrink-0 items-center justify-center rounded-xl border px-2.5 text-xs font-black text-slate-950 shadow-sm transition-all active:translate-y-0.5 ${
                   isBuild
                     ? 'border-amber-200 bg-gradient-to-b from-amber-300 to-amber-500 shadow-[0_2px_0_#b45309]'
                     : 'border-sky-200 bg-gradient-to-b from-sky-300 to-sky-500 shadow-[0_2px_0_#0369a1]'
@@ -479,7 +491,7 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
                 onSkip();
               }}
               aria-label="Skip Guided Tutorial"
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-slate-500 hover:text-white active:scale-95"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-slate-500 hover:text-white active:scale-95"
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />
             </button>

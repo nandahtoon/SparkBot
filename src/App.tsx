@@ -247,6 +247,7 @@ export default function App() {
   const [roster, setRoster] = useState<ProfileRosterState>(() => initialSessionRef.current!.roster);
 
   const [mode, setMode] = useState<WorldMode>('TITLE');
+  const [juniorSession, setJuniorSession] = useState(false);
   const [paused, setPaused] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showTrophies, setShowTrophies] = useState(false);
@@ -371,7 +372,8 @@ export default function App() {
     [save.graphicsQuality, save.lowGraphics]
   );
   const lowGraphics = graphicsQuality === 'eco';
-  const challengeTimerEnabled = Boolean(save.challengeTimerEnabled);
+  const challengeTimerEnabled = !juniorSession && Boolean(save.challengeTimerEnabled);
+  useEffect(() => { if (mode === 'TITLE') setJuniorSession(false); }, [mode]);
   const [circuitSolvedFreeze, setCircuitSolvedFreeze] = useState(false);
   const [lastVictorySpeedRun, setLastVictorySpeedRun] =
     useState<VictorySpeedRunSummary | null>(null);
@@ -567,7 +569,8 @@ export default function App() {
   }, [mode, paused]);
 
   const beginLevel = useCallback(
-    (lvl: LevelDef, preserveChassis = false) => {
+    (lvl: LevelDef, preserveChassis = false, junior = false) => {
+      setJuniorSession(junior);
       const hasStarterChassis = Boolean(lvl.starterChassis);
       const startInCode = Boolean(lvl.isDebug && hasStarterChassis);
       const nextChassis = hasStarterChassis
@@ -680,6 +683,7 @@ export default function App() {
     program,
     functionBody,
     save,
+    juniorSession,
     livePathPreview,
     showPathPreview
   });
@@ -691,6 +695,7 @@ export default function App() {
     program,
     functionBody,
     save,
+    juniorSession,
     livePathPreview,
     showPathPreview
   };
@@ -764,7 +769,7 @@ export default function App() {
       );
       const isBonusStar = evaluateBonusStar(cur.currentLevel, starRes);
 
-      const timerEnabled = Boolean(cur.save.challengeTimerEnabled);
+      const timerEnabled = !cur.juniorSession && Boolean(cur.save.challengeTimerEnabled);
       const speedRunEval = evaluateSpeedRunBonus(
         levelElapsedRef.current,
         cur.currentLevel,
@@ -1095,12 +1100,12 @@ export default function App() {
     const el = mountRef.current;
     if (!el) return;
     let disposed = false;
-    updateSplashProgress(68, 'Building 3D workshop...');
+    updateSplashProgress(68);
 
     import('./three/worldScene')
       .then(({ UnifiedWorldController }) => {
         if (disposed || !mountRef.current) return;
-        updateSplashProgress(88, 'Waking SparkBot...');
+        updateSplashProgress(88);
         const ctrl = new UnifiedWorldController(mountRef.current, {
           onBotTap: (zone: RobotTouchZone) => {
             triggerRobotSpeech(pickTouchResponse(zone, touchCounterRef.current++));
@@ -1402,6 +1407,14 @@ export default function App() {
     setTutorialForceActive(true);
   }, [beginLevel]);
 
+  const handleStartJunior = useCallback(() => {
+    SFX.click();
+    beginLevel(LEVELS[0], false, true);
+    setTutorialDismissed(false);
+    setTutorialAckSteps(new Set());
+    setTutorialForceActive(true);
+  }, [beginLevel]);
+
   const launchSimulation = useCallback(
     (sim: SimResult, stepMode: boolean) => {
       SFX.unlock();
@@ -1692,7 +1705,7 @@ export default function App() {
 
   const handleToggleChallengeTimer = () => {
     SFX.uiTick();
-    const nextEnabled = !challengeTimerEnabled;
+    const nextEnabled = !Boolean(save.challengeTimerEnabled);
     if (nextEnabled && mode !== 'VICTORY') {
       resetTimer();
     }
@@ -2448,7 +2461,7 @@ export default function App() {
           trophyTiers={trophyTiers}
           claimableQuestsCount={claimableQuestsCount}
           muted={save.muted}
-          onStartJunior={handleReplayTutorial}
+          onStartJunior={handleStartJunior}
           onStartMission={() => {
             SFX.click();
             const nextStoryLevelId = Math.min(LEVELS.length, Math.max(1, save.unlockedLevel || 1));
@@ -2557,7 +2570,7 @@ export default function App() {
             } else if (mode === 'PLANET_ADVENTURE_3D') {
               handlePlayPlanetAdventure();
             } else {
-              beginLevel(currentLevel);
+              beginLevel(currentLevel, false, juniorSession);
             }
           }}
           onToggleMute={handleToggleMute}
@@ -2649,6 +2662,7 @@ export default function App() {
       {/* Stage 2: 3D Track Visual Coding */}
       {(mode === 'CODE_3D' || mode === 'SIMULATING') && !pendingPredictQuiz && (
         <CodeDock
+          junior={juniorSession}
           program={program}
           functionBody={functionBody}
           parBlocks={currentLevel.parBlocks}
@@ -2829,6 +2843,8 @@ export default function App() {
 
       {/* First Mission Interactive Guided Spotlight Tutorial (Build & Code Phases) */}
       <GuidedTutorialOverlay
+        junior={juniorSession}
+        muted={save.muted}
         step={activeMissionTutorialStep}
         onAcknowledgeStep={handleAcknowledgeTutorialStep}
         onSkip={handleSkipTutorial}
@@ -2862,7 +2878,7 @@ export default function App() {
         onDeleteSlot={handleDeleteRosterSlot}
         onOpenPaintBooth={() => {
           if (mode === 'TITLE') {
-            beginLevel(currentLevel);
+            beginLevel(currentLevel, false, juniorSession);
             window.setTimeout(() => handleEnterPaintBooth(), 30);
           } else {
             handleEnterPaintBooth();
@@ -3066,7 +3082,7 @@ export default function App() {
         }}
         onReplay={() => {
           SFX.click();
-          beginLevel(currentLevel, true);
+          beginLevel(currentLevel, true, juniorSession);
         }}
         onOpenMap={() => {
           SFX.click();
@@ -3132,7 +3148,7 @@ export default function App() {
         }}
         onRestart={() => {
           SFX.click();
-          beginLevel(currentLevel);
+          beginLevel(currentLevel, false, juniorSession);
         }}
         onOpenSettings={() => {
           SFX.click();

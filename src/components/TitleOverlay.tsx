@@ -161,7 +161,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             type="button"
             onClick={onOpenProfile}
             aria-label={`Open Save Profile (${profileName} — ${charDef.name})`}
-            className="flex h-10 min-w-0 items-center gap-2 rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 px-2 text-left shadow-md transition-transform hover:border-sky-400 active:scale-95 sm:h-11 sm:px-2.5"
+            className="flex h-11 min-w-0 items-center gap-2 rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 px-2 text-left shadow-md transition-transform hover:border-sky-400 active:scale-95 sm:h-11 sm:px-2.5"
           >
             <div
               className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-slate-800 sm:h-8 sm:w-8"
@@ -201,7 +201,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               type="button"
               onClick={onToggleMute}
               aria-label={muted ? 'Unmute Sound' : 'Mute Sound'}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform active:scale-95 hover:border-sky-400 sm:h-11 sm:w-11"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform active:scale-95 hover:border-sky-400 sm:h-11 sm:w-11"
             >
               {muted ? (
                 <VolumeX className="h-4.5 w-4.5 text-rose-400" />
@@ -217,7 +217,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             type="button"
             onClick={onOpenSettings}
             aria-label="Audio, Speed, and App Settings"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform active:scale-95 hover:border-sky-400 sm:h-11 sm:w-11"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-600/80 bg-slate-900/95 text-slate-100 shadow-md transition-transform active:scale-95 hover:border-sky-400 sm:h-11 sm:w-11"
           >
             <Settings className="h-4.5 w-4.5 text-sky-300" />
           </button>
@@ -226,7 +226,11 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         </div>
 
         {/* Right Controls: Bolt Shop, Skill Quests, Trophies & Level Map */}
-        <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <details className="pointer-events-auto relative shrink-0">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-xl border border-slate-600 bg-slate-900/95 px-3 text-sm font-bold text-sky-100 shadow-md focus-visible:outline-2 focus-visible:outline-sky-300" aria-label="More activities">
+            <LayoutGrid className="h-5 w-5" aria-hidden="true" /> More
+          </summary>
+          <div className="absolute right-0 top-full z-30 mt-2 grid w-48 grid-cols-2 gap-2 rounded-2xl border border-slate-600 bg-slate-950/95 p-3 shadow-2xl" onClick={e => { if ((e.target as HTMLElement).closest('button')) e.currentTarget.parentElement?.removeAttribute('open'); }}>
           {onOpenShop && (
             <button
               id="titleBoltShopBtn"
@@ -250,7 +254,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                   ? `Mastery Skill Quests (${claimableQuestsCount} ready to claim)`
                   : 'Mastery Skill Quests'
               }
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-400/70 bg-slate-900/95 text-emerald-300 shadow-md transition-transform active:scale-95 hover:border-emerald-300 sm:w-auto sm:gap-1 sm:px-3"
+              className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-400/70 bg-slate-900/95 text-emerald-300 shadow-md transition-transform active:scale-95 hover:border-emerald-300 sm:w-auto sm:gap-1 sm:px-3"
             >
               <Target className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
               <span className="hidden text-xs font-black text-emerald-200 sm:inline">Quests</span>
@@ -280,11 +284,12 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             type="button"
             onClick={onOpenLevelMap}
             aria-label="Level Map, Bug Buster, Sandbox, and Class Code"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/95 text-sky-300 shadow-md transition-transform active:scale-95 hover:border-sky-400"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/95 text-sky-300 shadow-md transition-transform active:scale-95 hover:border-sky-400"
           >
             <LayoutGrid className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
           </button>
-        </div>
+          </div>
+        </details>
       </div>
 
       {/* Subtle Brand Wordmark Lockup (flows cleanly from Splash into 3D Hero Workshop) */}
@@ -292,7 +297,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         data-testid="title-brand-lockup"
         className="pointer-events-none mb-auto mt-2 flex flex-col items-center text-center sm:mt-3"
       >
-        <h1 className="text-2xl font-black tracking-tight text-white drop-shadow-[0_4px_18px_rgba(2,6,23,0.85)] sm:text-3xl">
+        <h1 className="text-3xl font-black tracking-tight text-white drop-shadow-[0_4px_18px_rgba(2,6,23,0.85)] sm:text-4xl">
           <span className="text-amber-300">Spark</span>Bot
         </h1>
         <p className="mt-0.5 text-[11px] font-semibold tracking-[0.14em] text-sky-200/90 drop-shadow-[0_2px_10px_rgba(2,6,23,0.9)] sm:text-xs">
@@ -307,7 +312,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           aria-label="Mission Launch Console"
           data-daily-date={todayKey}
           data-streak={streak}
-          className={`pointer-events-auto flex w-full max-w-[432px] flex-col gap-2 rounded-2xl border bg-slate-950/84 p-2 shadow-[0_14px_32px_rgba(2,6,23,0.55)] backdrop-blur-md transition-colors sm:gap-2.5 sm:p-2.5 ${
+          className={`pointer-events-auto flex w-full max-w-[480px] flex-col gap-2 rounded-2xl border bg-slate-950/90 p-3 shadow-[0_14px_32px_rgba(2,6,23,0.55)] backdrop-blur-md transition-colors sm:gap-2.5 sm:p-2.5 ${
             isDailyMode ? 'border-amber-400/55' : 'border-emerald-400/40'
           }`}
         >
@@ -324,14 +329,14 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               role="tab"
               aria-selected={!isDailyMode}
               onClick={() => handleSelectMode('story')}
-              className={`flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-black transition-all active:scale-[0.98] sm:text-sm ${
+              className={`flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-black transition-all active:scale-[0.98] sm:text-sm ${
                 !isDailyMode
                   ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/60 shadow-sm'
                   : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
               }`}
             >
               <Rocket className={`h-4 w-4 ${!isDailyMode ? 'text-emerald-300' : 'text-slate-400'}`} />
-              <span className="tabular">{nextLevelId}</span>
+              <span>Story · {nextLevelId}</span>
             </button>
 
             <button
@@ -341,7 +346,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               role="tab"
               aria-selected={isDailyMode}
               onClick={() => handleSelectMode('daily')}
-              className={`flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-black transition-all active:scale-[0.98] sm:text-sm ${
+              className={`flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-black transition-all active:scale-[0.98] sm:text-sm ${
                 isDailyMode
                   ? 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/60 shadow-sm'
                   : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
@@ -355,6 +360,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 <Flame className="h-3.5 w-3.5 fill-orange-400 text-orange-400" />
                 {streak}
               </span>
+              <span>Daily</span>
               {dailyStars > 0 ? (
                 <Check className="h-4 w-4 stroke-[3] text-emerald-300" aria-label="Daily Complete" />
               ) : (
@@ -513,7 +519,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             >
               <Play className="h-6 w-6 fill-slate-950 text-slate-950" />
               <span className="tabular">
-                {isDailyMode ? (dailyStars > 0 ? 'DAILY' : 'PLAY') : `PLAY ${nextLevelId}`}
+                {isDailyMode ? (dailyStars > 0 ? 'DAILY' : 'PLAY') : `Play Mission ${nextLevelId}`}
               </span>
             </button>
 

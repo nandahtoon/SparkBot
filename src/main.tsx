@@ -5,7 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { updateSplashProgress } from './game/splashScreen';
 import './index.css';
 
-updateSplashProgress(48, 'Starting workshop...');
+updateSplashProgress(48);
 
 if (typeof window !== 'undefined') {
   registerSW({ immediate: true });
