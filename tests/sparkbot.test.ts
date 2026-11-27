@@ -961,7 +961,7 @@ test('TitleOverlay renders unified Mission Launch Console with daily mode, rewar
   }
   assert.match(titleSrc, /anim-reward-hop/);
   assert.match(titleSrc, /anim-dot-pulse/);
-  assert.match(topHudSrc, /anim-flame-flicker/);
+  assert.match(topHudSrc, /aria-label=\{isDaily \? 'Daily Challenge'/);
   assert.match(topHudSrc, /anim-stage-nudge/);
   assert.match(topHudSrc, /anim-reward-hop/);
 
