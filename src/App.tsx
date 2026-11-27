@@ -2448,6 +2448,7 @@ export default function App() {
           trophyTiers={trophyTiers}
           claimableQuestsCount={claimableQuestsCount}
           muted={save.muted}
+          onStartJunior={handleReplayTutorial}
           onStartMission={() => {
             SFX.click();
             const nextStoryLevelId = Math.min(LEVELS.length, Math.max(1, save.unlockedLevel || 1));

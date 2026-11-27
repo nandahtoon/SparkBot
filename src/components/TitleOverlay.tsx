@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Wand2,
   Calendar,
   Check,
   Crown,
@@ -60,6 +61,7 @@ interface TitleOverlayProps {
   trophyTiers: number;
   claimableQuestsCount?: number;
   muted: boolean;
+  onStartJunior?: () => void;
   onStartMission: () => void;
   onStartDaily: () => void;
   onOpenGameRoom?: () => void;
@@ -83,6 +85,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   trophyTiers,
   claimableQuestsCount = 0,
   muted,
+  onStartJunior,
   onStartMission,
   onStartDaily,
   onOpenGameRoom,
@@ -316,6 +319,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           >
             <button
               id="modeStoryTab"
+              aria-label="Story Missions"
               type="button"
               role="tab"
               aria-selected={!isDailyMode}
@@ -332,6 +336,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
 
             <button
               id="modeDailyTab"
+              aria-label="Daily Challenge"
               type="button"
               role="tab"
               aria-selected={isDailyMode}
@@ -475,6 +480,21 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 })}
               </div>
             </div>
+          )}
+
+          {/* Junior guided entry: reuses the existing Level 1 tutorial without resetting saves. */}
+          {onStartJunior && !isDailyMode && (
+            <button
+              id="juniorGuidedStartBtn"
+              type="button"
+              onClick={onStartJunior}
+              aria-label="Junior Engineer: guided first mission, ages 5 to 7"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/70 bg-cyan-950/80 px-3 py-2 text-sm font-extrabold text-cyan-100 transition-colors hover:bg-cyan-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-200"
+            >
+              <Wand2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span>Learn to Play</span>
+              <span className="text-xs font-semibold text-cyan-200">Ages 5–7</span>
+            </button>
           )}
 
           {/* Primary Action Row: Chunky 3D Play CTA + Distinct Mini-Games Button */}
