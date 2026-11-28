@@ -71,8 +71,8 @@ export const ARCADE_GAMES: ArcadeGameCardDef[] = [
   {
     id: 'space_shooter',
     title: 'Space Shooter',
-    subtitle: 'Pilot your star-bot, blast drones, and collect stars',
-    controlsHint: 'Move mouse/touch or A/D · Space turbo burst',
+    subtitle: 'Transform your companion bot, clear space debris, and collect stars',
+    controlsHint: 'Drag or A/D · Transform/T · Space turbo burst',
     accentHex: '#34d399',
     baseBolts: 40
   },
