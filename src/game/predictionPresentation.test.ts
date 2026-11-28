@@ -17,7 +17,7 @@ test('landing choices map to real track tiles and distinct visual shapes',()=>{
  assert.ok(speech.startsWith('Beep beep!'));
  assert.ok(speech.length<=420);
  assert.match(getPredictionResultSpeech(question,true),/Woo hoo!/);
- assert.ok(getPredictionResultSpeech(question,false).startsWith('Good try!'));
+ assert.ok(getPredictionResultSpeech(question,false).startsWith('Good try, explorer!'));
 });
 test('prediction UI preserves direct run, visual track and manual audio',()=>{
  const card=fs.readFileSync('src/components/PredictBeforeRunCard.tsx','utf8');
