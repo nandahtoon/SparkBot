@@ -39,10 +39,15 @@ test('delivery and repair finish at station; power requires solved optics',()=>{
   assert.equal(isMissionComplete(level,win,traceCircuit(base.circuit)),true);
  }
 });
-test('all legacy campaigns retain existing objective and debug bypass',()=>{
- for(const level of [...LEVELS,...BONUS_LEVELS].filter(l=>l.id<=20)){
+test('unchanged legacy campaigns retain existing objective; revised campaign missions have explicit goals',()=>{
+ for(const level of [...LEVELS,...BONUS_LEVELS].filter(l=>l.id<=20 && ![13,14,17,18].includes(l.id))){
   assert.equal(level.objective,undefined);
   assert.equal(getMissionObjective(level).kind,'power');assert.equal(requiresMissionCircuit(level),true);
+ }
+ for (const id of [13,14,17,18]) {
+  const level=[...LEVELS,...BONUS_LEVELS].find(l=>l.id===id)!;
+  assert.equal(requiresMissionCircuit(level),false);
+  assert.equal(getMissionObjective(level).kind,id===14||id===17?'collect':'delivery');
  }
  assert.equal(requiresMissionCircuit({...base,isDebug:true}),false);
 });
