@@ -306,7 +306,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         <p className="mt-0.5 text-[11px] font-semibold tracking-[0.14em] text-sky-200/90 drop-shadow-[0_2px_10px_rgba(2,6,23,0.9)] sm:text-xs">
           Play &amp; Learn
         </p>
-        <span className="mt-1 text-[10px] text-slate-300" data-testid="release-version">V0.3 · Development Preview</span>
+        <span className="mt-1 text-[10px] text-slate-300" data-testid="release-version">V0.3 RC1 · Family Preview</span>
       </div>
 
       {/* Compact Unified Bottom Launch Console: One Mode Switcher + One Unmistakable Play CTA */}
