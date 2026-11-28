@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { JourneyCard } from './JourneyCard';
-import { Clubhouse3D } from './Clubhouse3D';
 import { CharacterVoiceButton } from './CharacterVoiceButton';
 import type { JourneyPreview } from '../game/journey';
 import {
@@ -13,8 +12,6 @@ import {
   Gamepad2,
   Heart,
   Layers,
-  Box,
-  LayoutGrid,
   Lightbulb,
   Maximize2,
   Minimize2,
@@ -1547,9 +1544,6 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
   const [runKey, setRunKey] = useState(0);
   const [summary, setSummary] = useState<GameRoomRoundSummary | null>(null);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
-  const [clubhouseView, setClubhouseView] = useState<'cards' | 'room'>(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches ? 'room' : 'cards');
-  const [clubhouseUnavailable, setClubhouseUnavailable] = useState(false);
-  const handleClubhouseUnavailable = useCallback(() => { setClubhouseUnavailable(true); setClubhouseView('cards'); }, []);
 
   const charDef = useMemo(() => BOT_CHARACTERS[activeCharacter], [activeCharacter]);
   const planetCaps = useMemo(
@@ -1789,12 +1783,8 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                 <div aria-hidden="true" className="pointer-events-none absolute bottom-4 right-12 -z-10 h-8 w-8 rotate-45 rounded-lg bg-violet-400/30 motion-safe:animate-bounce"/>
                 <div className="flex items-center gap-3"><Gamepad2 className="h-10 w-10 text-cyan-300"/><div className="flex-1"><h3 className="text-lg font-black text-white">SparkBot Clubhouse</h3><p className="text-xs text-sky-200">Play a mini-game or keep exploring!</p></div><CharacterVoiceButton id="room_welcome" text="Hey explorer! Welcome to my clubhouse. Pick a game, or let's go on our next adventure!" muted={voiceMuted}/></div>
               </section>
-              <div role="group" aria-label="Game room view" className="grid grid-cols-2 gap-2 rounded-xl border border-slate-700 bg-slate-900 p-1" data-testid="clubhouse-view-picker">
-                <button type="button" aria-pressed={clubhouseView==='cards'} onClick={()=>setClubhouseView('cards')} className={'flex min-h-11 items-center justify-center gap-2 rounded-lg px-2 text-sm font-black '+(clubhouseView==='cards'?'bg-cyan-800 text-white':'text-slate-300')}><LayoutGrid className="h-5 w-5" aria-hidden="true"/> Games</button>
-                <button type="button" aria-pressed={clubhouseView==='room'} disabled={clubhouseUnavailable} onClick={()=>setClubhouseView('room')} className={'flex min-h-11 items-center justify-center gap-2 rounded-lg px-2 text-sm font-black disabled:opacity-50 '+(clubhouseView==='room'?'bg-cyan-800 text-white':'text-slate-300')}><Box className="h-5 w-5" aria-hidden="true"/> 3D Room</button>
-              </div>
-              {clubhouseUnavailable&&<p role="status" className="text-sm text-slate-300">3D Room unavailable. You can still play every available game here.</p>}
-              {clubhouseView==='room'&&!clubhouseUnavailable?<Clubhouse3D onSelectGame={handleSelectGame} activeCharacter={activeCharacter} planetAvailable={Boolean(onLaunchPlanetAdventure)} onUnavailable={handleClubhouseUnavailable}/>:<div className="flex flex-col gap-3" data-testid="clubhouse-card-view">
+              {nextJourney&&hasNextLevel&&<JourneyCard next={nextJourney} onStart={onNextLevel}/>}
+              <div className="flex flex-col gap-3" data-testid="clubhouse-card-view">
               {/* Action Arcade Cartridges First — Visual Scene Cards (Zero Reading Needed!) */}
               <section className="flex flex-col gap-3">
                 <div className="flex items-center gap-2 px-1">
@@ -1925,8 +1915,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                   ))}
                 </div>
               </section>
-              </div>}
-              {nextJourney&&hasNextLevel&&<JourneyCard next={nextJourney} onStart={onNextLevel}/>}
+              </div>
             </div>
           )}
 

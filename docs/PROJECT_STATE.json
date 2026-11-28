@@ -44,16 +44,32 @@
     "stage": "SB-08A2",
     "status": "AWAITING_FAMILY_ACCEPTANCE",
     "next": "SB-08A3",
-    "nextGate": "Review physical family rescue trial and outstanding RC1 gates before 3D implementation",
+    "nextGate": "Review simplified Arcade retest, physical family rescue trial and outstanding world/map/transition gates before 3D implementation",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
       "reconciliationSha": "374ba795f2927968dafdaa2cd9ec41245b704292",
-      "reconciliationCiRun": 46104060508
+      "reconciliationCiRun": 46104060508,
+      "clubhouseRetest": {
+        "sha": "5c72abb6e241fd17cbafe7a125ac9ae76e38516f",
+        "ciRun": 46105568442,
+        "source": "parent-reported",
+        "pass": [
+          "Games / 3D Room switching",
+          "Seven mini-games playable",
+          "Portrait / landscape",
+          "Enter / exit",
+          "Child independently selects and plays"
+        ],
+        "notConfirmed": [
+          "No duplicate game cards"
+        ],
+        "feedback": "3D Room tab က အပိုလိုပဲ"
+      }
     },
     "pending": [
       "Differentiated worlds",
-      "Clubhouse and mini-games",
+      "Single Arcade catalog follow-up retest (previous seven-game and navigation checks passed; duplicate cards not confirmed)",
       "Map and next mission",
       "Mission transition animation",
       "Rescue family playtest"
