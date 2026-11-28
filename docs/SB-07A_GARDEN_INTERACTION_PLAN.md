@@ -1,0 +1,10 @@
+# SB-07A — Garden of Life: interaction-first V0.4 plan
+Status: proposed; not shipped in V0.3. Parent reports all V0.3 acceptance gates PASS including increased variety; verbatim feedback "Chatr 1 လိုကစားသွားတယ်" is ambiguous. Preserve the familiar accessible Chapter 1 entry and reduce unnecessary complexity; test this design hypothesis in family play rather than treating it as a confirmed interpretation. 
+## Prototype before campaign expansion
+- Add a deterministic, explicit plant-care interaction (e.g. water a marked plant using a limited resource, verify that action occurs at the intended location and only once). Use a readable, non-color cue, clear success/failure, replay reset, and objective-specific hint. Prefer a genuinely new interaction over repainted WAIT or crystal collection.
+- Choose a minimal command or accessible interaction compatible with the existing coding UI and touch controls; audit simulator, preview, hints, solver and playback before implementation. Do not claim real botany simulation.
+- Keep prototype opt-in and outside campaign saves. Test resource limits, wrong location, repeat actions, success, and legacy mission parity before expanding.
+## Intended chapter
+25 Seed Delivery — deliver seeds to a specified planting station; 26 Garden Routes — route/resource planning with meaningful plant-care choices; 27 Pollinator Patterns — observe a deterministic pattern and choose an appropriate interaction; 28 Greenhouse Rescue — repair a routine and restore plant-care stations. These are proposed designs; revise based on prototype results. Distinct garden landmarks and interactions, no visible age labels, no new child data.
+## Release gates
+Preserve V0.3 stable source and deployment. All 24 existing campaign regression fixtures plus new positive/negative tests, measurable mobile performance, 20-minute physical stability, touch/portrait/landscape, offline, save compatibility, hint/feedback, parent-reported differentiation. Family acceptance before V0.4 stable. No commercial or native launch.

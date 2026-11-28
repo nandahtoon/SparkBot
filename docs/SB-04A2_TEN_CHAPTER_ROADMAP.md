@@ -23,6 +23,6 @@
 - New biome visual targets require independent mobile graphics, performance and accessibility QA. Chapter 5 reuses existing scene art and optics patterns intentionally; no claim of new world geometry.
 - Learning goal, optional reflection, and transfer activity; do not treat completion as mastery.
 - 44px touch targets, non-color cues, no compulsory timer, no added child data or network collection.
-- Chapter 5 first playable increment; 6–10 are proposed work packages, not implemented. Physical device QA and release integration pending.
+- Chapters 1–5 shipped in V0.2; Chapter 6 implemented in V0.3 RC1 and parent acceptance 9/9 reported PASS. V0.3 final CI and release verification required. Chapters 7–10 remain planned.
 
-Next: Chapter 5 quality acceptance, then Chapter 6 mechanics/visual prototype. SB-04B assistance-aware learning remains an independent gate before educational claims. Commercial release HOLD.
+Next: complete V0.3 stable integration, then SB-07A Garden of Life interaction prototype. SB-04B assistance-aware learning remains an independent gate before educational claims. Commercial release HOLD.
