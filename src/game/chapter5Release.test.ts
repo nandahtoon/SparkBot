@@ -11,7 +11,7 @@ for (const id of [17,18,19,20]) {
   chassis[1][2]='laser';
   if(id===18) chassis[1][0]='thrusters';
   if(id===19) chassis[0][1]='booster';
-  const sequence: BlockType[]=id===17?Array(8).fill('MOVE'):id===18?['MOVE','JUMP','MOVE','JUMP','MOVE','MOVE','MOVE']:id===19?['BOOST','BOOST','BOOST']:findShortestTrackPlan(level)!.sequence as BlockType[];
+  const sequence: BlockType[]=id===17?Array(12).fill('MOVE'):id===18?['MOVE','JUMP','MOVE','JUMP','MOVE','MOVE','MOVE']:id===19?['BOOST','BOOST','BOOST']:findShortestTrackPlan(level)!.sequence as BlockType[];
   const program: CodeBlock[]=sequence.map((type,i)=>({id:`ch5-${i}`,type}));
   const result=simulateProgram(level,chassis,program);
   assert.equal(result.status,'win',result.failReason ?? undefined);
