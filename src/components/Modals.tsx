@@ -463,14 +463,27 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
       className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/82 p-3 sm:p-4"
     >
       <div className="anim-pop touch-pan-y flex max-h-[92dvh] w-full max-w-2xl flex-col gap-3.5 overflow-y-auto rounded-3xl border-2 border-slate-600 bg-slate-900 p-4 shadow-2xl sm:gap-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 text-sky-300">
-            <LayoutGrid className="h-7 w-7 shrink-0" />
+        <div className="flex flex-col gap-2" data-testid="map-compact-header">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 text-base font-black text-white"><LayoutGrid className="h-5 w-5 shrink-0 text-sky-300" aria-hidden="true" /> Missions</h2>
+          <button
+            type="button"
+            onClick={() => {
+              SPEECH.stop();
+              onClose();
+            }}
+            aria-label="Close Map"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 text-sky-300">
             <button
               type="button"
               onClick={onStartDaily}
               aria-label="Daily Challenge"
-              className="flex h-11 items-center gap-1.5 rounded-2xl border-2 border-orange-400 bg-orange-500/20 px-3 text-orange-300"
+              className="flex h-11 items-center gap-1.5 rounded-xl border border-orange-400 bg-orange-500/20 px-2.5 text-orange-300"
             >
               <Flame className="h-5 w-5 fill-orange-400" />
               <span className="tabular font-black">{save.daily.streak || 0}</span>
@@ -478,7 +491,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
             <div
               data-testid="map-streak-shields"
               aria-label={`Streak Shields ${shields} of ${STREAK_SHIELD_MAX}`}
-              className="flex h-11 items-center gap-1.5 rounded-2xl border border-cyan-400/50 bg-cyan-500/15 px-3 text-xs font-black text-cyan-200 tabular-nums"
+              className="flex h-11 items-center gap-1.5 rounded-2xl border border-cyan-400/50 bg-cyan-500/15 px-2.5 text-xs font-black text-cyan-200 tabular-nums"
             >
               <Shield className="h-4 w-4 text-cyan-300" aria-hidden="true" />
               <span>{shields}/{STREAK_SHIELD_MAX}</span>
@@ -492,7 +505,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                   onClose();
                   onOpenSandbox();
                 }}
-                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-2xl border-2 border-amber-400/75 bg-amber-500/20 px-3 text-xs font-black text-amber-200 hover:bg-amber-500/30 active:scale-95"
+                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-amber-400/75 bg-amber-500/20 px-2.5 text-xs font-black text-amber-200 hover:bg-amber-500/30 active:scale-95"
               >
                 <Hammer className="h-4 w-4" aria-hidden="true" />
                 <span>Sandbox</span>
@@ -507,24 +520,14 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                   onClose();
                   onOpenClassCode();
                 }}
-                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-2xl border-2 border-cyan-400/75 bg-cyan-500/20 px-3 text-xs font-black text-cyan-200 hover:bg-cyan-500/30 active:scale-95"
+                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-cyan-400/75 bg-cyan-500/20 px-2.5 text-xs font-black text-cyan-200 hover:bg-cyan-500/30 active:scale-95"
               >
                 <KeyRound className="h-4 w-4" aria-hidden="true" />
                 <span>Class Code</span>
               </button>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              SPEECH.stop();
-              onClose();
-            }}
-            aria-label="Close Map"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400"
-          >
-            <X className="h-6 w-6" />
-          </button>
+
         </div>
 
         {/* Story Campaign vs Bug Buster Debug Challenges Switcher */}
@@ -638,10 +641,9 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                 aria-label={chapter.title}
                 className="flex flex-col gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/75 p-3"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-black text-white">{chapter.title}</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-sky-300">{chapter.ageBand}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 text-sm font-black leading-snug text-white">{chapter.title}</h3>
+                  <div className="flex shrink-0 items-center">
                     {speech.supported && (
                       <button
                         type="button"
@@ -657,7 +659,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                             ? `Stop reading ${chapter.title}`
                             : `Listen to ${chapter.title}`
                         }
-                        className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
+                        className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
                           isSpeakingChapter
                             ? 'border-rose-400 bg-rose-500/20 text-rose-100'
                             : 'border-slate-700 bg-slate-900 text-sky-200 hover:border-sky-400'

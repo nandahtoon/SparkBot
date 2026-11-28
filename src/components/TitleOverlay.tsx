@@ -306,7 +306,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         <p className="mt-0.5 text-[11px] font-semibold tracking-[0.14em] text-sky-200/90 drop-shadow-[0_2px_10px_rgba(2,6,23,0.9)] sm:text-xs">
           Play &amp; Learn
         </p>
-        <span className="mt-1 text-[10px] text-slate-300" data-testid="release-version">V0.2 RC1 · Family Preview</span>
+        <span className="mt-1 text-[10px] text-slate-300" data-testid="release-version">V0.2 RC2 · Family Preview</span>
       </div>
 
       {/* Compact Unified Bottom Launch Console: One Mode Switcher + One Unmistakable Play CTA */}
@@ -498,12 +498,12 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               id="juniorGuidedStartBtn"
               type="button"
               onClick={onStartJunior}
-              aria-label="Junior Engineer: guided first mission, ages 5 to 7"
+              aria-label="Learn to Play: guided first mission"
               className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/70 bg-cyan-950/80 px-3 py-2 text-sm font-extrabold text-cyan-100 transition-colors hover:bg-cyan-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-200"
             >
               <Wand2 className="h-5 w-5 shrink-0" aria-hidden="true" />
               <span>Learn to Play</span>
-              <span className="text-xs font-semibold text-cyan-200">Ages 5–7</span>
+              <span className="text-xs font-semibold text-cyan-200">Guided adventure</span>
             </button>
           )}
 
