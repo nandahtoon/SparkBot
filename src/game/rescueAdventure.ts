@@ -52,3 +52,14 @@ export function traceRescue(map:RescueMap,program:readonly RescueAction[]){
  }
  return trace;
 }
+
+// Goal cues are derived from the same rules for both direct and coded play.
+export type RescueGoalCue='seek'|'repair-here'|'return-home'|'complete';
+export function rescueGoalCue(map:RescueMap,state:RescueState):RescueGoalCue{
+ if(state.won)return 'complete';
+ if(state.repaired.length===rescueGoal(map))return 'return-home';
+ if(map.cells[state.row]?.[state.col]==='beacon'&&!state.repaired.includes(key(state.row,state.col)))return 'repair-here';
+ return 'seek';
+}
+// Pause/step resumes from the visible state; a completed trace can be replayed.
+export function rescueRunStartCursor(cursor:number,last:number){return cursor>=last?0:Math.max(0,cursor);}

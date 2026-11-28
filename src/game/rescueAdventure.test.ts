@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {RESCUE_MAPS,RESCUE_ACTIONS,RESCUE_MAX_COMMANDS,startRescue,stepRescue,traceRescue,rescueGoal,type RescueAction} from './rescueAdventure';
+import {RESCUE_MAPS,RESCUE_ACTIONS,RESCUE_MAX_COMMANDS,startRescue,stepRescue,traceRescue,rescueGoal,rescueGoalCue,rescueRunStartCursor,type RescueAction} from './rescueAdventure';
 test('both rescue boards require navigation, explicit repair and return, with two distinct beacons',()=>{
  for(const map of RESCUE_MAPS){
   assert.equal(rescueGoal(map),2);
@@ -24,4 +24,17 @@ test('water, wrong repair, repeated repair and incomplete return never award suc
  const back=traceRescue(m,['up','down']).at(-1)!;assert.equal(back.won,false);
  assert.equal(traceRescue(m,['left','up']).length,2);
  assert.ok(traceRescue(m,Array(100).fill('up')).length<=RESCUE_MAX_COMMANDS+1);
+});
+
+test('visual goal cues distinguish seeking, repair, return and completion',()=>{
+ const m=RESCUE_MAPS[0];let s=startRescue(m);assert.equal(rescueGoalCue(m,s),'seek');
+ for(const a of ['up','up','right','right'] as const)s=stepRescue(m,s,a);
+ assert.equal(rescueGoalCue(m,s),'repair-here');s=stepRescue(m,s,'repair');assert.equal(rescueGoalCue(m,s),'seek');
+ for(const a of ['down','right','right','down','repair'] as const)s=stepRescue(m,s,a);
+ assert.equal(rescueGoalCue(m,s),'return-home');
+ for(const a of ['down','left','left','up','left','left'] as const)s=stepRescue(m,s,a);
+ assert.equal(s.won,true);assert.equal(rescueGoalCue(m,s),'complete');
+});
+test('paused or stepped code resumes at the visible cursor; finished playback restarts',()=>{
+ assert.equal(rescueRunStartCursor(0,8),0);assert.equal(rescueRunStartCursor(3,8),3);assert.equal(rescueRunStartCursor(8,8),0);assert.equal(rescueRunStartCursor(0,0),0);
 });
