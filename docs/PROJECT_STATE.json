@@ -74,6 +74,14 @@
         ],
         "preview": "https://sparkbot-g3bmw3elq-btk10.vercel.app",
         "physical": "NOT_RUN"
+      },
+      "architecturePreflight": {
+        "sha": "bbbdb4905d13731458af7de51fd67eec53c16e7c",
+        "ciRuns": [
+          46106418246,
+          46106413639
+        ],
+        "scope": "documentation only"
       }
     },
     "pending": [
@@ -88,6 +96,11 @@
       "status": "DESIGN_ONLY_PENDING_REVIEW",
       "document": "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
       "implementation": "BLOCKED_BY_A2_FAMILY_ACCEPTANCE"
+    },
+    "currentIteration": {
+      "id": "SB-08A2-code-error-recovery",
+      "status": "PROPOSED_PHYSICAL_RETEST_REQUIRED",
+      "document": "docs/SB-08A2_CODE_ERROR_RECOVERY.md"
     }
   },
   "requiredReads": [

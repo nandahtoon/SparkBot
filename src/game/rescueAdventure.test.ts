@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {RESCUE_MAPS,RESCUE_ACTIONS,RESCUE_MAX_COMMANDS,startRescue,stepRescue,traceRescue,rescueGoal,rescueGoalCue,rescueRunStartCursor,type RescueAction} from './rescueAdventure';
+import {RESCUE_MAPS,RESCUE_ACTIONS,RESCUE_MAX_COMMANDS,startRescue,stepRescue,traceRescue,rescueGoal,rescueGoalCue,rescueRunStartCursor,rescueFailedCommandIndex,replaceRescueCommand,type RescueAction} from './rescueAdventure';
 test('both rescue boards require navigation, explicit repair and return, with two distinct beacons',()=>{
  for(const map of RESCUE_MAPS){
   assert.equal(rescueGoal(map),2);
@@ -37,4 +37,17 @@ test('visual goal cues distinguish seeking, repair, return and completion',()=>{
 });
 test('paused or stepped code resumes at the visible cursor; finished playback restarts',()=>{
  assert.equal(rescueRunStartCursor(0,8),0);assert.equal(rescueRunStartCursor(3,8),3);assert.equal(rescueRunStartCursor(8,8),0);assert.equal(rescueRunStartCursor(0,0),0);
+});
+
+test('observed middle command failure can be replaced without erasing the valid prefix or suffix',()=>{
+ const map=RESCUE_MAPS[0],program:RescueAction[]=['up','left','right','right','repair'];const trace=traceRescue(map,program);
+ assert.equal(rescueFailedCommandIndex(trace,0),null);assert.equal(rescueFailedCommandIndex(trace,1),null);assert.equal(rescueFailedCommandIndex(trace,2),1);assert.equal(rescueFailedCommandIndex(trace,3),null);
+ const fixed=replaceRescueCommand(program,1,'up');assert.deepEqual(fixed,['up','up','right','right','repair']);assert.equal(program[1],'left');
+ const after=traceRescue(map,fixed);assert.equal(after.at(-1)?.feedback,'repair');assert.equal(after.at(-1)?.repaired.length,1);assert.equal(rescueFailedCommandIndex(after,5),null);
+ assert.deepEqual(replaceRescueCommand(program,-1,'up'),program);assert.deepEqual(replaceRescueCommand(program,program.length,'up'),program);
+});
+test('wrong repair and repeated repair identify the observed command, and full programs can still be corrected',()=>{
+ const m=RESCUE_MAPS[0];assert.equal(rescueFailedCommandIndex(traceRescue(m,['repair']),1),0);
+ assert.equal(rescueFailedCommandIndex(traceRescue(m,['up','up','right','right','repair','repair']),6),5);
+ const full:RescueAction[]=Array(RESCUE_MAX_COMMANDS).fill('left');const next=replaceRescueCommand(full,0,'up');assert.equal(next.length,RESCUE_MAX_COMMANDS);assert.equal(next[0],'up');assert.equal(full[0],'left');
 });
