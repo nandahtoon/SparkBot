@@ -2,7 +2,7 @@ name: SparkBot CI
 on:
   pull_request:
   push:
-    branches: [main, sb-02-baseline-ci-regression]
+    branches: [main, sb-02-baseline-ci-regression, integration/sb-08r]
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Verify SparkBot project context
+        run: node scripts/check-project-context.mjs
       - name: Install pinned Bun
         run: npm install --global bun@1.4.4
       - name: Locked dependencies

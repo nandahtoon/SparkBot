@@ -6,3 +6,6 @@ Checkpoint: 2026-11-27 US Eastern / SB-08R.
 4. Current candidate inherits PRs #15–28 at 179f485e6a160335fa01f8e069e65d30cf322c24. SB-08R adds governance only; no new gameplay. Next gate is physical family validation of rescue prototype and unconfirmed V0.3.1 RC1 items. No claim of efficacy. A3 3D renderer only after review; same deterministic rules, preserve legacy campaign.
 5. Roles: Director owns scope/release gates; Designer owns story/gameplay/UI; Education specialist owns age-appropriate scaffolding and independent-vs-assisted observation; Engineer owns deterministic game rules/render separation/tests; independent QA owns exact-head checks and physical evidence. No agent grants its own release approval.
 6. Report: repo ID, branch/PR, SHA, changed files, exact CI, actual family test scope, pending blockers, rollback. No child identifying information.
+
+## New chat / AI Studio
+Open docs/PROJECT_STATE.json for the current stage and gates; use docs/AI_START_PROMPT.md as the reusable tool instruction and docs/AI_HANDOFF_PROTOCOL.md for import, patch, verification and handoff. The canonical nandahtoon/SparkBot integration/sb-08r branch is authoritative; read live HEAD before every task. Run node scripts/check-project-context.mjs --preflight in a local topic checkout after fetching origin.
