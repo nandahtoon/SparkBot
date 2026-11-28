@@ -35,6 +35,8 @@ import { HazardIcon, SparkBotEmblem } from './Icons';
 import { MuteIndicator, useMuteFlash } from './MuteIndicator';
 import { FullscreenToggleButton } from './FullscreenToggleButton';
 
+import { getMissionLearningGoal } from '../game/missionCurriculum';
+
 type LaunchMode = 'story' | 'daily';
 
 function extractTrackHazards(track: TrackTile[], hasDynamicHazards = false): SensorCondition[] {
@@ -107,6 +109,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   const dayNum = Number(rawDay) || 1;
 
   const nextLevel = useMemo(() => getLevelById(nextLevelId) || LEVELS[0], [nextLevelId]);
+  const storyLearningGoal = getMissionLearningGoal(nextLevel);
   const storyHazards = useMemo(
     () => extractTrackHazards(nextLevel.track, Boolean(nextLevel.hazards?.length)),
     [nextLevel]
@@ -501,6 +504,10 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               <span>Learn to Play</span>
               <span className="text-xs font-semibold text-cyan-200">Ages 5–7</span>
             </button>
+          )}
+
+          {!isDailyMode && storyLearningGoal && (
+            <p data-testid="mission-learning-goal" className="px-1 text-center text-xs font-semibold leading-tight text-sky-200">{storyLearningGoal.goal}</p>
           )}
 
           {/* Primary Action Row: Chunky 3D Play CTA + Distinct Mini-Games Button */}

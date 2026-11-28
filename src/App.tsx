@@ -122,6 +122,7 @@ import type { UnifiedWorldController, WorldMode } from './three/worldScene';
 import { getNextCodeCameraPreset, type CodeCameraPreset } from './three/codeCamera';
 import type { HeadScreenPoint, SlotScreenPoint } from './three/robotRig';
 import { TitleOverlay } from './components/TitleOverlay';
+import { getMissionLearningGoal, getRecommendedCampaignLevel } from './game/missionCurriculum';
 import { TopHud, type MoodCue } from './components/TopHud';
 import { BuildDock } from './components/BuildDock';
 import { PaintBoothDock } from './components/PaintBoothDock';
@@ -2381,7 +2382,7 @@ export default function App() {
   );
 
   const nextLevelDef = useMemo(() => {
-    if (currentLevel.isDaily) return null;
+    if (currentLevel.isDaily || currentLevel.isSandbox || currentLevel.isClassCode) return null;
     if (currentLevel.isDebug && currentLevel.debugMissionId) {
       const curIdx = DEBUG_MISSIONS.findIndex((m) => m.id === currentLevel.debugMissionId);
       if (curIdx >= 0 && curIdx < DEBUG_MISSIONS.length - 1) {
@@ -2451,7 +2452,7 @@ export default function App() {
       {/* Title Screen Overlay */}
       {mode === 'TITLE' && (
         <TitleOverlay
-          nextLevelId={Math.min(LEVELS.length, Math.max(1, save.unlockedLevel || 1))}
+          nextLevelId={getRecommendedCampaignLevel(save).id}
           activeCharacter={activeCharacter}
           profileName={activeProfileName}
           totalStars={totalStarsEarned}
@@ -2464,8 +2465,7 @@ export default function App() {
           onStartJunior={handleStartJunior}
           onStartMission={() => {
             SFX.click();
-            const nextStoryLevelId = Math.min(LEVELS.length, Math.max(1, save.unlockedLevel || 1));
-            beginLevel(getLevelById(nextStoryLevelId) || LEVELS[0]);
+            beginLevel(getRecommendedCampaignLevel(save));
           }}
           onStartDaily={() => {
             SFX.click();
@@ -3056,6 +3056,7 @@ export default function App() {
       />
 
       <VictoryModal
+        learningGoal={getMissionLearningGoal(currentLevel)}
         visible={mode === 'VICTORY' && !showGameRoom && !showShop && !showQuests}
         stars={victoryStars}
         bonusEarned={victoryBonusInfo.earned}

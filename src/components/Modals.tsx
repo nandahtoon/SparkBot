@@ -39,6 +39,7 @@ import {
   type StemFactCardDef
 } from '../game/educationStrategy';
 import { SPEECH, useReadAloud } from '../game/readAloud';
+import { getMissionLearningGoal, type MissionLearningGoal } from '../game/missionCurriculum';
 
 export interface VictorySpeedRunSummary {
   evaluation: SpeedRunEvaluation;
@@ -47,6 +48,7 @@ export interface VictorySpeedRunSummary {
 }
 
 interface VictoryModalProps {
+  learningGoal?: MissionLearningGoal | null;
   visible: boolean;
   stars: number;
   bonusEarned: boolean;
@@ -77,6 +79,7 @@ interface VictoryModalProps {
 }
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
+  learningGoal = null,
   visible,
   stars,
   bonusEarned,
@@ -312,6 +315,13 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               <span className="text-base font-black">Next Mission</span>
             </button>
           )}
+
+        {learningGoal && (
+          <details className="w-full rounded-2xl border border-sky-700/60 bg-sky-950/30 p-3 text-left text-sm text-sky-100">
+            <summary className="cursor-pointer font-bold focus-visible:outline-2 focus-visible:outline-sky-300">Think about it · {learningGoal.skill}</summary>
+            <p className="mt-2 leading-relaxed">{learningGoal.reflect}</p>
+          </details>
+        )}
 
         {/* Enter Mission Game Room CTA */}
         <button
@@ -694,7 +704,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                               ? `Bonus Level ${lvl.id}`
                               : `Level ${lvl.id}`
                         }
-                        className={`relative flex h-20 flex-col items-center justify-center gap-1 rounded-2xl border-2 px-1 transition-transform active:scale-95 ${
+                        className={`relative flex min-h-24 flex-col items-center justify-center gap-1 rounded-2xl border-2 px-1 py-2 transition-transform active:scale-95 ${
                           active
                             ? 'border-amber-300 bg-amber-400/20'
                             : isBoss
@@ -728,6 +738,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                         <span className="max-w-full truncate text-[10px] font-bold text-slate-300">
                           {lvl.name}
                         </span>
+                        <span className="max-w-full text-center text-[10px] leading-tight text-sky-200">{getMissionLearningGoal(lvl)?.skill}</span>
                         <div className="flex gap-0.5">
                           {[1, 2, 3].map((s) => (
                             <Star
