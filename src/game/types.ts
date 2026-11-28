@@ -211,6 +211,7 @@ export type MissionObjective =
 
 export interface LevelDef {
   objective?: MissionObjective;
+  isPrototype?: boolean;
   id: number;
   name: string;
   ageLabel: string;
