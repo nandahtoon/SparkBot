@@ -19,7 +19,7 @@ export function AdventureSlicePreview(){
   <div className="mx-auto flex max-w-3xl flex-col gap-3 p-4">
    <header className="flex flex-wrap items-center justify-between gap-2">
     <div><h1 className="text-2xl font-black text-sky-200">SparkBot · Adventure</h1><p className="text-xs text-slate-300">Campaign rule test · no save changes</p></div>
-    <div className="flex gap-2"><button type="button" onClick={()=>setMuted(v=>!v)} aria-label={muted?'Unmute voice':'Mute voice'} className="min-h-11 rounded-xl border border-slate-500 px-3">{muted?'🔇':'🔊'}</button><a href="/" className="flex min-h-11 items-center rounded-xl border border-slate-500 px-3">Home</a></div>
+    <div className="flex gap-2"><button type="button" onClick={()=>setMuted(v=>!v)} aria-label={muted?'Unmute voice':'Mute voice'} className="min-h-11 rounded-xl border border-slate-500 px-3">{muted?'🔇':'🔊'}</button><a href="/?legacyGame=1" className="flex min-h-11 items-center rounded-xl border border-slate-500 px-3">Legacy game</a></div>
    </header>
    <nav aria-label="Test missions" className="grid grid-cols-4 gap-2">{ids.map(n=><button key={n} type="button" aria-pressed={id===n} onClick={()=>select(n)} className={'min-h-12 rounded-xl border font-bold '+(id===n?'border-emerald-300 bg-emerald-900':'border-slate-600 bg-slate-800')}>{n}</button>)}</nav>
    <section className="rounded-2xl border border-sky-800 bg-slate-900 p-3">
