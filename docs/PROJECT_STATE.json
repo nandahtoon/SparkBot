@@ -41,10 +41,10 @@
     ]
   },
   "work": {
-    "stage": "SB-08A2",
-    "status": "AWAITING_FAMILY_ACCEPTANCE",
-    "next": "SB-08A3",
-    "nextGate": "A2 family acceptance remains required for integration of experimental 3D gameplay and release; isolated SB-08A3 development is owner-approved.",
+    "stage": "SB-M01",
+    "status": "PROPOSED_FOUNDATION_REVIEW_REQUIRED",
+    "next": "SB-M02",
+    "nextGate": "M01 exact-head CI and independent review before integration; A2 family acceptance and explicit experimental integration approval remain required; RC1 and production/native/commercial HOLD.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -114,6 +114,26 @@
       "id": "SB-08A2-code-error-recovery",
       "status": "PROPOSED_PHYSICAL_RETEST_REQUIRED",
       "document": "docs/SB-08A2_CODE_ERROR_RECOVERY.md"
+    },
+    "previousStage": {
+      "stage": "SB-08A2",
+      "status": "AWAITING_FAMILY_ACCEPTANCE",
+      "next": "SB-08A3",
+      "nextGate": "A2 family acceptance remains required for integration of experimental 3D gameplay and release; isolated SB-08A3 development is owner-approved."
+    },
+    "mainGame": {
+      "document": "docs/SB-M01_MAIN_GAME_FOUNDATION.md",
+      "baseSha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",
+      "rc1Pr": 23,
+      "integrationPr": 29,
+      "isolatedExperimentPrs": [
+        38,
+        40
+      ],
+      "miniGameExpansion": "HOLD",
+      "experimentalIntegration": "HOLD",
+      "physical": "NOT_RUN",
+      "ci": "VERIFY_EXACT_PR_HEAD"
     }
   },
   "requiredReads": [
@@ -124,6 +144,7 @@
     "docs/SB-08A_ADVENTURE_FIRST_REDESIGN.md",
     "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md",
     "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
-    "docs/SB-08A3_EXPERIMENTAL_GATE.md"
+    "docs/SB-08A3_EXPERIMENTAL_GATE.md",
+    "docs/SB-M01_MAIN_GAME_FOUNDATION.md"
   ]
 }
