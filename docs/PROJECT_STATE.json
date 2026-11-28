@@ -108,9 +108,21 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "A3-1 isolated spatial lab review, exact CI and preview; then A3-2 animation",
-      "experimentalStatus": "A3_1_IMPLEMENTED_PENDING_CI",
-      "experimentalEntry": "/?experiment=rescue3d"
+      "nextPackage": "A3-2 exact CI and preview, then A3-3 lifecycle and device interaction QA",
+      "experimentalStatus": "A3_2_IMPLEMENTED_PENDING_CI",
+      "experimentalEntry": "/?experiment=rescue3d",
+      "lastVerifiedExperiment": {
+        "sha": "30d0e7a09b37a17345f8992d6235ed253862d1a0",
+        "ciRun": 46123221548,
+        "preview": "https://sparkbot-l2tth7gl4-btk10.vercel.app/?experiment=rescue3d"
+      },
+      "policyIntegration": {
+        "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",
+        "ciRuns": [
+          46123257673,
+          46123253634
+        ]
+      }
     },
     "currentIteration": {
       "id": "SB-08A2-code-error-recovery",

@@ -14,5 +14,5 @@ for(const map of RESCUE_MAPS)test('spatial scene maps deterministic board: '+map
  world.dispose();world.dispose();assert.equal(world.scene.children.length,0);
 });
 test('experiment route owns the only renderer and keeps normal App alternative',()=>{
- const main=fs.readFileSync('src/main.tsx','utf8'),board=fs.readFileSync('src/components/RescueSpatialBoard.tsx','utf8');assert.match(main,/experimentalRescue\?<Suspense/);assert.match(main,/:<App \/>/);assert.doesNotMatch(board,/requestAnimationFrame|setAnimationLoop/);assert.match(board,/webglcontextlost/);assert.match(board,/renderer\.dispose\(\)/);assert.match(board,/return cleanup/);assert.match(board,/\{fallback\}/);
+ const main=fs.readFileSync('src/main.tsx','utf8'),board=fs.readFileSync('src/components/RescueSpatialBoard.tsx','utf8');assert.match(main,/experimentalRescue\?<Suspense/);assert.match(main,/:<App \/>/);assert.doesNotMatch(board,/setAnimationLoop/);assert.match(board,/active&&more\)frame=requestAnimationFrame/);assert.match(board,/cancelAnimationFrame\(frame\)/);assert.match(board,/visibilitychange/);assert.match(board,/prefers-reduced-motion/);assert.match(board,/webglcontextlost/);assert.match(board,/renderer\.dispose\(\)/);assert.match(board,/return cleanup/);assert.match(board,/\{fallback\}/);
 });
