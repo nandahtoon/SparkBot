@@ -14,7 +14,7 @@ test('junior session keeps timer off, provides spoken guidance and simplified co
  const app=fs.readFileSync('src/App.tsx','utf8');
  const code=fs.readFileSync('src/components/CodeDock.tsx','utf8');
  const guide=fs.readFileSync('src/components/GuidedTutorialOverlay.tsx','utf8');
- assert.match(app,/!juniorSession && Boolean\(save.challengeTimerEnabled\)/);
+ assert.match(app,/!juniorSession && !currentLevel.isPrototype && Boolean\(save.challengeTimerEnabled\)/);
  assert.match(app,/!cur.juniorSession && Boolean\(cur.save.challengeTimerEnabled\)/);
  assert.match(app,/junior=\{juniorSession\}/);
  assert.match(code,/junior \? \(\['MOVE'\]/);
