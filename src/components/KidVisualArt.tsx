@@ -143,10 +143,13 @@ export const ArcadeSceneArt: React.FC<{ gameId: ArcadeGameId; className?: string
           <ellipse cx="164" cy="28" rx="8" ry="5" fill="#e9d5ff" />
           {/* Laser Beams */}
           <rect x="117" y="42" width="6" height="20" rx="3" fill="#34d399" />
-          {/* Star-Bot Ship */}
-          <polygon points="120,62 142,88 120,82 98,88" fill="#34d399" stroke="#a7f3d0" strokeWidth="2" />
-          <circle cx="120" cy="76" r="5" fill="#0f172a" />
-          <circle cx="120" cy="76" r="2.5" fill="#38bdf8" />
+          {/* Transforming companion robot */}
+          <rect x="107" y="72" width="26" height="21" rx="7" fill="#fbbf24" stroke="#fef3c7" strokeWidth="1.5"/>
+          <rect x="101" y="56" width="38" height="23" rx="9" fill="#e2e8f0"/>
+          <rect x="106" y="61" width="28" height="13" rx="5" fill="#0f172a"/>
+          <circle cx="114" cy="67" r="3" fill="#67e8f9"/><circle cx="126" cy="67" r="3" fill="#67e8f9"/>
+          <rect x="94" y="73" width="10" height="17" rx="4" fill="#34d399"/><rect x="136" y="73" width="10" height="17" rx="4" fill="#34d399"/>
+          <rect x="108" y="90" width="9" height="7" rx="3" fill="#67e8f9"/><rect x="123" y="90" width="9" height="7" rx="3" fill="#67e8f9"/>
         </svg>
       );
 

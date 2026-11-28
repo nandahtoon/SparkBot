@@ -75,6 +75,8 @@ import { SFX } from '../game/audio';
 import { BlockIcon, PartIcon } from './Icons';
 import { ArcadeSceneArt } from './KidVisualArt';
 import { WallBreakerCanvasGame } from './WallBreakerCanvasGame';
+import { SPACE_BOT_FORM_INFO, SPACE_TRANSFORM_DURATION, nextSpaceBotForm, spaceBotShots, spaceBotImpact, type SpaceBotForm } from '../game/spaceBotForms';
+import { drawSpaceBot } from '../game/spaceBotArt';
 
 interface GameRoomModalProps {
   visible: boolean;
@@ -292,19 +294,22 @@ const PowerConnectGame: React.FC<{
  * Mini-Game 3: SPACE SHOOTER (Full-Screen Dynamic Retina HTML5 Canvas)
  * ========================================================================== */
 const SpaceShooterGame: React.FC<{
-  accentColor: string;
+  character: BotCharacterId;
   onFinish: (score: number, bolts: number, won: boolean, detail: string) => void;
-}> = ({ accentColor, onFinish }) => {
+}> = ({ character, onFinish }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const burstTriggerRef = useRef<(() => void) | null>(null);
+  const transformRef = useRef<(() => void) | null>(null);
   const [hud, setHud] = useState({
     score: 0,
     wave: 1,
     shields: 3,
     stars: 0,
     timeLeft: 35,
-    burstReady: true
+    burstReady: true,
+    form: 'scout' as SpaceBotForm,
+    guardReady: true
   });
   const finishRef = useRef(onFinish);
   finishRef.current = onFinish;
@@ -317,7 +322,7 @@ const SpaceShooterGame: React.FC<{
     if (!ctx) return;
 
     let arenaW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
-    let arenaH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
+    let arenaH = Math.max(180, Math.floor(container.clientHeight || window.innerHeight - 48));
     let dpr = Math.min(2, window.devicePixelRatio || 1);
 
     const configureCanvas = (w: number, h: number) => {
@@ -359,10 +364,18 @@ const SpaceShooterGame: React.FC<{
     let invulnTimer = 0;
     let hudTimer = 0;
     let ended = false;
+    let form: SpaceBotForm = 'scout', previousForm: SpaceBotForm = 'scout', transformTime = SPACE_TRANSFORM_DURATION, guardCooldown = 0;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const transform = () => {
+      if (ended || transformTime < SPACE_TRANSFORM_DURATION) return;
+      previousForm = form; form = nextSpaceBotForm(form); transformTime = reducedMotion.matches ? SPACE_TRANSFORM_DURATION : 0;
+      setHud(old => ({...old, form, guardReady:guardCooldown<=0})); SFX.uiTick();
+    };
+    transformRef.current = transform;
 
     const handleResize = () => {
       const nextW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
-      const nextH = Math.max(360, Math.floor(container.clientHeight || window.innerHeight - 48));
+      const nextH = Math.max(180, Math.floor(container.clientHeight || window.innerHeight - 48));
       if (Math.abs(nextW - arenaW) < 2 && Math.abs(nextH - arenaH) < 2) return;
       const sx = nextW / Math.max(1, arenaW);
       const sy = nextH / Math.max(1, arenaH);
@@ -376,6 +389,8 @@ const SpaceShooterGame: React.FC<{
         en.x = Math.max(en.radius + 10, Math.min(arenaW - en.radius - 10, en.x * sx));
         en.y *= sy;
       }
+      for (const bullet of bullets) { bullet.x *= sx; bullet.y *= sy; }
+      for (const spark of sparks) { spark.x *= sx; spark.y *= sy; }
       for (const st of stars) {
         st.x *= sx;
         st.y *= sy;
@@ -412,9 +427,10 @@ const SpaceShooterGame: React.FC<{
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
       if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
-      if (e.key === ' ') {
+      if (e.key.toLowerCase() === 't' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); transform(); }
+      if (e.key === ' ' && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
-        triggerTurboBurst();
+        if(!e.repeat) triggerTurboBurst();
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -431,6 +447,9 @@ const SpaceShooterGame: React.FC<{
       triggerTurboBurst();
     };
 
+    const clearKeys=()=>{keys.left=false;keys.right=false;};
+    window.addEventListener('blur',clearKeys);
+    document.addEventListener('visibilitychange',clearKeys);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     canvas.addEventListener('pointermove', onPointerMove);
@@ -451,6 +470,10 @@ const SpaceShooterGame: React.FC<{
       const dt = Math.min(0.04, (now - last) / 1000);
       last = now;
       if (ended) return;
+      if (document.hidden) { rafId=requestAnimationFrame(loop); return; }
+      transformTime=Math.min(SPACE_TRANSFORM_DURATION,transformTime+dt);
+      if(reducedMotion.matches)transformTime=SPACE_TRANSFORM_DURATION;
+      guardCooldown=Math.max(0,guardCooldown-dt);
 
       timeLeft = Math.max(0, timeLeft - dt);
       if (timeLeft <= 0) {
@@ -458,7 +481,7 @@ const SpaceShooterGame: React.FC<{
         return;
       }
 
-      const shipSpeed = Math.max(410, arenaW * 0.68);
+      const shipSpeed = Math.max(410, arenaW * 0.68) * SPACE_BOT_FORM_INFO[form].speed;
       if (keys.left) shipX -= shipSpeed * dt;
       if (keys.right) shipX += shipSpeed * dt;
       shipX = Math.max(30, Math.min(arenaW - 30, shipX));
@@ -469,12 +492,9 @@ const SpaceShooterGame: React.FC<{
 
       // Auto-fire friendly twin lasers
       if (fireCooldown <= 0) {
-        fireCooldown = 0.22;
+        fireCooldown = SPACE_BOT_FORM_INFO[form].interval;
         const bulletSpd = Math.max(490, arenaH * 0.95);
-        bullets.push(
-          { x: shipX - 11, y: shipY - 16, vx: 0, vy: -bulletSpd },
-          { x: shipX + 11, y: shipY - 16, vx: 0, vy: -bulletSpd }
-        );
+        bullets.push(...spaceBotShots(form,shipX,shipY,bulletSpd));
       }
 
       // Move bullets
@@ -524,10 +544,10 @@ const SpaceShooterGame: React.FC<{
 
         // Ship collision
         if (invulnTimer <= 0 && Math.hypot(en.x - shipX, en.y - shipY) <= en.radius + 19) {
-          shields -= 1;
+          const impact=spaceBotImpact(form,shields,guardCooldown);shields=impact.shields;guardCooldown=impact.guardCooldown;
           invulnTimer = 1.05;
-          spawnBoom(shipX, shipY, '#fb7185', 14);
-          SFX.chirpConfused();
+          spawnBoom(shipX, shipY, impact.absorbed?'#6ee7b7':'#fb7185', 14);
+          if(impact.absorbed)SFX.uiTick();else SFX.chirpConfused();
           enemies.splice(i, 1);
           if (shields <= 0) {
             finishRound(score >= 120, `Reached Wave ${wave} with ${score} pts`);
@@ -559,7 +579,7 @@ const SpaceShooterGame: React.FC<{
       for (let i = stars.length - 1; i >= 0; i--) {
         const st = stars[i];
         st.y += st.vy * dt;
-        if (Math.hypot(st.x - shipX, st.y - shipY) <= 30) {
+        if (Math.hypot(st.x - shipX, st.y - shipY) <= SPACE_BOT_FORM_INFO[form].collectRadius) {
           starsCollected += 1;
           score += 25;
           spawnBoom(st.x, st.y, '#fde047', 8);
@@ -647,37 +667,11 @@ const SpaceShooterGame: React.FC<{
         ctx.fill();
       }
 
-      // Draw robot starfighter
+      // Draw the selected companion as a transforming robot, never an aircraft.
       ctx.save();
-      ctx.translate(shipX, shipY);
-      if (invulnTimer > 0 && Math.floor(invulnTimer * 16) % 2 === 0) {
-        ctx.globalAlpha = 0.45;
-      }
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.moveTo(-7, 14);
-      ctx.lineTo(7, 14);
-      ctx.lineTo(0, 28 + Math.random() * 6);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = accentColor;
-      ctx.beginPath();
-      ctx.moveTo(0, -24);
-      ctx.lineTo(-24, 14);
-      ctx.lineTo(24, 14);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.roundRect(-9, -6, 18, 11, 5);
-      ctx.fill();
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.arc(-4, -1, 2.4, 0, Math.PI * 2);
-      ctx.arc(4, -1, 2.4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.translate(shipX,shipY);
+      if(invulnTimer>0&&!reducedMotion.matches&&Math.floor(invulnTimer*16)%2===0)ctx.globalAlpha=.65;
+      drawSpaceBot(ctx,character,previousForm,form,transformTime/SPACE_TRANSFORM_DURATION,guardCooldown<=0);
       ctx.restore();
 
       // Sparks
@@ -697,7 +691,9 @@ const SpaceShooterGame: React.FC<{
           shields,
           stars: starsCollected,
           timeLeft: Math.ceil(timeLeft),
-          burstReady: burstCooldown <= 0.05
+          burstReady: burstCooldown <= 0.05,
+          form,
+          guardReady: guardCooldown <= 0
         });
       }
       rafId = requestAnimationFrame(loop);
@@ -708,12 +704,15 @@ const SpaceShooterGame: React.FC<{
       cancelAnimationFrame(rafId);
       ro.disconnect();
       burstTriggerRef.current = null;
+      transformRef.current = null;
+      window.removeEventListener('blur',clearKeys);
+      document.removeEventListener('visibilitychange',clearKeys);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerdown', onPointerDown);
     };
-  }, [accentColor]);
+  }, [character]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full flex-1 overflow-hidden bg-[#050a1a]">
@@ -758,6 +757,7 @@ const SpaceShooterGame: React.FC<{
         className="block h-full w-full cursor-crosshair touch-none"
       />
 
+      <button type="button" onClick={()=>transformRef.current?.()} aria-label={'Transform robot, current form '+SPACE_BOT_FORM_INFO[hud.form].label} className="safe-bottom absolute bottom-3 left-3 z-10 flex min-h-12 items-center gap-2 rounded-2xl border border-emerald-300 bg-slate-950/90 px-3 text-left text-emerald-100 focus-visible:ring-2 focus-visible:ring-white"><RotateCw className="h-5 w-5" aria-hidden="true"/><span><span className="block text-xs font-black">{SPACE_BOT_FORM_INFO[hud.form].label} · T</span><span className="block text-[10px]">{hud.form==='guard'?(hud.guardReady?'Shield ready':'Recharging'):SPACE_BOT_FORM_INFO[hud.form].hint}</span></span></button>
       {/* Chunky 3D Tactile Turbo Burst Button */}
       <button
         type="button"
@@ -1767,7 +1767,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
           {activeGame === 'space_shooter' && (
             <SpaceShooterGame
               key={runKey}
-              accentColor={charDef.accentCss}
+              character={activeCharacter}
               onFinish={(score, bolts, won, detail) =>
                 handleRoundFinish('space_shooter', 'Space Shooter', score, bolts, won, detail)
               }
