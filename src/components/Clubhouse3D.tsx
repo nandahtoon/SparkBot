@@ -64,7 +64,7 @@ export function Clubhouse3D({onSelectGame,activeCharacter,planetAvailable}:Props
      const point=points[game.id];if(!point)return null;
      const unavailable=game.id==='planet_adventure'&&!planetAvailable;
      return <button key={game.id} type="button" disabled={unavailable} data-clubhouse-game={game.id} aria-label={'Play '+game.title} onClick={()=>onSelectGame(game.id)}
-      className="absolute z-10 flex min-h-11 w-[23%] max-w-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-xl border border-white/60 bg-slate-950/80 px-1 py-1 text-center text-[10px] font-black leading-tight text-white shadow-lg focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
+      className="absolute z-10 flex min-h-11 w-[17%] max-w-[92px] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-xl border border-white/60 bg-slate-950/80 px-1 py-1 text-center text-[10px] font-black leading-tight text-white shadow-lg focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
       style={{left:point.x+'%',top:point.y+'%',borderColor:game.accentHex}}>
       <Play className="h-4 w-4 fill-current" style={{color:game.accentHex}} aria-hidden="true"/>{game.title}
      </button>;
