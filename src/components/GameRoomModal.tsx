@@ -77,6 +77,7 @@ import { ArcadeSceneArt } from './KidVisualArt';
 import { WallBreakerCanvasGame } from './WallBreakerCanvasGame';
 import { SPACE_BOT_FORM_INFO, SPACE_TRANSFORM_DURATION, nextSpaceBotForm, spaceBotShots, spaceBotImpact, type SpaceBotForm } from '../game/spaceBotForms';
 import { drawSpaceBot } from '../game/spaceBotArt';
+import {SPACE_EXPEDITION_STAGES,SPACE_RESCUE_GOAL,spaceStageCount,spaceRoundOutcome,spawnExpeditionWave,moveSpaceBotToward,rescueSignalPosition,type SpaceRoundMode} from '../game/spaceExpedition';
 
 interface GameRoomModalProps {
   visible: boolean;
@@ -293,10 +294,12 @@ const PowerConnectGame: React.FC<{
 /* ============================================================================
  * Mini-Game 3: SPACE SHOOTER (Full-Screen Dynamic Retina HTML5 Canvas)
  * ========================================================================== */
-const SpaceShooterGame: React.FC<{
+const SpaceShooterRound: React.FC<{
+  mode: SpaceRoundMode;
   character: BotCharacterId;
   onFinish: (score: number, bolts: number, won: boolean, detail: string) => void;
-}> = ({ character, onFinish }) => {
+}> = ({ character, mode, onFinish }) => {
+  const expedition=mode==='expedition',stageCount=spaceStageCount(mode);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const burstTriggerRef = useRef<(() => void) | null>(null);
@@ -309,7 +312,8 @@ const SpaceShooterGame: React.FC<{
     timeLeft: 35,
     burstReady: true,
     form: 'scout' as SpaceBotForm,
-    guardReady: true
+    guardReady: true,
+    rescued: 0
   });
   const finishRef = useRef(onFinish);
   finishRef.current = onFinish;
@@ -336,7 +340,7 @@ const SpaceShooterGame: React.FC<{
     configureCanvas(arenaW, arenaH);
 
     const getShipY = (h: number) => h - Math.max(60, Math.min(86, h * 0.1));
-    let shipX = arenaW / 2;
+    let shipX = arenaW / 2, pointerTarget:number|null=null;
     let shipY = getShipY(arenaH);
 
     let score = 0;
@@ -345,7 +349,10 @@ const SpaceShooterGame: React.FC<{
     let starsCollected = 0;
     let timeLeft = 35;
     let nextEnemyId = 1;
-    let enemies: SpaceEnemy[] = spawnSpaceWave(arenaW, wave, nextEnemyId);
+    const spawn=(stage:number,id:number)=>expedition?spawnExpeditionWave(arenaW,stage,id):spawnSpaceWave(arenaW,stage,id);
+    let enemies: SpaceEnemy[] = spawn(wave, nextEnemyId);
+    let rescued=0;
+    const signals:{x:number;y:number;index:number}[]=[];
     nextEnemyId += enemies.length + 2;
 
     const bullets: Array<{ x: number; y: number; vx: number; vy: number }> = [];
@@ -385,6 +392,8 @@ const SpaceShooterGame: React.FC<{
 
       shipX = Math.max(30, Math.min(arenaW - 30, shipX * sx));
       shipY = getShipY(arenaH);
+      if(pointerTarget!==null)pointerTarget=Math.max(30,Math.min(arenaW-30,pointerTarget*sx));
+      for(const signal of signals){signal.x=rescueSignalPosition(arenaW,signal.index);signal.y*=sy;}
       for (const en of enemies) {
         en.x = Math.max(en.radius + 10, Math.min(arenaW - en.radius - 10, en.x * sx));
         en.y *= sy;
@@ -413,7 +422,7 @@ const SpaceShooterGame: React.FC<{
     };
 
     const triggerTurboBurst = () => {
-      if (burstCooldown > 0 || ended) return;
+      if (burstCooldown > 0 || ended || (expedition&&wave===8)) return;
       burstCooldown = 1.25;
       bullets.push(
         { x: shipX - 10, y: shipY - 18, vx: -105, vy: -520 },
@@ -440,14 +449,15 @@ const SpaceShooterGame: React.FC<{
     const onPointerMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * arenaW;
-      shipX = Math.max(30, Math.min(arenaW - 30, relX));
+      const target=Math.max(30, Math.min(arenaW - 30, relX));
+      if(expedition)pointerTarget=target;else shipX=target;
     };
     const onPointerDown = (e: PointerEvent) => {
       onPointerMove(e);
       triggerTurboBurst();
     };
 
-    const clearKeys=()=>{keys.left=false;keys.right=false;};
+    const clearKeys=()=>{keys.left=false;keys.right=false;pointerTarget=null;};
     window.addEventListener('blur',clearKeys);
     document.addEventListener('visibilitychange',clearKeys);
     window.addEventListener('keydown', onKeyDown);
@@ -467,7 +477,7 @@ const SpaceShooterGame: React.FC<{
     };
 
     const loop = (now: number) => {
-      const dt = Math.min(0.04, (now - last) / 1000);
+      const dt = Math.max(0,Math.min(0.04, (now - last) / 1000));
       last = now;
       if (ended) return;
       if (document.hidden) { rafId=requestAnimationFrame(loop); return; }
@@ -475,15 +485,17 @@ const SpaceShooterGame: React.FC<{
       if(reducedMotion.matches)transformTime=SPACE_TRANSFORM_DURATION;
       guardCooldown=Math.max(0,guardCooldown-dt);
 
-      timeLeft = Math.max(0, timeLeft - dt);
-      if (timeLeft <= 0) {
+      if(!expedition)timeLeft = Math.max(0, timeLeft - dt);
+      if (!expedition&&spaceRoundOutcome(mode,shields,timeLeft,score,wave,enemies.length,rescued)==='won') {
         finishRound(true, `Defended space through Wave ${wave} and grabbed ${starsCollected} stars!`);
         return;
       }
 
       const shipSpeed = Math.max(410, arenaW * 0.68) * SPACE_BOT_FORM_INFO[form].speed;
+      if (keys.left||keys.right)pointerTarget=null;
       if (keys.left) shipX -= shipSpeed * dt;
       if (keys.right) shipX += shipSpeed * dt;
+      if(pointerTarget!==null)shipX=moveSpaceBotToward(shipX,pointerTarget,shipSpeed,dt);
       shipX = Math.max(30, Math.min(arenaW - 30, shipX));
 
       fireCooldown -= dt;
@@ -491,7 +503,7 @@ const SpaceShooterGame: React.FC<{
       invulnTimer = Math.max(0, invulnTimer - dt);
 
       // Auto-fire friendly twin lasers
-      if (fireCooldown <= 0) {
+      if (fireCooldown <= 0 && !(expedition&&wave===8)) {
         fireCooldown = SPACE_BOT_FORM_INFO[form].interval;
         const bulletSpd = Math.max(490, arenaH * 0.95);
         bullets.push(...spaceBotShots(form,shipX,shipY,bulletSpd));
@@ -550,7 +562,7 @@ const SpaceShooterGame: React.FC<{
           if(impact.absorbed)SFX.uiTick();else SFX.chirpConfused();
           enemies.splice(i, 1);
           if (shields <= 0) {
-            finishRound(score >= 120, `Reached Wave ${wave} with ${score} pts`);
+            finishRound(spaceRoundOutcome(mode,shields,timeLeft,score,wave,enemies.length,rescued)==='won', `Reached Wave ${wave} with ${score} pts`);
             return;
           }
           continue;
@@ -563,16 +575,28 @@ const SpaceShooterGame: React.FC<{
       }
 
       // Next wave
-      if (enemies.length === 0) {
+      if (enemies.length === 0 && !(expedition&&wave===8)) {
         wave += 1;
         score += 45;
-        if (wave > 4) {
+        if (wave > stageCount) {
           finishRound(true, `Cleared all 4 space waves with ${starsCollected} stars!`);
           return;
         }
-        enemies = spawnSpaceWave(arenaW, wave, nextEnemyId);
+        if(expedition){
+          // Restore one shield between stages, without exceeding the starting three.
+          shields=Math.min(3,shields+1);
+          if(wave===8){bullets.length=0;stars.length=0;for(let i=0;i<SPACE_RESCUE_GOAL;i++)signals.push({x:rescueSignalPosition(arenaW,i),y:-25-i*42,index:i});}
+        }
+        enemies = spawn(wave, nextEnemyId);
         nextEnemyId += enemies.length + 2;
         SFX.laserSolved();
+      }
+      if(expedition&&wave===8){
+        for(let i=signals.length-1;i>=0;i--){const signal=signals[i];signal.y+=90*verticalScale*dt;
+          if(Math.hypot(signal.x-shipX,signal.y-shipY)<=SPACE_BOT_FORM_INFO[form].collectRadius){rescued++;score+=25;spawnBoom(signal.x,signal.y,'#6ee7b7',8);signals.splice(i,1);SFX.crystal();}
+          else if(signal.y>arenaH+20)signal.y=-25;
+        }
+        if(spaceRoundOutcome(mode,shields,timeLeft,score,wave,enemies.length,rescued)==='won'){finishRound(true,'All 8 stages complete! Three rescue signals recovered.');return;}
       }
 
       // Collectible stars
@@ -607,7 +631,7 @@ const SpaceShooterGame: React.FC<{
       }
 
       // Render space canvas
-      ctx.fillStyle = '#050a1a';
+      ctx.fillStyle = expedition?['#07152b','#211a28','#161c3f','#10302c','#251f2e','#112941','#1c153c','#0a302d'][wave-1]:'#050a1a';
       ctx.fillRect(0, 0, arenaW, arenaH);
 
       for (const s of bgStars) {
@@ -659,6 +683,8 @@ const SpaceShooterGame: React.FC<{
         ctx.fill();
       }
 
+      // Rescue signals are friendly collectibles, never shot targets.
+      for(const signal of signals){ctx.save();ctx.translate(signal.x,signal.y);ctx.strokeStyle='#a7f3d0';ctx.lineWidth=2;ctx.fillStyle='#155e56';ctx.beginPath();ctx.arc(0,0,13,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle='#ecfdf5';ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(6,0);ctx.moveTo(0,-6);ctx.lineTo(0,6);ctx.stroke();ctx.restore();}
       // Draw lasers
       ctx.fillStyle = '#38bdf8';
       for (const b of bullets) {
@@ -691,9 +717,10 @@ const SpaceShooterGame: React.FC<{
           shields,
           stars: starsCollected,
           timeLeft: Math.ceil(timeLeft),
-          burstReady: burstCooldown <= 0.05,
+          burstReady: burstCooldown <= 0.05&&!(expedition&&wave===8),
           form,
-          guardReady: guardCooldown <= 0
+          guardReady: guardCooldown <= 0,
+          rescued
         });
       }
       rafId = requestAnimationFrame(loop);
@@ -712,7 +739,7 @@ const SpaceShooterGame: React.FC<{
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerdown', onPointerDown);
     };
-  }, [character]);
+  }, [character,mode,expedition,stageCount]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full flex-1 overflow-hidden bg-[#050a1a]">
@@ -725,7 +752,7 @@ const SpaceShooterGame: React.FC<{
           </span>
           <span className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 px-2.5 text-xs font-black text-sky-300 sm:text-sm">
             <Layers className="h-3.5 w-3.5 text-sky-300" aria-hidden="true" />
-            <span>{hud.wave}/4</span>
+            <span>{hud.wave}/{stageCount}</span>
           </span>
           <span className="inline-flex h-8 items-center gap-1 rounded-xl border border-amber-400/40 bg-slate-950/80 px-2.5 text-xs font-black text-amber-300 sm:text-sm">
             <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-300" aria-hidden="true" />
@@ -746,11 +773,12 @@ const SpaceShooterGame: React.FC<{
           </div>
           <span className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/80 px-2.5 text-xs font-black text-slate-200 sm:text-sm">
             <Clock className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-            <span>{hud.timeLeft}</span>
+            <span>{expedition?(hud.wave===8?hud.rescued+'/'+SPACE_RESCUE_GOAL:'∞'):hud.timeLeft}</span>
           </span>
         </div>
       </div>
 
+      {expedition&&<div className="pointer-events-none absolute inset-x-3 top-12 z-10 text-center"><span className="rounded-lg bg-slate-950/85 px-2 py-1 text-xs font-black text-white">{SPACE_EXPEDITION_STAGES[hud.wave-1].title} · {hud.wave===8?hud.rescued+'/'+SPACE_RESCUE_GOAL:SPACE_EXPEDITION_STAGES[hud.wave-1].hint}</span></div>}
       <canvas
         ref={canvasRef}
         data-testid="space-shooter-canvas"
@@ -775,6 +803,18 @@ const SpaceShooterGame: React.FC<{
       </button>
     </div>
   );
+};
+
+const SpaceShooterGame: React.FC<{character:BotCharacterId;onFinish:(score:number,bolts:number,won:boolean,detail:string)=>void}>=({character,onFinish})=>{
+ const [mode,setMode]=useState<SpaceRoundMode|null>(null);
+ if(mode)return <SpaceShooterRound character={character} mode={mode} onFinish={onFinish}/>;
+ return <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto bg-slate-950 p-4" data-testid="space-mode-select">
+  <h3 className="text-xl font-black text-white">Space Transform</h3><p className="text-sm text-sky-200">{BOT_CHARACTERS[character].name} · Choose your adventure</p>
+  <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2">
+   <button type="button" onClick={()=>setMode('classic')} className="min-h-24 rounded-2xl border-2 border-sky-400 bg-sky-950 p-3 text-left text-white"><span className="block text-lg font-black">Classic</span><span className="block text-sm">4 waves · 35 seconds</span><span className="block text-xs text-sky-200">Practice transformations</span></button>
+   <button type="button" onClick={()=>setMode('expedition')} className="min-h-24 rounded-2xl border-2 border-emerald-400 bg-emerald-950 p-3 text-left text-white"><span className="block text-lg font-black">Expedition</span><span className="block text-sm">8 stages · No timer</span><span className="block text-xs text-emerald-200">Explore, transform, rescue</span></button>
+  </div>
+ </div>;
 };
 
 /* ============================================================================

@@ -108,13 +108,13 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "Verify existing Space Shooter transformation increment, balance and physical retest; advanced wave progression requires separate scoped review",
-      "experimentalStatus": "SPACE_BOT_TRANSFORM_PENDING_CI",
+      "nextPackage": "Verify eight-stage optional arcade mode, touch balancing and rescue finale; A2/A3 physical acceptance remains pending",
+      "experimentalStatus": "SPACE_EXPEDITION_EIGHT_STAGES_PENDING_CI",
       "experimentalEntry": "/?experiment=rescue3d",
       "lastVerifiedExperiment": {
-        "sha": "38ba291f8dca71fb0410e585ff47f6b0917f14fb",
-        "ciRun": 46180776378,
-        "preview": "https://sparkbot-re34v2yu2-btk10.vercel.app/"
+        "sha": "d694327eef347d049a2b5f5f15e83a1e21414cd0",
+        "ciRun": 46181066178,
+        "preview": "https://sparkbot-nhytcb1oj-btk10.vercel.app/"
       },
       "policyIntegration": {
         "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",
