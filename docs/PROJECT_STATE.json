@@ -108,13 +108,13 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "Verify stage backgrounds, obstacle trajectories, transition freeze and physical gameplay balance",
-      "experimentalStatus": "SPACE_EXPEDITION_VISUAL_MOTION_PENDING_CI",
+      "nextPackage": "Exact CI and preview; verify core abilities, mobile HUD and eight-stage gameplay balance",
+      "experimentalStatus": "SPACE_BOT_EVOLUTION_PENDING_CI",
       "experimentalEntry": "/?experiment=rescue3d",
       "lastVerifiedExperiment": {
-        "sha": "65992e829aa85b0c4a0beed254acab8d147af791",
-        "ciRun": 46181476883,
-        "preview": "https://sparkbot-a7u7sy1ql-btk10.vercel.app/"
+        "sha": "360d6186ac95bad5fbb3e117c6c31aef909c139b",
+        "ciRun": 46181772235,
+        "preview": "https://sparkbot-4b5gmtz0j-btk10.vercel.app/"
       },
       "policyIntegration": {
         "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",

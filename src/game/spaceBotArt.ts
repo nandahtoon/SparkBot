@@ -1,16 +1,18 @@
 import {BOT_CHARACTERS,type BotCharacterId} from './customization';
+import {SPACE_ABILITIES} from './spaceBotEvolution';
 import {spaceBotTransformPose,type SpaceBotForm} from './spaceBotForms';
 
 // Render the same recognizable robot head, body, arms and feet in each form. No aircraft silhouette.
-export function drawSpaceBot(ctx:CanvasRenderingContext2D,character:BotCharacterId,from:SpaceBotForm,to:SpaceBotForm,progress:number,guardReady:boolean){
+export function drawSpaceBot(ctx:CanvasRenderingContext2D,character:BotCharacterId,from:SpaceBotForm,to:SpaceBotForm,progress:number,guardReady:boolean,evolved=false,boostActive=false,abilityFlash=0){
  const p=spaceBotTransformPose(from,to,progress),def=BOT_CHARACTERS[character],accent=def.accentCss;
  const part=(x:number,y:number,w:number,h:number,r:number,color:string,stroke='#263b55')=>{const finish=ctx.createLinearGradient(x,y,x+w,y+h);finish.addColorStop(0,color);finish.addColorStop(.72,color);finish.addColorStop(1,'#263b55');ctx.fillStyle=finish;ctx.strokeStyle=stroke;ctx.lineWidth=1.1;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();ctx.stroke();};
+ if(evolved){const color=SPACE_ABILITIES[to].color;ctx.save();ctx.globalAlpha*=.75;ctx.strokeStyle=color;ctx.lineWidth=1.7;ctx.beginPath();ctx.arc(0,2,24,0,Math.PI*2);ctx.stroke();if(abilityFlash>0){ctx.globalAlpha*=Math.min(1,abilityFlash/.45);ctx.beginPath();ctx.arc(0,2,29+(.45-abilityFlash)*20,0,Math.PI*2);ctx.stroke();}ctx.restore();}
  if(p.guard>.01){ctx.save();ctx.globalAlpha*=p.guard*(guardReady?.9:.3);ctx.strokeStyle='#6ee7b7';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,28,0,Math.PI*2);ctx.stroke();ctx.restore();}
  for(const side of [-1,1]){
   const x=side*p.footX;part(x-5,11,10,11,4,'#253c56');part(x-4,21,8,5,2,accent);
-  ctx.fillStyle='#67e8f9';ctx.beginPath();ctx.ellipse(x,28,3,5,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#67e8f9';ctx.beginPath();ctx.ellipse(x,boostActive?31:28,boostActive?4:3,boostActive?9:5,0,0,Math.PI*2);ctx.fill();
   ctx.save();ctx.translate(side*p.armX,p.armY);ctx.rotate(-side*p.armAngle);
-  part(-5,-8,10,19,4,def.defaultBodyHex);part(-4,-11,8,7,3,accent);ctx.restore();
+  part(-5,-8,10,19,4,def.defaultBodyHex);part(-4,-11,8,7,3,accent);if(evolved){part(-6,-7,12,5,2,SPACE_ABILITIES[to].color);part(-5,5,10,5,2,'#b6d1e6');}ctx.restore();
  }
  part(-12,-4,24,23,8,def.defaultBodyHex);part(-5,3,10,8,3,accent);
  ctx.fillStyle='#e4faff';ctx.beginPath();ctx.arc(0,7,2.4,0,Math.PI*2);ctx.fill();
