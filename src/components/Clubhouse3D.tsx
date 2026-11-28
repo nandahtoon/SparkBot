@@ -1,20 +1,19 @@
 import React,{useEffect,useRef,useState} from 'react';
 import * as THREE from 'three';
-import { Gamepad2,Monitor,Play } from 'lucide-react';
+import { Gamepad2,Play } from 'lucide-react';
 import { BOT_CHARACTERS,type BotCharacterId } from '../game/engine';
 import type { ArcadeGameId } from '../game/arcadeGames';
 import { CLUBHOUSE_LAYOUT,createClubhouseScene } from '../three/clubhouseScene';
-type Props={onSelectGame:(id:ArcadeGameId)=>void;activeCharacter:BotCharacterId;planetAvailable:boolean};
+type Props={onSelectGame:(id:ArcadeGameId)=>void;activeCharacter:BotCharacterId;planetAvailable:boolean;onUnavailable:()=>void};
 type Point={x:number;y:number};
-export function Clubhouse3D({onSelectGame,activeCharacter,planetAvailable}:Props){
+export function Clubhouse3D({onSelectGame,activeCharacter,planetAvailable,onUnavailable}:Props){
  const host=useRef<HTMLDivElement>(null);
- const [enabled,setEnabled]=useState(true);
  const [ready,setReady]=useState(false);
  const [failed,setFailed]=useState(false);
  const [points,setPoints]=useState<Partial<Record<ArcadeGameId,Point>>>({});
  const accent=BOT_CHARACTERS[activeCharacter].accentCss;
  useEffect(()=>{
-  if(!enabled||failed||!host.current)return;
+  if(failed||!host.current)return;
   const el=host.current;
   let renderer:THREE.WebGLRenderer|undefined;
   let room:ReturnType<typeof createClubhouseScene>|undefined;
@@ -31,7 +30,7 @@ export function Clubhouse3D({onSelectGame,activeCharacter,planetAvailable}:Props
    room.anchors.forEach((v,id)=>{const p=v.clone().project(room!.camera);next[id]={x:(p.x+1)*50,y:(1-p.y)*50};});
    setPoints(next);renderer.render(room.scene,room.camera);
   };
-  const lost=(e:Event)=>{e.preventDefault();setFailed(true);};
+  const lost=(e:Event)=>{e.preventDefault();setFailed(true);onUnavailable();};
   try{
    renderer=new THREE.WebGLRenderer({antialias:false,alpha:false,powerPreference:'low-power'});
    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.25));
@@ -51,25 +50,25 @@ export function Clubhouse3D({onSelectGame,activeCharacter,planetAvailable}:Props
    reduced.addEventListener?.('change',resetMotion);raf=requestAnimationFrame(tick);
    return ()=>{stopped=true;cancelAnimationFrame(raf);observer?.disconnect();reduced.removeEventListener?.('change',resetMotion);renderer?.domElement.removeEventListener('webglcontextlost',lost);renderer?.domElement.remove();room?.dispose();renderer?.dispose();renderer?.forceContextLoss();};
   }catch{
-   stopped=true;cancelAnimationFrame(raf);observer?.disconnect();renderer?.domElement.removeEventListener('webglcontextlost',lost);renderer?.domElement.remove();room?.dispose();renderer?.dispose();renderer?.forceContextLoss();setFailed(true);
+   stopped=true;cancelAnimationFrame(raf);observer?.disconnect();renderer?.domElement.removeEventListener('webglcontextlost',lost);renderer?.domElement.remove();room?.dispose();renderer?.dispose();renderer?.forceContextLoss();setFailed(true);onUnavailable();
   }
- },[enabled,failed,accent]);
+ },[failed,accent,onUnavailable]);
  return <section className="overflow-hidden rounded-2xl border border-cyan-700 bg-slate-900" data-testid="clubhouse-3d">
    <div className="flex items-center justify-between gap-2 px-3 py-2">
     <div className="flex items-center gap-2 text-sm font-black text-white"><Gamepad2 className="h-5 w-5 text-cyan-300"/> Arcade Clubhouse</div>
-    {!failed&&<button type="button" aria-pressed={enabled} className="flex min-h-11 items-center gap-1 rounded-xl border border-slate-500 px-3 text-xs font-bold text-sky-100" onClick={()=>{setReady(false);setEnabled(v=>!v);}}><Monitor className="h-4 w-4"/>{enabled?'2D':'3D'}</button>}
+    <span className="text-xs text-sky-200">Pick a cabinet</span>
    </div>
-   {enabled&&!failed?<div ref={host} className="relative isolate h-[300px] overflow-hidden bg-slate-950 sm:h-[360px]" aria-label="Interactive arcade room">
+   {!failed?<div ref={host} className="relative isolate h-[clamp(230px,60vw,360px)] overflow-hidden bg-slate-950" aria-label="Interactive arcade room">
     {ready&&CLUBHOUSE_LAYOUT.map(game=>{
      const point=points[game.id];if(!point)return null;
      const unavailable=game.id==='planet_adventure'&&!planetAvailable;
      return <button key={game.id} type="button" disabled={unavailable} data-clubhouse-game={game.id} aria-label={'Play '+game.title} onClick={()=>onSelectGame(game.id)}
-      className="absolute z-10 flex min-h-11 w-[17%] max-w-[92px] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-xl border border-white/60 bg-slate-950/80 px-1 py-1 text-center text-[10px] font-black leading-tight text-white shadow-lg focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
+      className="absolute z-10 flex min-h-11 w-[17%] max-w-[92px] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-xl border border-white/60 bg-slate-950/80 px-1 py-1 text-center text-[11px] font-black leading-tight text-white shadow-lg focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
       style={{left:point.x+'%',top:point.y+'%',borderColor:game.accentHex}}>
       <Play className="h-4 w-4 fill-current" style={{color:game.accentHex}} aria-hidden="true"/>{game.title}
      </button>;
     })}
     {!ready&&<div className="absolute inset-0 grid place-items-center text-sm text-sky-200">Opening clubhouse…</div>}
-   </div>:<p role="status" className="px-3 pb-3 text-xs text-slate-300">{failed?'3D room unavailable on this device. Choose any game below.':'Choose any game below.'}</p>}
+   </div>:<p role="status" className="px-3 pb-3 text-xs text-slate-300">3D room unavailable.</p>}
   </section>;
 }

@@ -11,10 +11,16 @@ test('clubhouse contains one actual cabinet and anchor for each existing game',(
  for(const game of CLUBHOUSE_LAYOUT){assert.equal(room.cabinets.get(game.id)?.position.x,game.x);assert.ok(room.anchors.has(game.id));}
  room.animate(1,false);room.animate(0,true);room.dispose();assert.equal(room.scene.children.length,0);
 });
-test('interactive 3D room retains existing cards, shared game launch and renderer cleanup',()=>{
+test('interactive 3D room and cards are alternative views with shared game launch and renderer cleanup',()=>{
  const room=fs.readFileSync('src/components/GameRoomModal.tsx','utf8');
  const club=fs.readFileSync('src/components/Clubhouse3D.tsx','utf8');
  assert.match(room,/<Clubhouse3D onSelectGame=\{handleSelectGame\}/);
+ assert.match(room,/clubhouseView==='room'&&!clubhouseUnavailable\?<Clubhouse3D/);
+ assert.match(room,/data-testid="clubhouse-card-view"/);
+ assert.match(room,/setClubhouseUnavailable\(true\); setClubhouseView\('cards'\)/);
+ assert.match(room,/aria-pressed=\{clubhouseView==='cards'\}/);
+ assert.match(room,/disabled=\{isPlanetCard&&!onLaunchPlanetAdventure\}/);
+ assert.match(club,/setFailed\(true\);onUnavailable\(\)/);
  assert.match(room,/ARCADE_GAMES\.map/);
  assert.match(room,/EDUCATIONAL_MINI_GAMES\.map/);
  assert.match(club,/onSelectGame\(game.id\)/);
