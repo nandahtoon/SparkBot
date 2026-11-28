@@ -13,6 +13,8 @@ import {
   Gamepad2,
   Heart,
   Layers,
+  Box,
+  LayoutGrid,
   Lightbulb,
   Maximize2,
   Minimize2,
@@ -1545,6 +1547,9 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
   const [runKey, setRunKey] = useState(0);
   const [summary, setSummary] = useState<GameRoomRoundSummary | null>(null);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const [clubhouseView, setClubhouseView] = useState<'cards' | 'room'>(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches ? 'room' : 'cards');
+  const [clubhouseUnavailable, setClubhouseUnavailable] = useState(false);
+  const handleClubhouseUnavailable = useCallback(() => { setClubhouseUnavailable(true); setClubhouseView('cards'); }, []);
 
   const charDef = useMemo(() => BOT_CHARACTERS[activeCharacter], [activeCharacter]);
   const planetCaps = useMemo(
@@ -1581,6 +1586,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
 
   const handleSelectGame = useCallback(
     (gameId: ArcadeGameId) => {
+      if (gameId === 'planet_adventure' && !onLaunchPlanetAdventure) return;
       SFX.click();
       onClearExternalSummary?.();
       if (gameId === 'robot_run') {
@@ -1777,14 +1783,18 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
       ) : (
         <div className="touch-pan-y safe-bottom flex-1 overflow-y-auto px-3 py-3.5 sm:px-6 sm:py-5">
           {view === 'HUB' && (
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:gap-4">
               <section className="relative isolate overflow-hidden rounded-3xl border border-violet-500/50 bg-gradient-to-br from-slate-900 via-indigo-950 to-cyan-950 p-4" data-testid="living-game-room">
                 <div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-8 -z-10 h-36 w-36 rounded-full border-[18px] border-cyan-400/20 motion-safe:animate-pulse"/>
                 <div aria-hidden="true" className="pointer-events-none absolute bottom-4 right-12 -z-10 h-8 w-8 rotate-45 rounded-lg bg-violet-400/30 motion-safe:animate-bounce"/>
                 <div className="flex items-center gap-3"><Gamepad2 className="h-10 w-10 text-cyan-300"/><div className="flex-1"><h3 className="text-lg font-black text-white">SparkBot Clubhouse</h3><p className="text-xs text-sky-200">Play a mini-game or keep exploring!</p></div><CharacterVoiceButton id="room_welcome" text="Hey explorer! Welcome to my clubhouse. Pick a game, or let's go on our next adventure!" muted={voiceMuted}/></div>
               </section>
-              <Clubhouse3D onSelectGame={handleSelectGame} activeCharacter={activeCharacter} planetAvailable={Boolean(onLaunchPlanetAdventure)}/>
-              {nextJourney&&hasNextLevel&&<JourneyCard next={nextJourney} onStart={onNextLevel}/>}
+              <div role="group" aria-label="Game room view" className="grid grid-cols-2 gap-2 rounded-xl border border-slate-700 bg-slate-900 p-1" data-testid="clubhouse-view-picker">
+                <button type="button" aria-pressed={clubhouseView==='cards'} onClick={()=>setClubhouseView('cards')} className={'flex min-h-11 items-center justify-center gap-2 rounded-lg px-2 text-sm font-black '+(clubhouseView==='cards'?'bg-cyan-800 text-white':'text-slate-300')}><LayoutGrid className="h-5 w-5" aria-hidden="true"/> Games</button>
+                <button type="button" aria-pressed={clubhouseView==='room'} disabled={clubhouseUnavailable} onClick={()=>setClubhouseView('room')} className={'flex min-h-11 items-center justify-center gap-2 rounded-lg px-2 text-sm font-black disabled:opacity-50 '+(clubhouseView==='room'?'bg-cyan-800 text-white':'text-slate-300')}><Box className="h-5 w-5" aria-hidden="true"/> 3D Room</button>
+              </div>
+              {clubhouseUnavailable&&<p role="status" className="text-sm text-slate-300">3D Room unavailable. You can still play every available game here.</p>}
+              {clubhouseView==='room'&&!clubhouseUnavailable?<Clubhouse3D onSelectGame={handleSelectGame} activeCharacter={activeCharacter} planetAvailable={Boolean(onLaunchPlanetAdventure)} onUnavailable={handleClubhouseUnavailable}/>:<div className="flex flex-col gap-3" data-testid="clubhouse-card-view">
               {/* Action Arcade Cartridges First — Visual Scene Cards (Zero Reading Needed!) */}
               <section className="flex flex-col gap-3">
                 <div className="flex items-center gap-2 px-1">
@@ -1800,9 +1810,10 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                         key={game.id}
                         type="button"
                         data-arcade-game={game.id}
+                        disabled={isPlanetCard&&!onLaunchPlanetAdventure}
                         onClick={() => handleSelectGame(game.id)}
                         aria-label={`Play ${game.title}`}
-                        className={`group relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-700/90 bg-slate-900 p-2 text-left transition-all hover:-translate-y-0.5 hover:border-sky-400/80 active:scale-[0.98] ${
+                        className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 border-slate-700/90 bg-slate-900 p-2 text-left transition-all hover:-translate-y-0.5 hover:border-sky-400/80 active:scale-[0.98] disabled:opacity-50 ${
                           isPlanetCard ? 'col-span-2 sm:col-span-2' : ''
                         }`}
                       >
@@ -1810,7 +1821,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                         <div className="relative w-full overflow-hidden rounded-2xl border border-slate-800">
                           <ArcadeSceneArt
                             gameId={game.id}
-                            className="h-24 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] sm:h-28"
+                            className="h-20 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] sm:h-28"
                           />
                           <span className="tabular absolute right-2 top-2 inline-flex items-center gap-0.5 rounded-xl bg-slate-950/85 px-2 py-0.5 text-[11px] font-black text-amber-300">
                             <Zap className="h-3 w-3 fill-amber-300 text-amber-300" aria-hidden="true" />
@@ -1856,7 +1867,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
 
                         {/* Bold Title + Chunky Play Badge */}
                         <div className="mt-2 flex items-center justify-between gap-2 px-1 pb-0.5">
-                          <h4 className="truncate text-sm font-black text-white sm:text-base">
+                          <h4 className="min-w-0 break-words text-sm font-black leading-tight text-white sm:text-base">
                             {game.title}
                           </h4>
                           <span
@@ -1892,7 +1903,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                       <div className="relative w-full overflow-hidden rounded-2xl border border-slate-800">
                         <ArcadeSceneArt
                           gameId={game.id}
-                          className="h-24 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] sm:h-28"
+                          className="h-20 w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] sm:h-28"
                         />
                         <span className="tabular absolute right-2 top-2 inline-flex items-center gap-0.5 rounded-xl bg-slate-950/85 px-2 py-0.5 text-[11px] font-black text-amber-300">
                           <Zap className="h-3 w-3 fill-amber-300 text-amber-300" aria-hidden="true" />
@@ -1900,7 +1911,7 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                         </span>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2 px-1 pb-0.5">
-                        <h4 className="truncate text-sm font-black text-white sm:text-base">
+                        <h4 className="min-w-0 break-words text-sm font-black leading-tight text-white sm:text-base">
                           {game.title}
                         </h4>
                         <span
@@ -1914,6 +1925,8 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
                   ))}
                 </div>
               </section>
+              </div>}
+              {nextJourney&&hasNextLevel&&<JourneyCard next={nextJourney} onStart={onNextLevel}/>}
             </div>
           )}
 
