@@ -9,7 +9,7 @@ export interface ReadAloudState {
 }
 
 type Listener = () => void;
-export interface SpeechStyle { playful?: boolean; mood?:CharacterVoiceMood; onFinished?: () => void; }
+export interface SpeechStyle { playful?: boolean; mood?:CharacterVoiceMood; pitchOffset?:number; onFinished?: () => void; }
 
 function hasSpeechSupport(): boolean {
   return (
@@ -129,7 +129,7 @@ class ReadAloudController {
       if(style.playful) utter.lang=voice && /^en(-|_|$)/i.test(voice.lang)?voice.lang:'en-US';
       const profile=characterVoiceStyle(id,style.mood);
       utter.rate = style.playful ? profile.rate : 0.94;
-      utter.pitch = style.playful ? profile.pitch : 1.05;
+      utter.pitch = style.playful ? Math.max(.85,Math.min(1.45,profile.pitch+(Number.isFinite(style.pitchOffset)?style.pitchOffset!:0))) : 1.05;
       utter.volume = this.voiceVolume;
 
       this.speaking = true;

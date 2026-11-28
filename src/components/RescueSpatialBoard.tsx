@@ -3,10 +3,11 @@ import * as THREE from 'three';
 import {createRescueSpatialScene} from '../three/rescueSpatialScene';
 import {planRescueMotion} from '../game/rescueSpatialMotion';
 import {createRescueFrameChain} from '../game/rescueFrameChain';
+import type {BotCharacterId} from '../game/customization';
 import type {RescueMap,RescueState} from '../game/rescueAdventure';
 
 // Exclusive standalone renderer. One bounded frame chain during a command; zero scheduled frames at idle.
-export function RescueSpatialBoard({map,state,mode,fallback}:{map:RescueMap;state:RescueState;mode:'explore'|'code';fallback:ReactNode}){
+export function RescueSpatialBoard({map,state,mode,fallback,character='sparkbot'}:{character?:BotCharacterId;map:RescueMap;state:RescueState;mode:'explore'|'code';fallback:ReactNode}){
  const host=useRef<HTMLDivElement>(null),current=useRef({map,state,mode}),sync=useRef<(()=>void)|null>(null);
  const [failed,setFailed]=useState(false);
  useEffect(()=>{current.current={map,state,mode};sync.current?.();},[map,state,mode]);
@@ -39,11 +40,11 @@ export function RescueSpatialBoard({map,state,mode,fallback}:{map:RescueMap;stat
    renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});
    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;
    renderer.domElement.style.width='100%';renderer.domElement.style.height='100%';renderer.domElement.setAttribute('aria-hidden','true');
-   renderer.domElement.addEventListener('webglcontextlost',onLost);el.appendChild(renderer.domElement);world=createRescueSpatialScene(map);world.update(current.current.state);
+   renderer.domElement.addEventListener('webglcontextlost',onLost);el.appendChild(renderer.domElement);world=createRescueSpatialScene(map,character);world.update(current.current.state);
    sync.current=syncState;window.addEventListener('resize',resize);document.addEventListener('visibilitychange',onVisibility);if(typeof preference.addEventListener==='function')preference.addEventListener('change',onPreference);else preference.addListener?.(onPreference);if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(resize);observer.observe(el);}resize();
   }catch{cleanup();setFailed(true);return;}
   return cleanup;
- },[map,failed]);
+ },[map,failed,character]);
  if(failed)return <><p role="status" className="text-center text-sm text-sky-200">3D unavailable — keep playing on the map.</p>{fallback}</>;
  return <div ref={host} data-testid="rescue-spatial-board" className="mx-auto h-[clamp(210px,40dvh,340px)] w-full max-w-[520px] landscape:h-[clamp(160px,48dvh,300px)] overflow-hidden rounded-xl border border-cyan-700" role="img" aria-label={`3D rescue board, robot row ${state.row+1}, column ${state.col+1}, ${state.repaired.length} repaired`}/>;
 }
