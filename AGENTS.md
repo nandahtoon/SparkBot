@@ -14,3 +14,7 @@ Read docs/PROJECT_STATE.json, docs/AI_HANDOFF_PROTOCOL.md and docs/AI_START_PROM
 
 ## Owner-approved experimental exception (2026-11-28)
 See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.
+
+
+## Owner-authorized main testing exception (2026-11-28)
+Owner requested merge and testing deployment before physical acceptance because AI Studio imports main. For SB-M01 only, exact-green reviewed integration may enter main as a testing candidate. main no longer denotes accepted stable after this merge; accepted V0.3 remains archive/v0.3-family at 7028aaa5aab718aff4cdbcfaea6cc4d11818ff33. Legacy branches.stable field in state remains main for checker compatibility; use acceptedStableRef for stable code. Disable automatic main Git deployments in vercel.json and auto-assignment of production domains; deploy exact merged SHA on a non-production test ref. No experimental runtime (#38/#40), mini-game expansion, public/native/commercial release or inferred physical acceptance. This exception does not authorize future arbitrary main merges. Independent review status must be disclosed.
