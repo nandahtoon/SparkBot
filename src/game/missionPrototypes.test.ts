@@ -23,9 +23,9 @@ test('Signal Repair begins with a genuinely failing program; corrected loop wins
  assert.equal(won.status,'win',won.failReason??undefined);assert.ok(isMissionComplete(level,won));
  assert.equal(JSON.stringify(level.starterProgram),original);
 });
-test('practice definitions are isolated from all 20 saved campaign IDs',()=>{
+test('practice definitions are isolated from all 24 saved campaign IDs',()=>{
  const ids=new Set([...LEVELS,...BONUS_LEVELS].map(l=>l.id));
- assert.equal(ids.size,20);
+ assert.equal(ids.size,24);
  for(const level of MISSION_PROTOTYPES){
   assert.equal(ids.has(level.id),false);assert.ok(level.isPrototype);assert.equal(getMissionPrototype(level.id),level);
   assert.ok(computeChassisInfo(level.starterChassis!).cost<=level.budget);

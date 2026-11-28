@@ -30,9 +30,9 @@ test('survey station validation fails closed for invalid or repeated locations',
   assert.equal(simulateProgram(bad,chassis,blocks('MOVE','WAIT','MOVE','JUMP','WAIT','MOVE','MOVE')).failCode,'objective_unmet');
  }
 });
-test('ocean theme is opt-in to Reef Survey; all twenty campaign themes remain non-ocean',()=>{
+test('ocean theme is opt-in to Reef Survey; legacy twenty campaign themes remain non-ocean',()=>{
  assert.equal(getBiomeForLevel(level).id,'ocean_discovery');
- for(const mission of [...LEVELS,...BONUS_LEVELS])assert.notEqual(getBiomeForLevel(mission).id,'ocean_discovery');
+ for(const mission of [...LEVELS,...BONUS_LEVELS])assert.equal(getBiomeForLevel(mission).id==='ocean_discovery',mission.id>=21);
  assert.notEqual(getBiomeForLevel({...level,isDaily:true}).id,'ocean_discovery');
  assert.notEqual(getBiomeForLevel(getMissionPrototype(6101)).id,'ocean_discovery');
 });

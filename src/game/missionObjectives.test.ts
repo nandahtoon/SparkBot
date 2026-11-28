@@ -40,7 +40,7 @@ test('delivery and repair finish at station; power requires solved optics',()=>{
  }
 });
 test('all legacy campaigns retain existing objective and debug bypass',()=>{
- for(const level of [...LEVELS,...BONUS_LEVELS]){
+ for(const level of [...LEVELS,...BONUS_LEVELS].filter(l=>l.id<=20)){
   assert.equal(level.objective,undefined);
   assert.equal(getMissionObjective(level).kind,'power');assert.equal(requiresMissionCircuit(level),true);
  }

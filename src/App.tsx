@@ -575,7 +575,7 @@ export default function App() {
     (lvl: LevelDef, preserveChassis = false, junior = false) => {
       setJuniorSession(junior);
       const hasStarterChassis = Boolean(lvl.starterChassis);
-      const startInCode = Boolean((lvl.isDebug || lvl.isPrototype) && hasStarterChassis);
+      const startInCode = Boolean((lvl.isDebug || lvl.isPrototype || lvl.objective) && hasStarterChassis);
       const nextChassis = hasStarterChassis
         ? lvl.starterChassis!.map((row) => [...row])
         : preserveChassis

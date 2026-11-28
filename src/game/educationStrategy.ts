@@ -31,7 +31,7 @@ import type { MilestoneUnlockKind } from './milestoneParticles';
  * 1. STORY-DRIVEN 4-CHAPTER CAMPAIGN & AGE BAND SCAFFOLDING (Ages 6–12)
  * ========================================================================== */
 
-export type StoryChapterId = 1 | 2 | 3 | 4 | 5;
+export type StoryChapterId = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface StoryChapterDef {
   id: StoryChapterId;
@@ -106,6 +106,11 @@ export const STORY_CHAPTERS: StoryChapterDef[] = [
     stemFocus: 'Resource trade-offs, reusable code and timing',
     levelIds: [17, 18, 19, 20],
     accentColor: '#2dd4bf'
+  },
+  {
+    id:6,title:'Chapter 6 · Ocean Discovery',ageBand:'Ages 8–12',subtitle:'Research Walkways & Ocean Beacon',
+    briefingLines:['Explore a floating research walkway.','Collect samples, record observations, time your steps and restore the beacon.'],
+    stemFocus:'Sampling, observation, periodic signals and repair',levelIds:[21,22,23,24],accentColor:'#67e8f9'
   }
 ];
 

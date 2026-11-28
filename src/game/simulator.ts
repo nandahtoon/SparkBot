@@ -5,7 +5,7 @@ import {
   levelHasDynamicHazards
 } from './hazards';
 import { findCircuitFixCell } from './optics';
-import { getRouteObjectiveFailure, getSurveyProgress, getSurveyStations } from './missionObjectives';
+import { getRouteObjectiveFailure, getSurveyProgress, getSurveyStations, getCollectionRequirement } from './missionObjectives';
 import {
   PARTS,
   parseNonNegInt,
@@ -833,29 +833,39 @@ export function findShortestTrackPlan(level: LevelDef): {
   if (gateIndex <= 0) return null;
   const hasHazards = levelHasDynamicHazards(level);
   const canWait = Boolean(level.waitUnlocked);
+  const survey = getSurveyStations(level);
+  const collectTarget = getCollectionRequirement(level);
+  if ((level.objective?.kind==='survey' && !survey) || (level.objective?.kind==='collect' && collectTarget===null)) return null;
 
   for (const prof of CHASSIS_SOLVER_PROFILES) {
     if (prof.cost > level.budget) continue;
-    const queue = [{ pos: 0, tick: 0, seq: [] as string[], crystals: 0 }];
-    const bestAt: Record<string, number> = { '0:0': 0 };
+    const queue = [{ pos: 0, tick: 0, seq: [] as string[], crystals: 0, observed: 0 }];
+    const bestAt: Record<string, number> = { '0:0:0': 0 };
 
     while (queue.length > 0) {
       const cur = queue.shift()!;
-      if (cur.pos === gateIndex) return { profile: prof, sequence: cur.seq };
+      if (cur.pos === gateIndex) {
+        if ((collectTarget===null || cur.crystals>=collectTarget) && (!survey || cur.observed===survey.length)) return { profile:prof,sequence:cur.seq };
+        continue;
+      }
       if (cur.seq.length >= 22) continue;
 
       const nextTick = cur.tick + 1;
+      const ordered = survey ? [...survey].sort((a,b)=>a-b) : [];
+      const nextStation = ordered[cur.observed];
+      const canAdvance = (target:number) => nextStation===undefined || (cur.pos<nextStation && target<=nextStation);
+      const keyFor=(pos:number,observed:number)=>`${pos}:${hasHazards?nextTick:cur.seq.length}:${observed}`;
 
       if (prof.wheels || prof.treads) {
         const np = Math.min(cur.pos + 1, gateIndex);
         const nt = track[np];
         const hazardBlocked = hasHazards && Boolean(getBlockingHazardAtTile(level, np, nextTick));
-        if (!hazardBlocked && nt.type !== 'gap' && nt.type !== 'ramp' && (nt.type !== 'mud' || prof.treads)) {
+        if (!hazardBlocked && canAdvance(np) && nt.type !== 'gap' && nt.type !== 'ramp' && (nt.type !== 'mud' || prof.treads)) {
           const nc = cur.crystals + (nt.crystal ? 1 : 0);
-          const keyM = hasHazards ? `${np}:${nextTick}` : `${np}:${cur.seq.length}`;
+          const keyM=keyFor(np,cur.observed);
           if (bestAt[keyM] === undefined || nc > bestAt[keyM]) {
             bestAt[keyM] = nc;
-            queue.push({ pos: np, tick: nextTick, seq: [...cur.seq, 'MOVE'], crystals: nc });
+            queue.push({ pos: np, tick: nextTick, seq: [...cur.seq, 'MOVE'], crystals: nc, observed:cur.observed });
           }
         }
       }
@@ -864,12 +874,12 @@ export function findShortestTrackPlan(level: LevelDef): {
         const jp = Math.min(cur.pos + 2, gateIndex);
         const jt = track[jp];
         const hazardBlocked = hasHazards && Boolean(getBlockingHazardAtTile(level, jp, nextTick));
-        if (!hazardBlocked && jt.type !== 'gap' && jt.type !== 'ramp' && (jt.type !== 'mud' || prof.treads)) {
+        if (!hazardBlocked && canAdvance(jp) && jt.type !== 'gap' && jt.type !== 'ramp' && (jt.type !== 'mud' || prof.treads)) {
           const jc = cur.crystals + (jt.crystal ? 1 : 0);
-          const keyJ = hasHazards ? `${jp}:${nextTick}` : `${jp}:${cur.seq.length}`;
+          const keyJ=keyFor(jp,cur.observed);
           if (bestAt[keyJ] === undefined || jc > bestAt[keyJ]) {
             bestAt[keyJ] = jc;
-            queue.push({ pos: jp, tick: nextTick, seq: [...cur.seq, 'JUMP'], crystals: jc });
+            queue.push({ pos: jp, tick: nextTick, seq: [...cur.seq, 'JUMP'], crystals: jc, observed:cur.observed });
           }
         }
       }
@@ -878,26 +888,27 @@ export function findShortestTrackPlan(level: LevelDef): {
         const bp = Math.min(cur.pos + 3, gateIndex);
         const bt = track[bp];
         const hazardBlocked = hasHazards && Boolean(getBlockingHazardAtTile(level, bp, nextTick));
-        if (!hazardBlocked && bt.type !== 'gap' && bt.type !== 'ramp' && (bt.type !== 'mud' || prof.treads)) {
+        if (!hazardBlocked && canAdvance(bp) && bt.type !== 'gap' && bt.type !== 'ramp' && (bt.type !== 'mud' || prof.treads)) {
           let bc = cur.crystals;
           for (let s = cur.pos + 1; s <= bp; s++) {
             if (track[s].crystal && track[s].type !== 'gap') bc++;
           }
-          const keyB = hasHazards ? `${bp}:${nextTick}` : `${bp}:${cur.seq.length}`;
+          const keyB=keyFor(bp,cur.observed);
           if (bestAt[keyB] === undefined || bc > bestAt[keyB]) {
             bestAt[keyB] = bc;
-            queue.push({ pos: bp, tick: nextTick, seq: [...cur.seq, 'BOOST'], crystals: bc });
+            queue.push({ pos: bp, tick: nextTick, seq: [...cur.seq, 'BOOST'], crystals: bc, observed:cur.observed });
           }
         }
       }
 
-      if (hasHazards && canWait) {
+      if (canWait && (hasHazards || nextStation===cur.pos)) {
         const waitBlocked = Boolean(getBlockingHazardAtTile(level, cur.pos, nextTick));
         if (!waitBlocked) {
-          const keyW = `${cur.pos}:${nextTick}`;
+          const observed=cur.observed+(nextStation===cur.pos?1:0);
+          const keyW=keyFor(cur.pos,observed);
           if (bestAt[keyW] === undefined || cur.crystals > bestAt[keyW]) {
             bestAt[keyW] = cur.crystals;
-            queue.push({ pos: cur.pos, tick: nextTick, seq: [...cur.seq, 'WAIT'], crystals: cur.crystals });
+            queue.push({ pos: cur.pos, tick: nextTick, seq: [...cur.seq, 'WAIT'], crystals: cur.crystals,observed });
           }
         }
       }
