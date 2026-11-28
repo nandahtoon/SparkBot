@@ -5,6 +5,7 @@ import type { ProceduralTextures } from './materials';
 import type { GraphicsQualityBudget } from '../game/graphicsConfig';
 import type { BiomeThemeDef } from '../game/biomes';
 import { createChapterLandmarks } from './chapterLandmarks';
+import { createLivingOcean } from './livingOcean';
 
 export interface WorkshopEnvironmentHandles {
   workshopGroup: THREE.Group;
@@ -347,6 +348,8 @@ export function buildWorkshopEnvironment(
   for(const mesh of [islands,coral,ripples])mesh.instanceMatrix.needsUpdate=true;
   if(coral.instanceColor)coral.instanceColor.needsUpdate=true;
   oceanGroup.add(islands,coral,ripples);skyportGroup.add(oceanGroup);
+  const livingOcean=createLivingOcean(trackDisposable);oceanGroup.add(livingOcean.root);
+  let oceanEco=false;
   // Distinct landmarks share geometry, never obstruct the playable deck.
   const oceanLandmarks = {sampling:new THREE.Group(),reef:new THREE.Group(),signal:new THREE.Group(),beacon:new THREE.Group()};
   const floatGeo=trackDisposable(new THREE.CylinderGeometry(0.75,0.9,0.7,12));
@@ -734,6 +737,7 @@ export function buildWorkshopEnvironment(
     if (softboxTop) softboxTop.visible = !isSoftwareGl && budget.softboxEnabled;
     if (softboxSide) softboxSide.visible = !isSoftwareGl && budget.softboxEnabled;
     ambientMotes.visible = budget.ambientMotesVisible;
+    oceanEco=budget.lowGraphics;
   };
 
   const applyBiome = (biome: BiomeThemeDef) => {
@@ -741,6 +745,8 @@ export function buildWorkshopEnvironment(
     energyArrays.visible = biome.id === 'energy_valley';
     const ocean = biome.id === 'ocean_discovery';
     oceanGroup.visible = ocean;
+    livingOcean.show(ocean?biome.oceanZone:undefined);
+    if(ocean)chapterLandmarks.groups.ocean_discovery!.visible=false;
     for(const [zone,group] of Object.entries(oceanLandmarks)) group.visible=ocean && zone===biome.oceanZone;
     for(const mesh of [solarRing,mesas,mesaCaps,mesaBands,beacons]) mesh.visible = biome.id==='skyport_canyon';
     for(const rotor of windmills) if(rotor.parent) rotor.parent.visible = biome.id==='skyport_canyon'||biome.id==='energy_valley';
@@ -784,7 +790,8 @@ export function buildWorkshopEnvironment(
     applyBiome,
     animateEnvironment: (time,reduced)=>{
       chapterLandmarks.animate(time,reduced);
-      if(!oceanGroup.visible)return;
+      if(!oceanGroup.visible||!skyportGroup.visible)return;
+      livingOcean.animate(time,reduced,oceanEco);
       waveMat.opacity=reduced?.55:.43+Math.sin(time*.8)*.12;
       for(const group of Object.values(oceanLandmarks))if(group.visible)group.position.y=reduced?0:Math.sin(time*1.1)*.08;
     },

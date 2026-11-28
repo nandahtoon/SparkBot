@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getJourneyPreview } from '../game/journey';
 import { getWorldArchitecture } from '../game/worldArchitecture';
+import { oceanTrackStyle,createOceanDestinationPreview } from './livingOcean';
 import { requiresMissionCircuit } from '../game/missionObjectives';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -1031,13 +1032,15 @@ export class UnifiedWorldController {
     this.gateOpenAmt = 0;
 
     const architecture=getWorldArchitecture(this.activeBiome.id);
+    const ocean=this.activeBiome.id==='ocean_discovery';
+    const oceanStyle=oceanTrackStyle(this.activeBiome.oceanZone);
     const normalMat = new THREE.MeshStandardMaterial({
-      map: this.tex.floorDeck,
-      bumpMap: this.tex.floorBump,
+      map: ocean?null:this.tex.floorDeck,
+      bumpMap: ocean?null:this.tex.floorBump,
       bumpScale: 0.02,
-      color: architecture.deck,
-      roughness: 0.55,
-      metalness: 0.48
+      color: ocean?oceanStyle.deck:architecture.deck,
+      roughness: ocean?.86:.55,
+      metalness: ocean?.08:.48
     });
     const startMat = new THREE.MeshStandardMaterial({
       map: this.tex.floorDeck,
@@ -1088,7 +1091,9 @@ export class UnifiedWorldController {
     const track = level.track;
     // A miniature holographic route of the following mission, not traversable geometry.
     const next=getJourneyPreview(level);
-    if(next){
+    if(next&&ocean&&next.biome==='ocean_discovery'){
+      this.trackGroup.add(createOceanDestinationPreview(next,track.length));
+    }else if(next){
       const group=new THREE.Group();group.name='next-mission-hologram';
       group.position.set(3.7,1.4,TRACK_START_Z-(track.length-1)*TILE_SPACING+1.8);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.78,.95,.16,12),new THREE.MeshStandardMaterial({color:0x164e63,emissive:0x0891b2,emissiveIntensity:.25}));group.add(base);
@@ -1136,7 +1141,7 @@ export class UnifiedWorldController {
         this.trackGroup.add(base, wedge);
       } else {
         const isGateTile = tile.type === 'gate';
-        const deckW = isGateTile ? GATE_DECK_WIDTH : 3.2;
+        const deckW = isGateTile ? GATE_DECK_WIDTH : ocean?oceanStyle.deckWidth:3.2;
         const deck = new THREE.Mesh(
           new RoundedBoxGeometry(deckW, 0.38, TILE_SPACING - 0.16, 2, 0.06),
           tile.type === 'start' ? startMat : normalMat
@@ -1144,6 +1149,13 @@ export class UnifiedWorldController {
         deck.position.set(0, -0.19, tz);
         deck.receiveShadow = true;
         this.trackGroup.add(deck);
+        if(ocean){
+          // Pontoon flotation, plank seams, and bright side bumpers replace the industrial runway look.
+          const floatMat=new THREE.MeshStandardMaterial({color:0xe9b878,roughness:.9});
+          const trimMat=new THREE.MeshStandardMaterial({color:oceanStyle.trim,roughness:.7});
+          for(const x of [-deckW*.37,deckW*.37]){const pontoon=new THREE.Mesh(new RoundedBoxGeometry(.85,.75,TILE_SPACING-.24,2,.09),floatMat);pontoon.position.set(x,-.68,tz);this.trackGroup.add(pontoon);}
+          for(const dz of [-.85,0,.85]){const seam=new THREE.Mesh(new THREE.BoxGeometry(deckW-.25,.014,.035),trimMat);seam.position.set(0,.009,tz+dz);this.trackGroup.add(seam);}
+        }
 
         // Glowing side rails framing the runway or wider Gate Landing Bay
         const railOffsetX = deckW * 0.5 - 0.06;
@@ -1155,7 +1167,7 @@ export class UnifiedWorldController {
       }
 
       // Sleek under-deck architectural support pylon every 2nd solid tile
-      if (i % 2 === 0 || tile.type === 'gate') {
+      if (!ocean && (i % 2 === 0 || tile.type === 'gate')) {
         const pylon = new THREE.Mesh(pylonGeo, pylonMat);
         pylon.position.set(0, -2.42, tz);
         this.trackGroup.add(pylon);
@@ -2080,7 +2092,7 @@ export class UnifiedWorldController {
       if (this.planetWorld) {
         this.planetWorld.planetGroup.visible = false;
       }
-      this.env.workshopGroup.visible = true;
+      this.env.workshopGroup.visible = this.activeBiome.id!=='ocean_discovery'||mode==='TITLE'||mode==='BUILD_3D'||mode==='PAINT_BOOTH';
       this.env.skyportGroup.visible = true;
       this.scene.background = new THREE.Color(this.activeBiome.skyHex);
       this.scene.fog = new THREE.FogExp2(this.activeBiome.fogHex, this.activeBiome.fogDensity);
