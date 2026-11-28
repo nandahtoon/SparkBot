@@ -42,6 +42,7 @@ import {
 import { SPEECH, useReadAloud } from '../game/readAloud';
 import { CharacterVoiceButton } from './CharacterVoiceButton';
 import { JourneyCard } from './JourneyCard';
+import { AdventureMap } from './AdventureMap';
 import { getJourneyPreview, type JourneyPreview } from '../game/journey';
 import { victoryVoice } from '../game/characterGuidance';
 import { getMissionLearningGoal, type MissionLearningGoal } from '../game/missionCurriculum';
@@ -455,10 +456,12 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
 }) => {
   const speech = useReadAloud();
   const [mapTab, setMapTab] = useState<'story' | 'debug'>(initialTab);
+  const [detailedMap,setDetailedMap]=useState(false);
 
   useEffect(() => {
     if (visible) {
       setMapTab(initialTab);
+      setDetailedMap(false);
     } else {
       SPEECH.stop();
     }
@@ -660,8 +663,12 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
           </section>
         )}
         {mapTab==='story' && (()=>{const level=allLevelsById.get(currentLevelId);const next=level?getJourneyPreview(level):null;return next?<JourneyCard next={next} locked={next.id<=LEVELS.length && next.id>save.unlockedLevel}/>:null;})()}
-        {/* Story Campaign */}
-        {mapTab === 'story' && (
+        {/* Story Campaign — overview by default; full original cards remain available. */}
+        {mapTab==='story'&&<>
+          <div className="flex items-center justify-between gap-2"><span className="text-sm font-black text-white">{detailedMap?'Mission list':'Explore worlds'}</span><button type="button" aria-pressed={detailedMap} onClick={()=>setDetailedMap(v=>!v)} className="min-h-11 rounded-xl border border-slate-600 bg-slate-800 px-3 text-xs font-bold text-sky-100">{detailedMap?'World Map':'Mission List'}</button></div>
+          {!detailedMap&&<AdventureMap save={save} currentLevelId={currentLevelId} onSelectLevel={onSelectLevel} muted={save.muted}/>}
+        </>}
+        {mapTab === 'story' && detailedMap && (
         <div className="flex flex-col gap-3">
           {STORY_CHAPTERS.map((chapter) => {
             const chapterSpeechId = `chapter_${chapter.id}`;

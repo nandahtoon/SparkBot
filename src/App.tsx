@@ -75,6 +75,8 @@ import { SPEECH } from './game/readAloud';
 import { missionVoice } from './game/characterGuidance';
 import { soundscapeFor } from './game/soundscape';
 import { getJourneyPreview } from './game/journey';
+import { canEnterCampaign,createMissionTravel,type MissionTravel } from './game/adventureMap';
+import { MissionTravelOverlay } from './components/MissionTravelOverlay';
 import { getBiomeForLevel } from './game/biomes';
 import { getPartPlacementSoundProfile } from './game/partAudio';
 import {
@@ -258,6 +260,8 @@ export default function App() {
   const [juniorSession, setJuniorSession] = useState(false);
   const [paused, setPaused] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [missionTravel,setMissionTravel]=useState<MissionTravel|null>(null);
+  const finishMissionTravel=useCallback(()=>setMissionTravel(null),[]);
   const [showTrophies, setShowTrophies] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -589,6 +593,7 @@ export default function App() {
   const beginLevel = useCallback(
     (lvl: LevelDef, preserveChassis = false, junior = false) => {
       SPEECH.stop();
+      setMissionTravel(null);
       setJuniorSession(junior);
       const hasStarterChassis = Boolean(lvl.starterChassis);
       const startInCode = Boolean((lvl.isDebug || lvl.isPrototype || lvl.objective) && hasStarterChassis);
@@ -2416,8 +2421,15 @@ export default function App() {
       }
       return null;
     }
-    return getLevelById(currentLevel.id + 1);
-  }, [currentLevel]);
+    const target=getLevelById(currentLevel.id + 1);
+    return target&&canEnterCampaign(target,save)?target:null;
+  }, [currentLevel,save.unlockedLevel]);
+  const travelToMission=(target:LevelDef)=>{
+    if(!target.isDebug&&!canEnterCampaign(target,save))return;
+    const travel=createMissionTravel(currentLevel,target);
+    beginLevel(target);
+    if(travel){setMissionTravel(travel);SFX.uiTick();}
+  };
 
   const currentLevelSavedStars = getLevelSavedStars(save, currentLevel);
   const currentAdaptiveHint = useMemo(() => {
@@ -3025,7 +3037,7 @@ export default function App() {
             onNextLevel={() => {
               setPlanetSummary(null);
               setShowGameRoom(false);
-              if (nextLevelDef) beginLevel(nextLevelDef);
+              if (nextLevelDef) travelToMission(nextLevelDef);
             }}
             onClose={() => {
               setPlanetSummary(null);
@@ -3164,7 +3176,7 @@ export default function App() {
         }
         onNextLevel={() => {
           SFX.click();
-          if (nextLevelDef) beginLevel(nextLevelDef);
+          if (nextLevelDef) travelToMission(nextLevelDef);
         }}
       />
 
@@ -3175,8 +3187,8 @@ export default function App() {
         initialTab={mapInitialTab}
         onSelectLevel={(id) => {
           SFX.click();
-          const target = getLevelById(id) || BONUS_LEVELS[0];
-          beginLevel(target);
+          const target = getLevelById(id);
+          if(target&&canEnterCampaign(target,save))travelToMission(target);
         }}
         onSelectPrototype={(id)=>{const level=getMissionPrototype(id);if(level){SFX.click();beginLevel(level);}}}
         onSelectDebugMission={handleSelectDebugMission}
@@ -3236,6 +3248,7 @@ export default function App() {
         onDismiss={() => setMilestoneCelebration(null)}
       />
 
+      {missionTravel&&!webglLost&&<MissionTravelOverlay travel={missionTravel} onFinish={finishMissionTravel}/>}
       {/* WebGL Context Lost Recovery */}
       {webglLost && (
         <div
