@@ -97,6 +97,7 @@ function getTierBadgeStyle(optimality: LogicPathOptimality): string {
 interface CodeDockProps {
   objectiveLabel?: string;
   objectiveTarget?: number | null;
+  surveyTarget?: number | null;
   objectiveFeedback?: string | null;
   junior?: boolean;
   program: CodeBlock[];
@@ -261,6 +262,7 @@ const TILE_BADGE_STYLE: Record<TileType, string> = {
 export const CodeDock: React.FC<CodeDockProps> = ({
   objectiveLabel,
   objectiveTarget = null,
+  surveyTarget = null,
   objectiveFeedback = null,
   junior = false,
   program,
@@ -1197,6 +1199,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             <div className="mb-2 rounded-xl border border-cyan-400/50 bg-cyan-950/45 px-3 py-2 text-xs font-bold text-cyan-100" data-testid="mission-objective">
               <p>{objectiveLabel}</p>
               {objectiveTarget !== null && stepInspection && <p aria-live="polite">Collected: {stepInspection.crystalsCollected}/{objectiveTarget}</p>}
+              {surveyTarget !== null && <p aria-live="polite">Survey stations: {stepInspection?.surveysCompleted ?? 0}/{surveyTarget}</p>}
               {!simulating && objectiveFeedback && <p role="status" className="mt-1 text-amber-200">{objectiveFeedback}</p>}
             </div>
           )}

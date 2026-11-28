@@ -5,7 +5,7 @@ import {
   levelHasDynamicHazards
 } from './hazards';
 import { findCircuitFixCell } from './optics';
-import { getRouteObjectiveFailure } from './missionObjectives';
+import { getRouteObjectiveFailure, getSurveyProgress, getSurveyStations } from './missionObjectives';
 import {
   PARTS,
   parseNonNegInt,
@@ -568,7 +568,7 @@ export function simulateProgram(
         terminated = makeResult('fail', 'Reached the gate, but need Laser Emitter on front slot!', 'missing_part', 'laser');
         return;
       }
-      const objectiveFailure = getRouteObjectiveFailure(level, Object.keys(collectedSet).length);
+      const objectiveFailure = getRouteObjectiveFailure(level, Object.keys(collectedSet).length, events);
       terminated = objectiveFailure
         ? makeResult('fail', objectiveFailure, 'objective_unmet', null)
         : makeResult('win', null, null, null);
@@ -674,6 +674,7 @@ export interface SimStepInspection {
   aheadTileType: TileType;
   crystalsCollected: number;
   totalCrystals: number;
+  surveysCompleted?: number;
   activeCapabilities: string[];
   statusLabel: string;
   isLastStep: boolean;
@@ -755,6 +756,7 @@ export function buildStepInspection(
     aheadTileType,
     crystalsCollected: crystalSeen.size,
     totalCrystals: result.totalCrystals,
+    ...(getSurveyStations(level) ? {surveysCompleted:getSurveyProgress(level,result.events.slice(0,clampedIdx+1))} : {}),
     activeCapabilities,
     statusLabel,
     isLastStep: clampedIdx >= result.events.length - 1,

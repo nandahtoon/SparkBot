@@ -1139,6 +1139,17 @@ export class UnifiedWorldController {
         this.trackGroup.add(pylon);
       }
 
+      if (level.objective?.kind === 'survey' && level.objective.stations.includes(i)) {
+        // Survey deck marker: geometry sits flat, outside the robot collision model.
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.73,0.88,24),new THREE.MeshBasicMaterial({color:0x22d3ee,side:THREE.DoubleSide}));
+        ring.rotation.x=-Math.PI/2;ring.position.set(0,0.035,tz);this.trackGroup.add(ring);
+        for(const x of [-1.27,1.27]){
+          const post=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.14,0.65,8),new THREE.MeshStandardMaterial({color:0x164e63}));
+          post.position.set(x,0.32,tz);this.trackGroup.add(post);
+          const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),new THREE.MeshBasicMaterial({color:0x67e8f9}));
+          lamp.position.set(x,0.74,tz);this.trackGroup.add(lamp);
+        }
+      }
       if (tile.crystal) {
         const crystalBaseY = tile.type === 'ramp' ? 1.34 : 1.0;
         const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), crystalMat);

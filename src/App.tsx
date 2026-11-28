@@ -123,7 +123,7 @@ import { getNextCodeCameraPreset, type CodeCameraPreset } from './three/codeCame
 import type { HeadScreenPoint, SlotScreenPoint } from './three/robotRig';
 import { TitleOverlay } from './components/TitleOverlay';
 import { getMissionLearningGoal, getRecommendedCampaignLevel } from './game/missionCurriculum';
-import { getCollectionRequirement, getMissionObjectiveLabel, isMissionComplete, requiresMissionCircuit } from './game/missionObjectives';
+import { getCollectionRequirement, getMissionObjectiveLabel, getSurveyStations, isMissionComplete, requiresMissionCircuit } from './game/missionObjectives';
 import { getMissionPrototype } from './game/missionPrototypes';
 import { TopHud, type MoodCue } from './components/TopHud';
 import { BuildDock } from './components/BuildDock';
@@ -2674,6 +2674,7 @@ export default function App() {
         <CodeDock
           objectiveLabel={currentLevel.objective ? getMissionObjectiveLabel(currentLevel) : undefined}
           objectiveTarget={currentLevel.objective ? getCollectionRequirement(currentLevel) : null}
+          surveyTarget={getSurveyStations(currentLevel)?.length ?? null}
           objectiveFeedback={currentLevel.isPrototype || lastFailedSim?.failCode === 'objective_unmet' ? lastFailedSim?.failReason : null}
           junior={juniorSession}
           program={program}
@@ -3071,8 +3072,8 @@ export default function App() {
       {mode === 'VICTORY' && currentLevel.isPrototype && (
         <div role="dialog" aria-modal="true" aria-label="Practice complete" className="fixed inset-0 z-40 grid place-items-center bg-slate-950/85 p-4">
           <div className="w-full max-w-sm space-y-4 rounded-3xl border border-emerald-400/60 bg-slate-900 p-5 text-center text-white shadow-xl">
-            <h2 className="text-2xl font-black">{currentLevel.objective?.kind === 'repair' ? 'Robot repaired!' : 'Collection complete!'}</h2>
-            <p className="text-sm text-emerald-200">{currentLevel.objective?.kind === 'collect' ? `${lastSimCrystals.collected} crystals delivered. Great planning!` : 'Your repaired program reached the station.'}</p>
+            <h2 className="text-2xl font-black">{currentLevel.objective?.kind === 'survey' ? 'Survey complete!' : currentLevel.objective?.kind === 'repair' ? 'Robot repaired!' : 'Collection complete!'}</h2>
+            <p className="text-sm text-emerald-200">{currentLevel.objective?.kind === 'survey' ? 'Both research stations observed. Great exploring!' : currentLevel.objective?.kind === 'collect' ? `${lastSimCrystals.collected} crystals delivered. Great planning!` : 'Your repaired program reached the station.'}</p>
             <p className="text-xs text-slate-300">Practice challenge — your story progress stays unchanged.</p>
             <button type="button" className="min-h-12 w-full rounded-xl bg-emerald-400 font-black text-slate-950" onClick={()=>beginLevel(currentLevel)}>Play again</button>
             <button type="button" className="min-h-12 w-full rounded-xl border border-sky-400 font-bold" onClick={()=>{setMode('TITLE');worldRef.current?.setMode('TITLE');setMapInitialTab('story');setShowMap(true);}}>Choose mission</button>

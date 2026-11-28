@@ -29,6 +29,14 @@ export const MISSION_PROTOTYPES: readonly LevelDef[] = [
       {type:'normal',crystal:false},{type:'normal',crystal:true},{type:'gap',crystal:false},
       {type:'gate',crystal:false}
     ],circuit:makeCircuit([])
+  },
+  {
+    id:6103,isPrototype:true,name:'Reef Survey',ageLabel:'',
+    brief:'Explore the floating research walkway. Pause at both marked stations to record observations, then return to base.',
+    objective:{kind:'survey',stations:[1,4]},budget:80,parBudget:80,parBlocks:7,loopUnlocked:true,waitUnlocked:true,
+    starterChassis:[[null,null,null],['thrusters',null,'laser'],['wheels',null,null]],
+    track:[{type:'start',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:false},{type:'gap',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:false},{type:'gate',crystal:false}],
+    circuit:makeCircuit([])
   }
 ];
 export function getMissionPrototype(id:number):LevelDef|undefined {
