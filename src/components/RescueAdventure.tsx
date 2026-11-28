@@ -1,12 +1,12 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {ArrowUp,ArrowRight,ArrowDown,ArrowLeft,Wrench,Bot,Home,Lightbulb,Check,Play,Pause,RotateCcw,Undo2,Footprints,Code2,StepForward} from 'lucide-react';
 import {CharacterVoiceButton} from './CharacterVoiceButton';
-import {RESCUE_MAPS,RESCUE_ACTIONS,RESCUE_MAX_COMMANDS,startRescue,stepRescue,traceRescue,rescueGoal,rescueGoalCue,rescueRunStartCursor,rescueFailedCommandIndex,replaceRescueCommand,type RescueAction} from '../game/rescueAdventure';
+import {RESCUE_MAPS,RESCUE_ACTIONS,RESCUE_MAX_COMMANDS,startRescue,stepRescue,traceRescue,rescueGoal,rescueGoalCue,rescueRunStartCursor,rescueFailedCommandIndex,replaceRescueCommand,type RescueAction,type RescueMap,type RescueState} from '../game/rescueAdventure';
 const icons={up:ArrowUp,right:ArrowRight,down:ArrowDown,left:ArrowLeft,repair:Wrench};
 const actionLabels={up:'Up',right:'Right',down:'Down',left:'Left',repair:'Repair beacon'};
 const feedback={ready:'Find the two beacons!',move:'Keep exploring!',blocked:'Water ahead! Try another way.',repair:'Beacon restored!',already:'This beacon is already fixed.', 'wrong-place':'Go to a beacon first.',win:'You restored both beacons and came home!'};
 const goalCues={seek:{Icon:Lightbulb,text:'Find a beacon',voice:'Find a light bulb beacon. Choose a path.'},'repair-here':{Icon:Wrench,text:'Repair here',voice:'You found a beacon! Tap the wrench to repair it.'},'return-home':{Icon:Home,text:'Go home',voice:'Both beacons are fixed. Find your way back to the green home dock.'},complete:{Icon:Check,text:'Home safe!',voice:'You fixed both beacons and came home. Great teamwork!'}};
-export function RescueAdventure({muted}:{muted:boolean}){
+export function RescueAdventure({muted,renderBoard}:{muted:boolean;renderBoard?:(map:RescueMap,state:RescueState,fallback:React.ReactNode)=>React.ReactNode}){
  const [mapIndex,setMapIndex]=useState(0),[mode,setMode]=useState<'explore'|'code'>('explore');
  const map=RESCUE_MAPS[mapIndex];
  const [direct,setDirect]=useState(()=>startRescue(RESCUE_MAPS[0]));
@@ -33,12 +33,7 @@ export function RescueAdventure({muted}:{muted:boolean}){
   if(program.length>=RESCUE_MAX_COMMANDS)return;
   setCursor(0);setProgram(p=>p.length<RESCUE_MAX_COMMANDS?[...p,action]:p);
  };
- return <div className="mt-3 space-y-2" data-testid="rescue-adventure-prototype">
-  <div className="flex items-center justify-between gap-2"><div className="flex flex-wrap gap-1">{RESCUE_MAPS.map((m,i)=><button key={m.id} type="button" aria-pressed={i===mapIndex} onClick={()=>switchMap(i)} className={'min-h-11 rounded-lg border px-2 text-xs font-bold '+(i===mapIndex?'border-cyan-300 bg-cyan-900 text-white':'border-slate-600 bg-slate-900 text-slate-200')}>{i+1} · {m.name}</button>)}</div><CharacterVoiceButton id="rescue_intro" text="Let's save the beacons! Use the arrows to move. Tap the wrench when you are on a beacon. Fix both, then go back home. Try it yourself, then build a program!" muted={muted}/></div>
-  <div className="flex gap-2"><button type="button" aria-pressed={mode==='explore'} onClick={()=>switchMode('explore')} className={'flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg border text-sm font-bold '+(mode==='explore'?'border-emerald-300 bg-emerald-800 text-white':'border-slate-500 text-slate-200')}><Footprints className="h-5 w-5"/> Explore</button><button type="button" aria-pressed={mode==='code'} onClick={()=>switchMode('code')} className={'flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg border text-sm font-bold '+(mode==='code'?'border-sky-300 bg-sky-800 text-white':'border-slate-500 text-slate-200')}><Code2 className="h-5 w-5"/> Code</button></div>
-  <div className="flex items-center justify-center gap-2 text-cyan-100"><Wrench className="h-5 w-5"/><span className="font-black">{state.repaired.length}/{rescueGoal(map)}</span><ArrowRight className="h-4 w-4"/><Home className="h-5 w-5 text-emerald-300"/></div>
-  <div className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-cyan-600 bg-slate-900 px-3 text-cyan-100"><div className="flex items-center gap-2"><GoalIcon className="h-7 w-7" aria-hidden="true"/><span className="font-bold">{goal.text}</span></div><CharacterVoiceButton id={'rescue_goal_'+cue} text={goal.voice} muted={muted}/></div>
-  <div className="mx-auto grid max-w-[300px] grid-cols-5 gap-1 rounded-xl bg-cyan-950 p-1" role="img" aria-label={`Rescue board, robot row ${state.row+1}, column ${state.col+1}, ${state.repaired.length} repaired`}>
+ const board=<div className="mx-auto grid max-w-[300px] grid-cols-5 gap-1 rounded-xl bg-cyan-950 p-1" role="img" aria-label={`Rescue board, robot row ${state.row+1}, column ${state.col+1}, ${state.repaired.length} repaired`}>
    {map.cells.flatMap((row,r)=>row.map((cell,c)=>{
     const bot=state.row===r&&state.col===c,done=state.repaired.includes(r+':'+c);
     return <div key={r+':'+c} className={'relative flex aspect-square items-center justify-center rounded-md border '+(cell==='water'?'border-cyan-900 bg-cyan-800/60':cell==='dock'?'border-emerald-300 bg-emerald-900':cell==='beacon'?'border-amber-300 bg-slate-700':'border-teal-400/70 bg-teal-900')} aria-hidden="true">
@@ -46,7 +41,13 @@ export function RescueAdventure({muted}:{muted:boolean}){
      {bot&&<span className="absolute bottom-0 right-0 flex h-2/3 w-2/3 items-center justify-center rounded-lg border-2 border-yellow-200 bg-slate-950 shadow-md"><Bot className="h-5 w-5 text-yellow-300"/></span>}
     </div>;
    }))}
-  </div>
+  </div>;
+ return <div className="mt-3 space-y-2" data-testid="rescue-adventure-prototype">
+  <div className="flex items-center justify-between gap-2"><div className="flex flex-wrap gap-1">{RESCUE_MAPS.map((m,i)=><button key={m.id} type="button" aria-pressed={i===mapIndex} onClick={()=>switchMap(i)} className={'min-h-11 rounded-lg border px-2 text-xs font-bold '+(i===mapIndex?'border-cyan-300 bg-cyan-900 text-white':'border-slate-600 bg-slate-900 text-slate-200')}>{i+1} · {m.name}</button>)}</div><CharacterVoiceButton id="rescue_intro" text="Let's save the beacons! Use the arrows to move. Tap the wrench when you are on a beacon. Fix both, then go back home. Try it yourself, then build a program!" muted={muted}/></div>
+  <div className="flex gap-2"><button type="button" aria-pressed={mode==='explore'} onClick={()=>switchMode('explore')} className={'flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg border text-sm font-bold '+(mode==='explore'?'border-emerald-300 bg-emerald-800 text-white':'border-slate-500 text-slate-200')}><Footprints className="h-5 w-5"/> Explore</button><button type="button" aria-pressed={mode==='code'} onClick={()=>switchMode('code')} className={'flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg border text-sm font-bold '+(mode==='code'?'border-sky-300 bg-sky-800 text-white':'border-slate-500 text-slate-200')}><Code2 className="h-5 w-5"/> Code</button></div>
+  <div className="flex items-center justify-center gap-2 text-cyan-100"><Wrench className="h-5 w-5"/><span className="font-black">{state.repaired.length}/{rescueGoal(map)}</span><ArrowRight className="h-4 w-4"/><Home className="h-5 w-5 text-emerald-300"/></div>
+  <div className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-cyan-600 bg-slate-900 px-3 text-cyan-100"><div className="flex items-center gap-2"><GoalIcon className="h-7 w-7" aria-hidden="true"/><span className="font-bold">{goal.text}</span></div><CharacterVoiceButton id={'rescue_goal_'+cue} text={goal.voice} muted={muted}/></div>
+  {renderBoard?renderBoard(map,state,board):board}
   <div className="flex min-h-8 items-center justify-center gap-2 text-center text-sm font-bold text-white" role="status">{state.won&&<Check className="h-5 w-5 text-emerald-300"/>}{feedback[state.feedback]}</div>
   {mode==='code'&&!running&&failedIndex!==null&&editIndex===null&&<button type="button" data-testid="rescue-fix-command" onClick={()=>setEditIndex(failedIndex)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-950 text-amber-100 font-bold"><Wrench className="h-5 w-5" aria-hidden="true"/> Fix step {failedIndex+1}</button>}
   {mode==='code'&&editIndex!==null&&<div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-950 p-2 text-amber-100"><span className="flex items-center gap-2 font-bold"><Wrench className="h-5 w-5" aria-hidden="true"/> Choose a new arrow or wrench for step {editIndex+1}</span><button type="button" onClick={()=>setEditIndex(null)} className="min-h-11 rounded-lg border border-amber-400 px-2">Cancel</button></div>}
