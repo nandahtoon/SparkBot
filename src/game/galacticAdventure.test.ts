@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGalactic,startGalactic,moveGalactic,transformGalactic,stepGalactic,currentEncounter,MISSIONS,REQUIRED,TICKS_PER_ENCOUNTER,readGalacticUnlock,nextGalacticUnlock,hazardLanes,FORM_SPEED,FORMS} from './galacticAdventure';
+import {createGalactic,startGalactic,moveGalactic,transformGalactic,stepGalactic,currentEncounter,MISSIONS,REQUIRED,TICKS_PER_ENCOUNTER,readGalacticUnlock,nextGalacticUnlock,hazardLanes,FORM_SPEED,FORMS,repairTarget,repairRequirement,buyGalacticUpgrade} from './galacticAdventure';
 const advance=(s:ReturnType<typeof createGalactic>)=>{for(let i=0;i<TICKS_PER_ENCOUNTER;i++)s=stepGalactic(s);return s;};
 test('every mission is solvable with correct robot forms and safe lane',()=>{
   let unlock=0;
@@ -72,4 +72,48 @@ test('second formation lane also causes shield loss at impact',()=>{
   assert.equal(s.phase,1);
   const l=hazardLanes(1,1)[1];
   s=advance(moveGalactic(s,l));assert.equal(s.shields,2);assert.equal(s.phase,1);
+});
+
+test('repair pulses intersect moving drone and charge a real objective',()=>{
+  let s=transformGalactic(moveGalactic(startGalactic(createGalactic(1)),1),'astro');
+  const initial=repairTarget(s);
+  for(let i=0;i<5;i++)s=stepGalactic(s);
+  assert.notDeepEqual(repairTarget(s),initial);
+  assert.ok(s.pulses.length>0);
+  for(let i=0;i<55;i++)s=stepGalactic(s);
+  assert.equal(s.repairCharge,repairRequirement(s));
+  for(let i=0;i<20;i++)s=stepGalactic(s);
+  assert.equal(s.phase,1);assert.equal(s.cores,1);assert.equal(s.repairCharge,0);assert.equal(s.pulses.length,0);
+});
+test('late alignment without a pulse hit cannot restore a drone',()=>{
+  let s=transformGalactic(moveGalactic(startGalactic(createGalactic(1)),4),'astro');
+  for(let i=0;i<60;i++)s=stepGalactic(s);
+  assert.equal(s.repairCharge,0);
+  s=moveGalactic(s,1);
+  // Switch out of Astro until the final tick: no aligned projectile can reach the target.
+  s=transformGalactic(s,'explorer');
+  for(let i=0;i<19;i++)s=stepGalactic(s);
+  s=stepGalactic(transformGalactic(s,'astro'));
+  assert.equal(s.phase,0);assert.equal(s.feedback,'miss');
+});
+test('cores are earned once per restored module and upgrades are bounded',()=>{
+  let s=startGalactic(createGalactic());
+  assert.equal(buyGalacticUpgrade(s,'pulse'),s);
+  s=advance(s);assert.equal(s.cores,1);
+  s=advance(moveGalactic(s,0));assert.equal(s.cores,2);
+  s=buyGalacticUpgrade(s,'pulse');assert.equal(s.cores,0);assert.equal(s.pulseLevel,2);
+  assert.equal(buyGalacticUpgrade(s,'pulse'),s);
+  const damaged={...s,cores:2,shields:2};
+  const healed=buyGalacticUpgrade(damaged,'shield');
+  assert.equal(healed.shields,3);assert.equal(healed.cores,0);
+  assert.equal(buyGalacticUpgrade(healed,'shield'),healed);
+});
+test('upgraded pulse charges two units and Titan requires three units',()=>{
+  let s=advance(transformGalactic(startGalactic(createGalactic(2)),'guardian'));
+  s=transformGalactic(moveGalactic(s,0),'astro');
+  s=buyGalacticUpgrade({...s,cores:2},'pulse');
+  assert.equal(repairRequirement(s),3);
+  let sawTwo=false;
+  for(let i=0;i<65;i++){s=stepGalactic(s);if(s.repairCharge===2)sawTwo=true;assert.ok(s.pulses.length<=12);}
+  assert.ok(sawTwo);assert.equal(s.repairCharge,3);
 });
