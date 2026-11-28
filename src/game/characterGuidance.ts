@@ -15,7 +15,7 @@ export function tutorialVoice(step:MissionTutorialStepDef):string{
 }
 export function missionVoice(level:LevelDef):string{
  const stations=getSurveyStations(level);
- const intro=stations?'Look for the clock circles! Stop on each one and tap the clock command. Then reach the flag. ':level.id===23&&level.isBonus&&!level.isDaily&&!level.isSandbox&&!level.isClassCode&&!level.isDebug?'Two gates! A cross means stop. An arrow means open. Use the clock to wait on a safe deck. ':'';
+ const intro=stations?'Look for the clock circles! Stop on each one and tap the clock command. Then reach the flag. ':level.id===23&&level.isBonus&&!level.isDaily&&!level.isSandbox&&!level.isClassCode&&!level.isDebug?'Three gates! A cross means stop. An arrow means open. Use the clock to wait on a safe deck. ':'';
  return 'Ready, explorer? '+level.name+'. '+intro+(level.brief||getMissionObjectiveLabel(level));
 }
 export function buildVoice(part:PartId|null,name?:string,slot?:string):string{
