@@ -114,12 +114,12 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   const nextLevelId = launch.missionId;
   const nextLevel = useMemo(() => (nextLevelId === null ? null : getLevelById(nextLevelId)) || LEVELS[0], [nextLevelId]);
   const storyHazards = useMemo(
-    () => extractTrackHazards(nextLevel.track, Boolean(nextLevel.hazards?.length)),
-    [nextLevel]
+    () => nextLevelId === null ? [] : extractTrackHazards(nextLevel.track, Boolean(nextLevel.hazards?.length)),
+    [nextLevel, nextLevelId]
   );
   const storyCrystals = useMemo(
-    () => nextLevel.track.filter((t) => t.crystal).length,
-    [nextLevel]
+    () => nextLevelId === null ? 0 : nextLevel.track.filter((t) => t.crystal).length,
+    [nextLevel, nextLevelId]
   );
 
   const dailyChallenge = useMemo(() => generateDailyChallenge(todayKey), [todayKey]);
@@ -385,7 +385,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           {!isDailyMode ? (
             <div className="flex items-center justify-between gap-2 px-1 text-xs">
               <div className="flex min-w-0 items-center gap-1.5">
-                {nextLevel.isBoss && (
+                {nextLevelId !== null && nextLevel.isBoss && (
                   <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-label="Boss Mission" />
                 )}
                 <span className="truncate font-extrabold text-slate-100">
