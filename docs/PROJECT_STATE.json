@@ -43,10 +43,10 @@
     ]
   },
   "work": {
-    "stage": "SB-M01",
+    "stage": "MAIN_GAME_IMPROVEMENTS",
     "status": "OWNER_TEST_MERGE_AUTHORIZED",
-    "next": "SB-M02",
-    "nextGate": "Owner authorized main testing merge and deployment before physical acceptance; production promotion and experimental integration remain HOLD. Independent review remains pending; confirm exact CI before merge and physical family acceptance before release.",
+    "next": "MAIN_GAME_CHAPTER_REDESIGN",
+    "nextGate": "Owner approved main-game improvement through merge for testing. Verify exact CI and retain production HOLD. Do not merge isolated prototype or outdated UI PRs; physical acceptance pending.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -141,6 +141,18 @@
         "stable": "archive/v0.3-family",
         "productionAutoDeploy": "DISABLED_IN_VERCEL_JSON",
         "physicalAcceptance": "PENDING"
+      },
+      "directImprovements": {
+        "baseSha": "dfe6aa10823b4fcba9a8b8a824e95d2cb98cb255",
+        "scope": "existing 3D campaign: compact title, differentiated goals 13/14/17/18, longer tracks 13/17",
+        "pausedPrs": [
+          42,
+          43,
+          38,
+          40
+        ],
+        "physical": "NOT_RUN",
+        "production": "HOLD"
       }
     }
   },
