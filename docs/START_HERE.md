@@ -16,3 +16,7 @@ The spatial architecture is documented in docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITE
 
 ## Owner-approved experimental exception (2026-11-28)
 See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.
+
+
+## Current owner exception — SB-M01
+Read AGENTS.md owner-authorized main testing exception and PROJECT_STATE.json. AI Studio uses main for testing, but accepted V0.3 remains archive/v0.3-family. Keep production HOLD and deploy exact test SHA only. A2/RC1 physical gates remain pending; no experiments merged. Next M02 is a separate scoped work package.
