@@ -123,6 +123,9 @@ import { getNextCodeCameraPreset, type CodeCameraPreset } from './three/codeCame
 import type { HeadScreenPoint, SlotScreenPoint } from './three/robotRig';
 import { TitleOverlay } from './components/TitleOverlay';
 import { getMissionLearningGoal, getRecommendedCampaignLevel } from './game/missionCurriculum';
+import { getCollectionRequirement, getMissionObjectiveLabel, getSurveyStations, isMissionComplete, requiresMissionCircuit } from './game/missionObjectives';
+import { getMissionPrototype } from './game/missionPrototypes';
+import { getOceanPresentation } from './game/oceanPresentation';
 import { TopHud, type MoodCue } from './components/TopHud';
 import { BuildDock } from './components/BuildDock';
 import { PaintBoothDock } from './components/PaintBoothDock';
@@ -373,7 +376,7 @@ export default function App() {
     [save.graphicsQuality, save.lowGraphics]
   );
   const lowGraphics = graphicsQuality === 'eco';
-  const challengeTimerEnabled = !juniorSession && Boolean(save.challengeTimerEnabled);
+  const challengeTimerEnabled = !juniorSession && !currentLevel.isPrototype && Boolean(save.challengeTimerEnabled);
   useEffect(() => { if (mode === 'TITLE') setJuniorSession(false); }, [mode]);
   const [circuitSolvedFreeze, setCircuitSolvedFreeze] = useState(false);
   const [lastVictorySpeedRun, setLastVictorySpeedRun] =
@@ -573,7 +576,7 @@ export default function App() {
     (lvl: LevelDef, preserveChassis = false, junior = false) => {
       setJuniorSession(junior);
       const hasStarterChassis = Boolean(lvl.starterChassis);
-      const startInCode = Boolean(lvl.isDebug && hasStarterChassis);
+      const startInCode = Boolean((lvl.isDebug || lvl.isPrototype || lvl.objective) && hasStarterChassis);
       const nextChassis = hasStarterChassis
         ? lvl.starterChassis!.map((row) => [...row])
         : preserveChassis
@@ -744,10 +747,11 @@ export default function App() {
   }, [hoveredCodeBlockId, mode]);
 
   const finalizeMissionVictory = useCallback(
-    (sim: SimResult) => {
+    (sim: SimResult, completedCircuit?: ReturnType<typeof traceCircuit>) => {
       const cur = stateRef.current;
       const isDebug = Boolean(cur.currentLevel.isDebug);
-      if (isDebug) {
+      if (cur.currentLevel.objective && !isMissionComplete(cur.currentLevel, sim, completedCircuit)) return;
+      if (isDebug || cur.currentLevel.objective?.kind === 'repair') {
         SFX.bugSquashed();
       } else {
         SFX.laserSolved();
@@ -755,6 +759,12 @@ export default function App() {
       HAPTICS.trigger('victory');
       worldRef.current?.triggerCompanionCelebrate();
       setCircuitSolvedFreeze(true);
+      if (cur.currentLevel.isPrototype) {
+        setLastSimCrystals({collected:sim.collectedCrystals,total:sim.totalCrystals});
+        setMode('VICTORY');
+        worldRef.current?.setMode('VICTORY');
+        return; // Practice only: no campaign stars, currency, telemetry or mastery writes.
+      }
 
       const info = computeChassisInfo(cur.chassis);
       const blkCount = countBlocks(
@@ -945,7 +955,7 @@ export default function App() {
       const trace = traceCircuit(nextGrid);
       if (trace.solved) {
         const sim = simulateProgram(cur.currentLevel, cur.chassis, cur.program, cur.functionBody);
-        finalizeMissionVictory(sim);
+        finalizeMissionVictory(sim, trace);
       }
     },
     [finalizeMissionVictory]
@@ -976,7 +986,7 @@ export default function App() {
         setLastFailedSim(null);
         setAdaptiveHintTier(0);
         setMoodCue({ mood: 'happy' });
-        if (stateRef.current.currentLevel.isDebug) {
+        if (!requiresMissionCircuit(stateRef.current.currentLevel)) {
           finalizeMissionVictory(res);
           return;
         }
@@ -1008,7 +1018,7 @@ export default function App() {
       });
     }
 
-    setSave((prev) => {
+    if (!cur.currentLevel.isPrototype) setSave((prev) => {
       const next: SaveProfile = {
         ...prev,
         learningTelemetry: recordLevelAttemptResult(prev.learningTelemetry, {
@@ -1027,6 +1037,7 @@ export default function App() {
       res.failCode === 'empty' ||
       res.failCode === 'empty_container' ||
       res.failCode === 'empty_function' ||
+      res.failCode === 'objective_unmet' ||
       res.failCode === 'short'
     ) {
       setMoodCue({ mood: 'confused' });
@@ -1451,7 +1462,7 @@ export default function App() {
       ? `daily_${currentLevel.dailyDateKey || getDailyDateKey()}`
       : `lvl_${currentLevel.id}`;
     const shouldAsk = shouldPromptPredictQuiz({
-      enabled: save.predictQuizEnabled !== false,
+      enabled: !currentLevel.isPrototype && save.predictQuizEnabled !== false,
       level: currentLevel,
       alreadyPromptedLevelKey: predictPromptedLevelKey,
       levelKey
@@ -2382,7 +2393,7 @@ export default function App() {
   );
 
   const nextLevelDef = useMemo(() => {
-    if (currentLevel.isDaily || currentLevel.isSandbox || currentLevel.isClassCode) return null;
+    if (currentLevel.isPrototype || currentLevel.isDaily || currentLevel.isSandbox || currentLevel.isClassCode) return null;
     if (currentLevel.isDebug && currentLevel.debugMissionId) {
       const curIdx = DEBUG_MISSIONS.findIndex((m) => m.id === currentLevel.debugMissionId);
       if (curIdx >= 0 && curIdx < DEBUG_MISSIONS.length - 1) {
@@ -2395,7 +2406,7 @@ export default function App() {
 
   const currentLevelSavedStars = getLevelSavedStars(save, currentLevel);
   const currentAdaptiveHint = useMemo(() => {
-    if (adaptiveHintTier === 0) return null;
+    if (currentLevel.isPrototype || adaptiveHintTier === 0) return null;
     if (mode !== 'BUILD_3D' && mode !== 'CODE_3D' && mode !== 'CIRCUIT_3D') return null;
     const phase = mode === 'BUILD_3D' ? 'build' : mode === 'CIRCUIT_3D' ? 'circuit' : 'code';
     return computeAdaptiveHint({
@@ -2662,6 +2673,10 @@ export default function App() {
       {/* Stage 2: 3D Track Visual Coding */}
       {(mode === 'CODE_3D' || mode === 'SIMULATING') && !pendingPredictQuiz && (
         <CodeDock
+          objectiveLabel={currentLevel.objective ? getMissionObjectiveLabel(currentLevel) : undefined}
+          objectiveTarget={currentLevel.objective ? getCollectionRequirement(currentLevel) : null}
+          surveyTarget={getSurveyStations(currentLevel)?.length ?? null}
+          objectiveFeedback={currentLevel.isPrototype || lastFailedSim?.failCode === 'objective_unmet' ? lastFailedSim?.failReason : null}
           junior={juniorSession}
           program={program}
           functionBody={functionBody}
@@ -3055,9 +3070,21 @@ export default function App() {
         }}
       />
 
+      {mode === 'VICTORY' && currentLevel.isPrototype && (
+        <div role="dialog" aria-modal="true" aria-label="Practice complete" className="fixed inset-0 z-40 grid place-items-center bg-slate-950/85 p-4">
+          <div className="w-full max-w-sm space-y-4 rounded-3xl border border-emerald-400/60 bg-slate-900 p-5 text-center text-white shadow-xl">
+            <h2 className="text-2xl font-black">{currentLevel.objective?.kind === 'survey' ? 'Survey complete!' : currentLevel.objective?.kind === 'repair' ? 'Robot repaired!' : 'Collection complete!'}</h2>
+            <p className="text-sm text-emerald-200">{currentLevel.objective?.kind === 'survey' ? 'Both research stations observed. Great exploring!' : currentLevel.objective?.kind === 'collect' ? `${lastSimCrystals.collected} crystals delivered. Great planning!` : 'Your repaired program reached the station.'}</p>
+            <p className="text-xs text-slate-300">Practice challenge — your story progress stays unchanged.</p>
+            <button type="button" className="min-h-12 w-full rounded-xl bg-emerald-400 font-black text-slate-950" onClick={()=>beginLevel(currentLevel)}>Play again</button>
+            <button type="button" className="min-h-12 w-full rounded-xl border border-sky-400 font-bold" onClick={()=>{setMode('TITLE');worldRef.current?.setMode('TITLE');setMapInitialTab('story');setShowMap(true);}}>Choose mission</button>
+          </div>
+        </div>
+      )}
       <VictoryModal
+        missionMessage={getOceanPresentation(currentLevel)?.victory}
         learningGoal={getMissionLearningGoal(currentLevel)}
-        visible={mode === 'VICTORY' && !showGameRoom && !showShop && !showQuests}
+        visible={mode === 'VICTORY' && !currentLevel.isPrototype && !showGameRoom && !showShop && !showQuests}
         stars={victoryStars}
         bonusEarned={victoryBonusInfo.earned}
         fullCrystals={victoryBonusInfo.fullCrystals}
@@ -3123,6 +3150,7 @@ export default function App() {
           const target = getLevelById(id) || BONUS_LEVELS[0];
           beginLevel(target);
         }}
+        onSelectPrototype={(id)=>{const level=getMissionPrototype(id);if(level){SFX.click();beginLevel(level);}}}
         onSelectDebugMission={handleSelectDebugMission}
         onStartDaily={() => {
           SFX.click();

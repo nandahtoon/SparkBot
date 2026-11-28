@@ -28,7 +28,11 @@ export const MISSION_LEARNING_GOALS: Readonly<Record<number, MissionLearningGoal
   17: {"skill":"Efficient construction","goal":"Finish with a lightweight robot.","reflect":"Which parts did you not need?"},
   18: {"skill":"Resource trade-offs","goal":"Choose useful parts within the budget.","reflect":"Why is the cheapest robot not always the best?"},
   19: {"skill":"Reusable optimization","goal":"Reuse a route pattern across ramps.","reflect":"How does repeating a command group help?"},
-  20: {"skill":"Timing and resource planning","goal":"Deliver energy with safe, timed steps.","reflect":"Why might waiting save resources?"}
+  20: {"skill":"Timing and resource planning","goal":"Deliver energy with safe, timed steps.","reflect":"Why might waiting save resources?"},
+  21: {"skill":"Complete sampling","goal":"Collect every sample before returning.","reflect":"Why might the fastest route miss a sample?"},
+  22: {"skill":"Systematic observation","goal":"Pause at both marked observation stations.","reflect":"Why do repeated observations at one station not replace visiting another?"},
+  23: {"skill":"Periodic signals","goal":"Time your movement using the repeating signal.","reflect":"How does waiting change when you reach the barrier?"},
+  24: {"skill":"Repair and restoration","goal":"Fix the routine and power both beacon cores.","reflect":"How did you check that both the code and the beacon worked?"}
 };
 
 export function getMissionLearningGoal(level: LevelDef): MissionLearningGoal | null {

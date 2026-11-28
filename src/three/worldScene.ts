@@ -321,6 +321,8 @@ export class UnifiedWorldController {
   // Groups
   private trackGroup = new THREE.Group();
   private crystalMeshes: Map<number, THREE.Mesh> = new Map();
+  private surveyMarkers = new Map<number, THREE.Mesh<THREE.RingGeometry,THREE.MeshBasicMaterial>>();
+  private surveyedStations = new Set<number>();
   private dynamicHazardVisuals: Map<string, DynamicHazardVisual> = new Map();
   private bossRig: BossSentinelRig | null = null;
   private lastHazardTick = 0;
@@ -1017,6 +1019,7 @@ export class UnifiedWorldController {
   private rebuildTrack(level: LevelDef) {
     clearAndDisposeGroup(this.trackGroup, this.sharedTextures);
     this.crystalMeshes.clear();
+    this.surveyMarkers.clear();this.surveyedStations.clear();
     this.dynamicHazardVisuals.clear();
     this.bossRig = null;
     this.lastHazardTick = 0;
@@ -1139,6 +1142,17 @@ export class UnifiedWorldController {
         this.trackGroup.add(pylon);
       }
 
+      if (level.objective?.kind === 'survey' && level.objective.stations.includes(i)) {
+        // Survey deck marker: geometry sits flat, outside the robot collision model.
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.73,0.88,24),new THREE.MeshBasicMaterial({color:0x22d3ee,side:THREE.DoubleSide}));
+        ring.rotation.x=-Math.PI/2;ring.position.set(0,0.035,tz);this.trackGroup.add(ring);this.surveyMarkers.set(i,ring);
+        for(const x of [-1.27,1.27]){
+          const post=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.14,0.65,8),new THREE.MeshStandardMaterial({color:0x164e63}));
+          post.position.set(x,0.32,tz);this.trackGroup.add(post);
+          const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),new THREE.MeshBasicMaterial({color:0x67e8f9}));
+          lamp.position.set(x,0.74,tz);this.trackGroup.add(lamp);
+        }
+      }
       if (tile.crystal) {
         const crystalBaseY = tile.type === 'ramp' ? 1.34 : 1.0;
         const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), crystalMat);
@@ -2178,6 +2192,8 @@ export class UnifiedWorldController {
     this.crystalMeshes.forEach((m) => {
       m.visible = true;
     });
+    this.surveyedStations.clear();
+    this.surveyMarkers.forEach(marker=>{marker.material.color.setHex(0x22d3ee);marker.scale.setScalar(1);});
     this.syncHazardsToTick(0, true);
   }
 
@@ -2196,6 +2212,8 @@ export class UnifiedWorldController {
     this.crystalMeshes.forEach((m) => {
       m.visible = true;
     });
+    this.surveyedStations.clear();
+    this.surveyMarkers.forEach(marker=>{marker.material.color.setHex(0x22d3ee);marker.scale.setScalar(1);});
     this.syncHazardsToTick(0, true);
   }
 
@@ -2475,7 +2493,11 @@ export class UnifiedWorldController {
       SFX.sensorScan(Boolean(ev.scanMatch));
     } else if (ev.action === 'WAIT') {
       this.setMood('scan', step.duration);
-      SFX.uiTick();
+      const marker=this.surveyMarkers.get(ev.toPos);
+      if(marker && ev.status==='ok' && ev.fromPos===ev.toPos && !this.surveyedStations.has(ev.toPos)){
+        this.surveyedStations.add(ev.toPos);marker.material.color.setHex(0x34d399);marker.scale.setScalar(1.2);
+        this.spawnSparks(0,0.5,this.simToZ,0x67e8f9,12);SFX.sensorScan(true);
+      }else SFX.uiTick();
     } else if (ev.action === 'JUMP') {
       this.setMood('neutral', 0);
       this.spawnSparks(0, 0.5, this.simFromZ, this.nextTrailColor(), 14);

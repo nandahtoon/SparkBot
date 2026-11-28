@@ -4,12 +4,12 @@ import { LEVELS, BONUS_LEVELS } from './levels';
 import { defaultSaveProfile } from './engine';
 import { MISSION_LEARNING_GOALS, getMissionLearningGoal, getRecommendedCampaignLevel } from './missionCurriculum';
 
-test('all 20 missions have distinct skill, goal and reflection prompts', () => {
+test('all 24 missions have distinct skill, goal and reflection prompts', () => {
  const levels = [...LEVELS,...BONUS_LEVELS];
- assert.equal(Object.keys(MISSION_LEARNING_GOALS).length,20);
+ assert.equal(Object.keys(MISSION_LEARNING_GOALS).length,24);
  const goals = levels.map(level=>getMissionLearningGoal(level));
  assert.ok(goals.every(goal=>goal && goal.goal.length>0 && goal.reflect.endsWith('?')));
- assert.equal(new Set(goals.map(goal=>goal?.skill)).size,20);
+ assert.equal(new Set(goals.map(goal=>goal?.skill)).size,24);
  for(const flag of ['isDaily','isSandbox','isClassCode','isDebug']) {
   assert.equal(getMissionLearningGoal({...LEVELS[0],[flag]:true}),null);
  }
@@ -27,7 +27,7 @@ test('campaign recommends the next eligible incomplete mission without modifying
  assert.equal(getRecommendedCampaignLevel(save).id,11);
  for(const level of BONUS_LEVELS) save.bonusStars[level.id]={stars:3,bonusStar:true};
  const snapshot=JSON.stringify(save);
- assert.equal(getRecommendedCampaignLevel(save).id,20);
+ assert.equal(getRecommendedCampaignLevel(save).id,24);
  assert.equal(JSON.stringify(save),snapshot);
 });
 test('missing or locked main mission does not silently skip to advanced bonus levels',()=>{

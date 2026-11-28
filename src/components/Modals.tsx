@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { BONUS_LEVELS, LEVELS, type SaveProfile } from '../game/engine';
 import { DEBUG_MISSIONS } from '../game/debugMissions';
+import { MISSION_PROTOTYPES } from '../game/missionPrototypes';
 import { formatChallengeTime, type SpeedRunEvaluation } from '../game/challengeTimer';
 import { buildBeatenLevelHistory } from '../game/levelHistory';
 import {
@@ -48,6 +49,7 @@ export interface VictorySpeedRunSummary {
 }
 
 interface VictoryModalProps {
+  missionMessage?: string;
   learningGoal?: MissionLearningGoal | null;
   visible: boolean;
   stars: number;
@@ -80,6 +82,7 @@ interface VictoryModalProps {
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
   learningGoal = null,
+  missionMessage,
   visible,
   stars,
   bonusEarned,
@@ -140,7 +143,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         )}
 
         <h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2>
-        <p className="-mt-2 text-center text-sm text-emerald-200">Great work, SparkBot explorer.</p>
+        <p className="-mt-2 text-center text-sm text-emerald-200">{missionMessage || 'Great work, SparkBot explorer.'}</p>
         {/* 3 Big Stars */}
         <div className="flex items-center gap-3">
           {[1, 2, 3].map((s) => (
@@ -418,6 +421,7 @@ interface LevelMapModalProps {
   currentLevelId: number;
   initialTab?: 'story' | 'debug';
   onSelectLevel: (id: number) => void;
+  onSelectPrototype?: (id: number) => void;
   onSelectDebugMission?: (missionId: string) => void;
   onStartDaily: () => void;
   onOpenSandbox?: () => void;
@@ -431,6 +435,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
   currentLevelId,
   initialTab = 'story',
   onSelectLevel,
+  onSelectPrototype,
   onSelectDebugMission,
   onStartDaily,
   onOpenSandbox,
@@ -628,7 +633,22 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
           </section>
         )}
 
-        {/* Story Campaign (Ages 6–12) */}
+        {mapTab === 'story' && onSelectPrototype && (
+          <section aria-label="Try new challenges" className="rounded-2xl border border-cyan-700/60 bg-cyan-950/25 p-3">
+            <h3 className="font-black text-white">Try New Challenges</h3>
+            <p className="mb-2 text-xs text-slate-300">Practice a different way to play.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {MISSION_PROTOTYPES.map(level=>(
+                <button key={level.id} type="button" onClick={()=>{SPEECH.stop();onSelectPrototype(level.id);}} className="flex min-h-20 flex-col items-start gap-1 rounded-xl border border-cyan-600 bg-slate-800 p-3 text-left text-white focus-visible:outline-2 focus-visible:outline-sky-300" aria-label={`Practice ${level.name}`}>
+                  {level.objective?.kind==='collect'?<Gem className="h-5 w-5 text-cyan-300" aria-hidden="true"/>:<Hammer className="h-5 w-5 text-amber-300" aria-hidden="true"/>}
+                  <span className="text-sm font-black">{level.name}</span>
+                  <span className="text-xs text-slate-300">{level.objective?.kind==='survey'?'Observe both stations':level.objective?.kind==='collect'?'Collect every crystal':'Fix broken code'}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+        {/* Story Campaign */}
         {mapTab === 'story' && (
         <div className="flex flex-col gap-3">
           {STORY_CHAPTERS.map((chapter) => {

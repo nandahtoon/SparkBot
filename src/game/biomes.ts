@@ -1,14 +1,17 @@
 import type { LevelDef } from './types';
+import { getOceanPresentation, type OceanZone } from './oceanPresentation';
 
 export type BiomeId =
   | 'skyport_canyon'
   | 'solar_dunes'
   | 'aurora_glade'
   | 'reactor_citadel'
-  | 'energy_valley';
+  | 'energy_valley'
+  | 'ocean_discovery';
 
 export interface BiomeThemeDef {
   id: BiomeId;
+  oceanZone?: OceanZone;
   name: string;
   chapterLabel: string;
   skyHex: number;
@@ -106,6 +109,13 @@ export const BIOME_THEMES: Record<BiomeId, BiomeThemeDef> = {
     rimLightHex: 0xfde68a, skyFloorHex: 0x173b38,
     solarRingHex: 0xfbbf24, solarRingEmissiveHex: 0xb45309,
     mesaHex: 0x315f53, mesaBandHex: 0x2dd4bf, accentCss: '#2dd4bf'
+  },
+  ocean_discovery: {
+    id:'ocean_discovery',name:'Ocean Discovery',chapterLabel:'Ocean Preview',
+    skyHex:0x78c9e9,fogHex:0x90d5e4,fogDensity:0.009,keyLightHex:0xfff0cc,
+    hemiSkyHex:0xdff9ff,hemiGroundHex:0x155a72,rimLightHex:0x99f6e4,
+    skyFloorHex:0x187b9f,solarRingHex:0x67e8f9,solarRingEmissiveHex:0x0891b2,
+    mesaHex:0x4e898b,mesaBandHex:0x7dd3fc,accentCss:'#67e8f9'
   }
 };
 
@@ -122,6 +132,8 @@ export function getBiomeForLevel(level: LevelDef | null | undefined): BiomeTheme
     const list: BiomeId[] = ['skyport_canyon', 'solar_dunes', 'aurora_glade', 'reactor_citadel'];
     return BIOME_THEMES[list[seed % list.length]];
   }
+  const ocean=getOceanPresentation(level);
+  if(ocean) return {...BIOME_THEMES.ocean_discovery,name:ocean.name,chapterLabel:'Ch. 6',oceanZone:ocean.zone};
   if (!level.isSandbox && !level.isClassCode && level.id >= 17 && level.id <= 20) return BIOME_THEMES.energy_valley;
   if (level.isBoss || level.id >= 13) return BIOME_THEMES.reactor_citadel;
   if (level.isBonus || level.id >= 9) return BIOME_THEMES.aurora_glade;

@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LEVELS, BONUS_LEVELS, getLevelById, createEmptyChassis, computeChassisInfo, findShortestTrackPlan, simulateProgram, cloneCircuitGrid, traceCircuit, findCircuitFixCell, type CodeBlock, type BlockType } from './engine';
 
+import { requiresMissionCircuit } from './missionObjectives';
+
 const campaign = [...LEVELS, ...BONUS_LEVELS];
-test('campaign contains unique mission IDs 1–20', () => {
-  assert.deepEqual(campaign.map(l => l.id).sort((a,b) => Number(a)-Number(b)), Array.from({length:20}, (_,i)=>i+1));
+test('campaign contains unique mission IDs 1–24', () => {
+  assert.deepEqual(campaign.map(l => l.id).sort((a,b) => Number(a)-Number(b)), Array.from({length:24}, (_,i)=>i+1));
 });
 for (const level of campaign) {
   test(`campaign ${level.id}: budget-valid route reaches gate`, () => {
@@ -24,7 +26,7 @@ for (const level of campaign) {
     assert.equal(result.finalPos, level.track.length-1);
     assert.deepEqual(simulateProgram(level, chassis, program), result);
   });
-  test(`campaign ${level.id}: optical puzzle has a reachable solution`, () => {
+  if (requiresMissionCircuit(level)) test(`campaign ${level.id}: optical puzzle has a reachable solution`, () => {
     const grid = cloneCircuitGrid(level.circuit);
     const initial = cloneCircuitGrid(grid);
     const cells = grid.flatMap((row,r)=>row.flatMap((cell,c)=>cell.type==='mirror'||cell.type==='splitter'?[{r,c}]:[]));

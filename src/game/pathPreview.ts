@@ -189,6 +189,9 @@ export function buildLivePathPreview(
     endpointTile = gateIndex;
     endpointZ = getTrackBotStopZ(track, gateIndex);
     summaryLabel = level.isBoss ? 'Reaches Boss Sentinel!' : 'Reaches Gate';
+  } else if (simResult.failCode === 'objective_unmet') {
+    endpointStatus = 'short';
+    summaryLabel = simResult.failReason || 'Collection goal not reached';
   } else if (simResult.failCode === 'short') {
     endpointStatus = 'short';
     endpointTile = simResult.finalPos;

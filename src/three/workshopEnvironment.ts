@@ -307,6 +307,72 @@ export function buildWorkshopEnvironment(
     windmills.push(rotor);
   });
 
+  // Ocean surface and distant reef islands, outside the playable walkway.
+  const oceanGroup = new THREE.Group();
+  oceanGroup.visible = false;
+  const oceanWater = new THREE.Mesh(trackDisposable(new THREE.CircleGeometry(125,48)),
+    trackDisposable(new THREE.MeshStandardMaterial({color:0x169ac1,roughness:0.32,metalness:0.12})));
+  oceanWater.rotation.x=-Math.PI/2;
+  oceanWater.position.set(0,-3.4,-20);
+  oceanGroup.add(oceanWater);
+  const islandGeo=trackDisposable(new THREE.CylinderGeometry(3.4,5.2,1.8,10));
+  const islandMat=trackDisposable(new THREE.MeshStandardMaterial({color:0xf1d79b,roughness:0.94}));
+  const coralGeo=trackDisposable(new THREE.ConeGeometry(0.48,2.4,6));
+  const coralMat=trackDisposable(new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.82}));
+  const islands=new THREE.InstancedMesh(islandGeo,islandMat,6);
+  const coral=new THREE.InstancedMesh(coralGeo,coralMat,24);
+  const waveGeo=trackDisposable(new THREE.TorusGeometry(2.6,0.035,4,20,Math.PI*1.1));
+  const waveMat=trackDisposable(new THREE.MeshBasicMaterial({color:0xb0f3ef,transparent:true,opacity:0.55}));
+  const ripples=new THREE.InstancedMesh(waveGeo,waveMat,18);
+  const oceanTransform=new THREE.Object3D();
+  const oceanColor=new THREE.Color();
+  for(let i=0;i<6;i++){
+    const x=(i%2===0?-1:1)*(12+Math.floor(i/2)*4);
+    const z=-10-Math.floor(i/2)*17;
+    oceanTransform.position.set(x,-3.1,z);oceanTransform.rotation.set(0,0,0);oceanTransform.scale.set(1,1,1);
+    oceanTransform.updateMatrix();islands.setMatrixAt(i,oceanTransform.matrix);
+    for(let j=0;j<4;j++){
+      oceanTransform.position.set(x+(j%2===0?-1:1)*1.15,-1.15,z+(j<2?-1:1)*1.1);
+      oceanTransform.rotation.set((j%2===0?-1:1)*0.22,j*0.9,0.15);
+      oceanTransform.scale.set(0.75,0.8+j*0.15,0.75);oceanTransform.updateMatrix();
+      coral.setMatrixAt(i*4+j,oceanTransform.matrix);coral.setColorAt(i*4+j,oceanColor.setHex([0xf08f9a,0xf7b56d,0x71dbbb,0xae9bed][j]));
+    }
+    for(let j=0;j<3;j++){
+      oceanTransform.position.set(x,-3.35,z);oceanTransform.rotation.set(-Math.PI/2,0,j*1.8);
+      oceanTransform.scale.setScalar(1.7+j*0.45);oceanTransform.updateMatrix();ripples.setMatrixAt(i*3+j,oceanTransform.matrix);
+    }
+  }
+  for(const mesh of [islands,coral,ripples])mesh.instanceMatrix.needsUpdate=true;
+  if(coral.instanceColor)coral.instanceColor.needsUpdate=true;
+  oceanGroup.add(islands,coral,ripples);skyportGroup.add(oceanGroup);
+  // Distinct landmarks share geometry, never obstruct the playable deck.
+  const oceanLandmarks = {sampling:new THREE.Group(),reef:new THREE.Group(),signal:new THREE.Group(),beacon:new THREE.Group()};
+  const floatGeo=trackDisposable(new THREE.CylinderGeometry(0.75,0.9,0.7,12));
+  const mastGeo=trackDisposable(new THREE.CylinderGeometry(0.12,0.24,3.0,10));
+  const oceanLampGeo=trackDisposable(new THREE.SphereGeometry(0.42,12,8));
+  const redMat=trackDisposable(new THREE.MeshStandardMaterial({color:0xf97316,roughness:0.7}));
+  const whiteMat=trackDisposable(new THREE.MeshStandardMaterial({color:0xf1f5f9,roughness:0.75}));
+  const greenMat=trackDisposable(new THREE.MeshBasicMaterial({color:0x34d399}));
+  const amberMat=trackDisposable(new THREE.MeshBasicMaterial({color:0xfbbf24}));
+  const addLandmark=(group:THREE.Group,geo:THREE.BufferGeometry,mat:THREE.Material,x:number,y:number,z:number,scale=1)=>{
+    const mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.scale.setScalar(scale);group.add(mesh);return mesh;
+  };
+  for(const x of [-6,6]){
+    for(const z of [-8,-18,-28]){
+      addLandmark(oceanLandmarks.sampling,floatGeo,redMat,x,-3.05,z);
+      addLandmark(oceanLandmarks.sampling,oceanLampGeo,whiteMat,x,-2.4,z,0.65);
+    }
+    addLandmark(oceanLandmarks.reef,floatGeo,whiteMat,x,-3.05,-16,1.8);
+    addLandmark(oceanLandmarks.reef,mastGeo,whiteMat,x,-0.7,-16);
+    addLandmark(oceanLandmarks.reef,oceanLampGeo,greenMat,x,0.95,-16);
+    addLandmark(oceanLandmarks.signal,mastGeo,whiteMat,x,-0.8,-12,1.6);
+    addLandmark(oceanLandmarks.signal,oceanLampGeo,amberMat,x,1.8,-12);
+  }
+  addLandmark(oceanLandmarks.beacon,floatGeo,whiteMat,7,-2.5,-24,3);
+  addLandmark(oceanLandmarks.beacon,mastGeo,whiteMat,7,1,-24,2.3);
+  addLandmark(oceanLandmarks.beacon,oceanLampGeo,amberMat,7,4.7,-24,2);
+  for(const group of Object.values(oceanLandmarks)){group.visible=false;oceanGroup.add(group);}
+
   // Chapter 5 solar arrays: background-only, shared geometry and materials.
   const energyArrays = new THREE.Group();
   energyArrays.visible = false;
@@ -667,6 +733,11 @@ export function buildWorkshopEnvironment(
 
   const applyBiome = (biome: BiomeThemeDef) => {
     energyArrays.visible = biome.id === 'energy_valley';
+    const ocean = biome.id === 'ocean_discovery';
+    oceanGroup.visible = ocean;
+    for(const [zone,group] of Object.entries(oceanLandmarks)) group.visible=ocean && zone===biome.oceanZone;
+    for(const mesh of [solarRing,mesas,mesaCaps,mesaBands,beacons]) mesh.visible = !ocean;
+    for(const rotor of windmills) if(rotor.parent) rotor.parent.visible = !ocean;
     hemi.color.setHex(biome.hemiSkyHex);
     hemi.groundColor.setHex(biome.hemiGroundHex);
     key.color.setHex(biome.keyLightHex);
