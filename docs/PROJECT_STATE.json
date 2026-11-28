@@ -108,13 +108,13 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "Exact CI and preview; verify core abilities, mobile HUD and eight-stage gameplay balance",
-      "experimentalStatus": "SPACE_BOT_EVOLUTION_PENDING_CI",
+      "nextPackage": "Verify ultimate fusion, mobile controls and full expedition acceptance; no release until gates reviewed",
+      "experimentalStatus": "SPACE_ULTIMATE_FUSION_PENDING_CI",
       "experimentalEntry": "/?experiment=rescue3d",
       "lastVerifiedExperiment": {
-        "sha": "360d6186ac95bad5fbb3e117c6c31aef909c139b",
-        "ciRun": 46181772235,
-        "preview": "https://sparkbot-4b5gmtz0j-btk10.vercel.app/"
+        "sha": "aa0834ff20bd3f45abc7810e0df5c5fdb6284da2",
+        "ciRun": 46182988817,
+        "preview": "https://sparkbot-fbfvfr53t-btk10.vercel.app/"
       },
       "policyIntegration": {
         "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",

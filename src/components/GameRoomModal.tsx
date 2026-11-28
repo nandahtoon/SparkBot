@@ -78,6 +78,7 @@ import { WallBreakerCanvasGame } from './WallBreakerCanvasGame';
 import { SPACE_BOT_FORM_INFO, SPACE_TRANSFORM_DURATION, nextSpaceBotForm, spaceBotShots, spaceBotImpact, type SpaceBotForm } from '../game/spaceBotForms';
 import { drawSpaceBot } from '../game/spaceBotArt';
 import {SPACE_ABILITIES,SPACE_CORE_MAX,spaceEvolutionEnabled,rechargeSpaceCore,canUseSpaceAbility,activateSpaceAbility,spaceAbilitySpeed,spacePulseWave} from '../game/spaceBotEvolution';
+import {ULTIMATE_STAGE,ULTIMATE_COST,newUltimate,canActivateUltimate,activateUltimate,tickUltimate,absorbUltimateHit,ultimateArmorBlend} from '../game/spaceUltimate';
 import {drawExpeditionBackdrop} from '../game/spaceBackdrop';
 import {advanceExpeditionObstacle,advanceSpaceTransition,SPACE_STAGE_TRANSITION_SECONDS} from '../game/spaceExpeditionMotion';
 import {SPACE_EXPEDITION_STAGES,SPACE_RESCUE_GOAL,spaceStageCount,spaceRoundOutcome,spawnExpeditionWave,moveSpaceBotToward,rescueSignalPosition,type SpaceRoundMode} from '../game/spaceExpedition';
@@ -307,6 +308,7 @@ const SpaceShooterRound: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const burstTriggerRef = useRef<(() => void) | null>(null);
   const transformRef = useRef<(() => void) | null>(null);
+  const ultimateRef = useRef<(() => void) | null>(null);
   const [hud, setHud] = useState({
     score: 0,
     wave: 1,
@@ -319,7 +321,8 @@ const SpaceShooterRound: React.FC<{
     rescued: 0,
     transitioning: false,
     energy: 100,
-    boostActive: false
+    boostActive: false,
+    ultimateReady:false,ultimateUsed:false,ultimateSeconds:0,ultimateShield:false
   });
   const finishRef = useRef(onFinish);
   finishRef.current = onFinish;
@@ -380,14 +383,22 @@ const SpaceShooterRound: React.FC<{
     let hudTimer = 0;
     let ended = false,transitionRemaining=0,stageElapsed=0;
     let energy=SPACE_CORE_MAX,boostRemaining=0,abilityFlash=0;
+    let ultimate=newUltimate();
     let form: SpaceBotForm = 'scout', previousForm: SpaceBotForm = 'scout', transformTime = SPACE_TRANSFORM_DURATION, guardCooldown = 0;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const transform = () => {
-      if (ended || transformTime < SPACE_TRANSFORM_DURATION) return;
+      if (ended || document.hidden || transitionRemaining>0 || ultimate.remaining>0 || transformTime < SPACE_TRANSFORM_DURATION) return;
       previousForm = form; form = nextSpaceBotForm(form); boostRemaining=0;abilityFlash=0; transformTime = reducedMotion.matches ? SPACE_TRANSFORM_DURATION : 0;
       setHud(old => ({...old, form, guardReady:guardCooldown<=0,boostActive:false,burstReady:spaceEvolutionEnabled(expedition,wave)?transitionRemaining===0&&canUseSpaceAbility(form,energy,boostRemaining,guardCooldown):burstCooldown<=.05&&transitionRemaining===0&&!(expedition&&wave===8)})); SFX.uiTick();
     };
     transformRef.current = transform;
+    const triggerUltimate=()=>{
+      if(ended||document.hidden||transitionRemaining>0)return;
+      const activation=activateUltimate(expedition,wave,energy,ultimate);if(!activation)return;
+      energy=activation.energy;ultimate=activation.state;boostRemaining=0;abilityFlash=.45;
+      setHud(old=>({...old,energy,boostActive:false,ultimateReady:false,ultimateUsed:true,ultimateSeconds:ultimate.remaining,ultimateShield:true,burstReady:false}));SFX.laserSolved();
+    };
+    ultimateRef.current=triggerUltimate;
 
     const handleResize = () => {
       const nextW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
@@ -431,7 +442,7 @@ const SpaceShooterRound: React.FC<{
     };
 
     const triggerTurboBurst = () => {
-      if (ended || document.hidden || transitionRemaining>0 || (expedition&&wave===8)) return;
+      if (ended || document.hidden || transitionRemaining>0 || ultimate.remaining>0 || (expedition&&wave===8)) return;
       if(spaceEvolutionEnabled(expedition,wave)){
         const ability=activateSpaceAbility(form,energy,boostRemaining,guardCooldown);if(!ability)return;
         energy=ability.energy;boostRemaining=ability.boostRemaining;guardCooldown=ability.guardCooldown;abilityFlash=.45;
@@ -453,6 +464,7 @@ const SpaceShooterRound: React.FC<{
       if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
       if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
       if (e.key.toLowerCase() === 't' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); transform(); }
+      if (e.key.toLowerCase()==='u'&&!e.repeat&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&expedition&&wave===ULTIMATE_STAGE){e.preventDefault();triggerUltimate();}
       if (e.key === ' ' && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
         if(!e.repeat) triggerTurboBurst();
@@ -503,7 +515,8 @@ const SpaceShooterRound: React.FC<{
       if(reducedMotion.matches)transformTime=SPACE_TRANSFORM_DURATION;
       guardCooldown=Math.max(0,guardCooldown-dt);
       boostRemaining=Math.max(0,boostRemaining-dt);abilityFlash=Math.max(0,abilityFlash-dt);
-      if(spaceEvolutionEnabled(expedition,wave))energy=rechargeSpaceCore(energy,dt);
+      ultimate=tickUltimate(ultimate,dt,wave);
+      if(spaceEvolutionEnabled(expedition,wave)&&ultimate.remaining===0)energy=rechargeSpaceCore(energy,dt);
 
       if(!expedition)timeLeft = Math.max(0, timeLeft - dt);
       if (!expedition&&spaceRoundOutcome(mode,shields,timeLeft,score,wave,enemies.length,rescued)==='won') {
@@ -511,7 +524,7 @@ const SpaceShooterRound: React.FC<{
         return;
       }
 
-      const shipSpeed = Math.max(410, arenaW * 0.68) * SPACE_BOT_FORM_INFO[form].speed * spaceAbilitySpeed(form,boostRemaining);
+      const shipSpeed = Math.max(410, arenaW * 0.68) * (ultimate.remaining>0?1.5:SPACE_BOT_FORM_INFO[form].speed * spaceAbilitySpeed(form,boostRemaining));
       if (keys.left||keys.right)pointerTarget=null;
       if (keys.left) shipX -= shipSpeed * dt;
       if (keys.right) shipX += shipSpeed * dt;
@@ -524,9 +537,9 @@ const SpaceShooterRound: React.FC<{
 
       // Auto-fire friendly twin lasers
       if (dt>0&&fireCooldown <= 0 && !(expedition&&wave===8)) {
-        fireCooldown = SPACE_BOT_FORM_INFO[form].interval;
+        fireCooldown = ultimate.remaining>0?.24:SPACE_BOT_FORM_INFO[form].interval;
         const bulletSpd = Math.max(490, arenaH * 0.95);
-        bullets.push(...spaceBotShots(form,shipX,shipY,bulletSpd));
+        bullets.push(...(ultimate.remaining>0?spacePulseWave(shipX,shipY,bulletSpd):spaceBotShots(form,shipX,shipY,bulletSpd)));
       }
 
       // Move bullets
@@ -574,7 +587,8 @@ const SpaceShooterRound: React.FC<{
 
         // Ship collision
         if (invulnTimer <= 0 && Math.hypot(en.x - shipX, en.y - shipY) <= en.radius + 19) {
-          const impact=spaceBotImpact(form,shields,guardCooldown);shields=impact.shields;guardCooldown=impact.guardCooldown;
+          const fusionHit=absorbUltimateHit(ultimate);ultimate=fusionHit.state;
+          const impact=fusionHit.absorbed?{absorbed:true,shields,guardCooldown}:spaceBotImpact(form,shields,guardCooldown);shields=impact.shields;guardCooldown=impact.guardCooldown;
           invulnTimer = 1.05;
           spawnBoom(shipX, shipY, impact.absorbed?'#6ee7b7':'#fb7185', 14);
           if(impact.absorbed)SFX.uiTick();else SFX.chirpConfused();
@@ -602,8 +616,8 @@ const SpaceShooterRound: React.FC<{
         }
         if(expedition){
           // Restore one shield between stages, without exceeding the starting three.
-          shields=Math.min(3,shields+1);stageElapsed=0;boostRemaining=0;abilityFlash=0;if(wave===3)energy=SPACE_CORE_MAX;transitionRemaining=reducedMotion.matches?0:SPACE_STAGE_TRANSITION_SECONDS;
-          bullets.length=0;sparks.length=0;setHud(old=>({...old,wave,shields,energy,boostActive:false,burstReady:transitionRemaining===0&&wave!==8,transitioning:transitionRemaining>0}));
+          shields=Math.min(3,shields+1);stageElapsed=0;boostRemaining=0;abilityFlash=0;ultimate=tickUltimate(ultimate,0,wave);if(wave===3||wave===ULTIMATE_STAGE)energy=SPACE_CORE_MAX;transitionRemaining=reducedMotion.matches?0:SPACE_STAGE_TRANSITION_SECONDS;
+          bullets.length=0;sparks.length=0;setHud(old=>({...old,wave,shields,energy,boostActive:false,ultimateReady:transitionRemaining===0&&canActivateUltimate(expedition,wave,energy,ultimate),ultimateUsed:ultimate.used,ultimateSeconds:0,ultimateShield:false,burstReady:transitionRemaining===0&&wave!==8,transitioning:transitionRemaining>0}));
           if(wave===8){bullets.length=0;stars.length=0;for(let i=0;i<SPACE_RESCUE_GOAL;i++)signals.push({x:rescueSignalPosition(arenaW,i),y:-25-i*42,index:i});}
         }
         enemies = spawn(wave, nextEnemyId);
@@ -716,7 +730,7 @@ const SpaceShooterRound: React.FC<{
       ctx.save();
       ctx.translate(shipX,shipY);
       if(invulnTimer>0&&!reducedMotion.matches&&Math.floor(invulnTimer*16)%2===0)ctx.globalAlpha=.65;
-      drawSpaceBot(ctx,character,previousForm,form,transformTime/SPACE_TRANSFORM_DURATION,guardCooldown<=0,spaceEvolutionEnabled(expedition,wave),boostRemaining>0,abilityFlash);
+      drawSpaceBot(ctx,character,previousForm,form,transformTime/SPACE_TRANSFORM_DURATION,guardCooldown<=0,spaceEvolutionEnabled(expedition,wave),boostRemaining>0,abilityFlash,ultimateArmorBlend(ultimate.remaining,reducedMotion.matches),ultimate.shield);
       ctx.restore();
 
       // Sparks
@@ -736,12 +750,13 @@ const SpaceShooterRound: React.FC<{
           shields,
           stars: starsCollected,
           timeLeft: Math.ceil(timeLeft),
-          burstReady: transitionRemaining===0&&!(expedition&&wave===8)&&(spaceEvolutionEnabled(expedition,wave)?canUseSpaceAbility(form,energy,boostRemaining,guardCooldown):burstCooldown<=.05),
+          burstReady: ultimate.remaining===0&&transitionRemaining===0&&!(expedition&&wave===8)&&(spaceEvolutionEnabled(expedition,wave)?canUseSpaceAbility(form,energy,boostRemaining,guardCooldown):burstCooldown<=.05),
           form,
           guardReady: guardCooldown <= 0,
           rescued,
           transitioning:transitionRemaining>0,
-          energy:Math.floor(energy),boostActive:boostRemaining>0
+          energy:Math.floor(energy),boostActive:boostRemaining>0,
+          ultimateReady:transitionRemaining===0&&canActivateUltimate(expedition,wave,energy,ultimate),ultimateUsed:ultimate.used,ultimateSeconds:Math.ceil(ultimate.remaining),ultimateShield:ultimate.shield
         });
       }
       rafId = requestAnimationFrame(loop);
@@ -753,6 +768,7 @@ const SpaceShooterRound: React.FC<{
       ro.disconnect();
       burstTriggerRef.current = null;
       transformRef.current = null;
+      ultimateRef.current=null;
       window.removeEventListener('blur',clearKeys);
       document.removeEventListener('visibilitychange',clearKeys);
       window.removeEventListener('keydown', onKeyDown);
@@ -801,14 +817,15 @@ const SpaceShooterRound: React.FC<{
       </div>
 
       {expedition&&<div className="pointer-events-none absolute inset-x-3 top-12 z-10 text-center"><span className="rounded-lg bg-slate-950/85 px-2 py-1 text-xs font-black text-white">{SPACE_EXPEDITION_STAGES[hud.wave-1].title} · {hud.wave===8?hud.rescued+'/'+SPACE_RESCUE_GOAL:SPACE_EXPEDITION_STAGES[hud.wave-1].hint}</span></div>}
-      {expedition&&hud.transitioning&&<div className="pointer-events-none absolute inset-x-4 top-1/3 z-20 flex justify-center" role="status"><div className="rounded-2xl border border-emerald-300 bg-slate-950/95 px-4 py-3 text-center"><span className="block text-xs font-bold text-emerald-300">Stage {hud.wave} / {stageCount}</span><span className="block text-lg font-black text-white">{SPACE_EXPEDITION_STAGES[hud.wave-1].title}</span>{hud.wave===3&&<span className="block text-xs text-cyan-200">Energy Core unlocked!</span>}</div></div>}
+      {expedition&&hud.transitioning&&<div className="pointer-events-none absolute inset-x-4 top-1/3 z-20 flex justify-center" role="status"><div className="rounded-2xl border border-emerald-300 bg-slate-950/95 px-4 py-3 text-center"><span className="block text-xs font-bold text-emerald-300">Stage {hud.wave} / {stageCount}</span><span className="block text-lg font-black text-white">{SPACE_EXPEDITION_STAGES[hud.wave-1].title}</span>{hud.wave===3&&<span className="block text-xs text-cyan-200">Energy Core unlocked!</span>}{hud.wave===ULTIMATE_STAGE&&<span className="block text-xs text-amber-200">Ultimate Fusion unlocked!</span>}</div></div>}
       <canvas
         ref={canvasRef}
         data-testid="space-shooter-canvas"
         className="block h-full w-full cursor-crosshair touch-none"
       />
 
-      <button type="button" onClick={()=>transformRef.current?.()} aria-label={'Transform robot, current form '+SPACE_BOT_FORM_INFO[hud.form].label} className="safe-bottom absolute bottom-3 left-3 z-10 flex min-h-12 items-center gap-2 rounded-2xl border border-emerald-300 bg-slate-950/90 px-3 text-left text-emerald-100 focus-visible:ring-2 focus-visible:ring-white"><RotateCw className="h-5 w-5" aria-hidden="true"/><span><span className="block text-xs font-black">{SPACE_BOT_FORM_INFO[hud.form].label} · T</span><span className="block text-[10px]">{hud.form==='guard'?(hud.guardReady?'Shield ready':'Recharging'):SPACE_BOT_FORM_INFO[hud.form].hint}</span></span></button>
+      {expedition&&hud.wave===ULTIMATE_STAGE&&<button type="button" onClick={()=>ultimateRef.current?.()} disabled={!hud.ultimateReady} aria-label="Ultimate Fusion" className="absolute bottom-[76px] left-1/2 z-10 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-xl border border-amber-300 bg-slate-950/90 px-3 text-amber-100 disabled:opacity-70 focus-visible:ring-2 focus-visible:ring-white"><Sparkles className="h-5 w-5" aria-hidden="true"/><span className="whitespace-nowrap text-xs font-black">{hud.ultimateSeconds>0?'Fusion '+hud.ultimateSeconds+'s'+(hud.ultimateShield?' · Shield':''):hud.ultimateUsed?'Fusion complete':'Fusion · '+ULTIMATE_COST+' energy · U'}</span></button>}
+      <button type="button" disabled={hud.ultimateSeconds>0||hud.transitioning} onClick={()=>transformRef.current?.()} aria-label={'Transform robot, current form '+SPACE_BOT_FORM_INFO[hud.form].label} className="safe-bottom absolute bottom-3 left-3 z-10 flex min-h-12 items-center gap-2 rounded-2xl border border-emerald-300 bg-slate-950/90 px-3 text-left text-emerald-100 focus-visible:ring-2 focus-visible:ring-white"><RotateCw className="h-5 w-5" aria-hidden="true"/><span><span className="block text-xs font-black">{SPACE_BOT_FORM_INFO[hud.form].label} · T</span><span className="block text-[10px]">{hud.form==='guard'?(hud.guardReady?'Shield ready':'Recharging'):SPACE_BOT_FORM_INFO[hud.form].hint}</span></span></button>
       {/* Chunky 3D Tactile Turbo Burst Button */}
       <button
         type="button"
