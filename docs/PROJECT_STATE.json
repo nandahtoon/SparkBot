@@ -43,10 +43,10 @@
     ]
   },
   "work": {
-    "stage": "SB-M01",
-    "status": "OWNER_TEST_MERGE_AUTHORIZED",
-    "next": "SB-M02",
-    "nextGate": "Owner authorized main testing merge and deployment before physical acceptance; production promotion and experimental integration remain HOLD. Independent review remains pending; confirm exact CI before merge and physical family acceptance before release.",
+    "stage": "SB-M03B",
+    "status": "ISOLATED_CAMPAIGN_RULE_TEST",
+    "next": "SB-M03C",
+    "nextGate": "Exact M03B CI and physical preview test pending. Continue isolated 9–12 rules after verification; no experimental runtime integration or production release.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -141,6 +141,39 @@
         "stable": "archive/v0.3-family",
         "productionAutoDeploy": "DISABLED_IN_VERCEL_JSON",
         "physicalAcceptance": "PENDING"
+      },
+      "campaignRedesign": {
+        "document": "docs/SB-M03A_ALL_CAMPAIGN_REDESIGN.md",
+        "designIds": 24,
+        "rulePrototypeIds": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          13,
+          14,
+          15,
+          16
+        ],
+        "branch": "sb-m03a-campaign-redesign",
+        "previewRoute": "/",
+        "physical": "NOT_RUN",
+        "uiPr": 42,
+        "uiFeedback": "Home layout awkward; gameplay repetitive by Level 13",
+        "integration": "HOLD",
+        "legacyRoute": "/?legacyGame=1",
+        "previewFeedback": "Owner screenshot showed legacy Level 24; root preview now defaults to rule prototype; actual device retest pending.",
+        "currentDocument": "docs/SB-M03B_EARLY_ADVENTURE_RULES.md",
+        "previousVerified": {
+          "sha": "6873aeb63646cb9982eeac80449a3c026126a29d",
+          "ciRun": 46186545747,
+          "preview": "https://sparkbot-kbemmxsu0-btk10.vercel.app",
+          "physical": "NOT_RUN"
+        }
       }
     }
   },
@@ -153,6 +186,8 @@
     "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md",
     "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
     "docs/SB-08A3_EXPERIMENTAL_GATE.md",
-    "docs/SB-M01_MAIN_GAME_FOUNDATION.md"
+    "docs/SB-M01_MAIN_GAME_FOUNDATION.md",
+    "docs/SB-M03A_ALL_CAMPAIGN_REDESIGN.md",
+    "docs/SB-M03B_EARLY_ADVENTURE_RULES.md"
   ]
 }

@@ -1,0 +1,32 @@
+// SB-M03A: target campaign design, not shipped levels. IDs map to existing saves.
+export interface AdventureMissionDesign {
+ id:number; legacyName:string; title:string; learning:string; goal:string; mechanic:string;
+ difficulty:number; minAreas:number; maxAreas:number; minMinutes:number; maxMinutes:number;
+}
+export const ADVENTURE_MISSION_DESIGNS: readonly AdventureMissionDesign[] = [
+{"id":1,"legacyName":"First Spark","title":"Workshop delivery","learning":"sequence","goal":"assemble wheels and drive to charging dock","mechanic":"assembly-delivery","difficulty":1,"minAreas":1,"maxAreas":2,"minMinutes":1,"maxMinutes":3},
+{"id":2,"legacyName":"Leap the Pit","title":"Broken walkway","learning":"jump timing","goal":"choose landing points and cross gaps","mechanic":"platform-crossing","difficulty":1,"minAreas":1,"maxAreas":3,"minMinutes":2,"maxMinutes":3},
+{"id":3,"legacyName":"Double Canyon","title":"Bridge builder","learning":"cause and effect","goal":"place bridge pieces then test a crossing","mechanic":"bridge-construction","difficulty":2,"minAreas":2,"maxAreas":3,"minMinutes":2,"maxMinutes":4},
+{"id":4,"legacyName":"Mud Bog & Loop","title":"Swamp trail","learning":"loops","goal":"select traction and trace a repeating trail","mechanic":"terrain-routing","difficulty":2,"minAreas":2,"maxAreas":4,"minMinutes":3,"maxMinutes":5},
+{"id":5,"legacyName":"Steep Sky Ramp","title":"Hill lift","learning":"energy","goal":"boost a loaded lift to the summit","mechanic":"lift-transport","difficulty":2,"minAreas":2,"maxAreas":4,"minMinutes":3,"maxMinutes":5},
+{"id":6,"legacyName":"Swamp Jumpers","title":"Island hopping","learning":"patterns","goal":"navigate moving platforms in a repeatable pattern","mechanic":"platform-pattern","difficulty":2,"minAreas":2,"maxAreas":4,"minMinutes":3,"maxMinutes":5},
+{"id":7,"legacyName":"Energy Crunch","title":"Battery expedition","learning":"trade-offs","goal":"choose charging stops with limited energy","mechanic":"energy-routing","difficulty":2,"minAreas":3,"maxAreas":4,"minMinutes":3,"maxMinutes":5},
+{"id":8,"legacyName":"Master Reactor","title":"Reactor restoration","learning":"nested loops","goal":"route energy to multiple disconnected cores","mechanic":"network-power","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":6},
+{"id":9,"legacyName":"Sensor Gate","title":"Sensor detective","learning":"conditions","goal":"scan landmarks to reveal safe doors","mechanic":"sensor-discovery","difficulty":2,"minAreas":3,"maxAreas":4,"minMinutes":3,"maxMinutes":5},
+{"id":10,"legacyName":"Sludge Scanner","title":"Clean the marsh","learning":"conditional actions","goal":"detect and clean different materials","mechanic":"sorting-cleanup","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":6},
+{"id":11,"legacyName":"Ramp Surge","title":"Cargo launch","learning":"conditional boost","goal":"choose launch power and deliver cargo to raised stations","mechanic":"cargo-launch","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":6},
+{"id":12,"legacyName":"Starport Finale","title":"Starport traffic","learning":"if/else","goal":"redirect service bots to matching docks","mechanic":"traffic-routing","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":7},
+{"id":13,"legacyName":"Rhythm Crossing","title":"Lost robot rescue","learning":"timing","goal":"find tools, repair bridge, rescue robot and return","mechanic":"rescue-return","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":7},
+{"id":14,"legacyName":"Patrol Corridor","title":"Guide the convoy","learning":"functions","goal":"send repeated safe signals to two waiting bots","mechanic":"convoy-control","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":7},
+{"id":15,"legacyName":"Dual-Hazard Gauntlet","title":"Emergency power","learning":"resource planning","goal":"allocate power between two facilities","mechanic":"power-allocation","difficulty":4,"minAreas":3,"maxAreas":6,"minMinutes":5,"maxMinutes":8},
+{"id":16,"legacyName":"Overload Sentinel","title":"Restore the citadel","learning":"systems thinking","goal":"scan faults, align switches and restart the guardian","mechanic":"fault-diagnosis","difficulty":4,"minAreas":4,"maxAreas":6,"minMinutes":5,"maxMinutes":8},
+{"id":17,"legacyName":"Lightweight Delivery","title":"Cargo workshop","learning":"efficient construction","goal":"build a carrier to fit different packages","mechanic":"loadout-design","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":7},
+{"id":18,"legacyName":"Marsh Supply Run","title":"Village supply route","learning":"planning","goal":"deliver distinct cargo to matching villages","mechanic":"multi-destination-delivery","difficulty":4,"minAreas":4,"maxAreas":6,"minMinutes":5,"maxMinutes":8},
+{"id":19,"legacyName":"Sunrise Express","title":"Automated railway","learning":"reusable routines","goal":"program shuttles and switch rails","mechanic":"rail-automation","difficulty":4,"minAreas":4,"maxAreas":6,"minMinutes":5,"maxMinutes":8},
+{"id":20,"legacyName":"Power Station Rescue","title":"Microgrid","learning":"scheduling","goal":"balance power while stations request service","mechanic":"grid-scheduling","difficulty":4,"minAreas":4,"maxAreas":6,"minMinutes":5,"maxMinutes":9},
+{"id":21,"legacyName":"Tide Survey","title":"Ocean samples","learning":"sampling","goal":"choose dive routes and gather distinct samples","mechanic":"underwater-collection","difficulty":3,"minAreas":3,"maxAreas":5,"minMinutes":4,"maxMinutes":7},
+{"id":22,"legacyName":"Reef Survey","title":"Reef photographer","learning":"observation","goal":"identify and record different reef habitats","mechanic":"observation-mapping","difficulty":4,"minAreas":4,"maxAreas":6,"minMinutes":5,"maxMinutes":8},
+{"id":23,"legacyName":"Current Patterns","title":"Current navigator","learning":"periodic signals","goal":"plan swimming routes around changing currents","mechanic":"current-navigation","difficulty":4,"minAreas":4,"maxAreas":6,"minMinutes":5,"maxMinutes":9},
+{"id":24,"legacyName":"Ocean Beacon","title":"Ocean restoration","learning":"debugging","goal":"diagnose broken beacon, repair modules and return","mechanic":"multi-stage-restoration","difficulty":5,"minAreas":4,"maxAreas":7,"minMinutes":6,"maxMinutes":10},
+];
+export const CAMPAIGN_REDESIGN_POLICY = Object.freeze({existingIds:24, futureTarget:100, firstRuleSlice:[13,14,15,16] as const, miniGameExpansion:'HOLD', experimentalIntegration:'HOLD', production:'HOLD'} as const);
