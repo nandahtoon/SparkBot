@@ -208,7 +208,7 @@ export type MissionObjective =
   | { kind: 'collect'; requiredCrystals: number }
   | { kind: 'power' }
   | { kind: 'repair' }
-  | { kind: 'survey'; stations: number[] };
+  | { kind: 'survey'; stations: number[]; requiredCrystals?: number };
 
 export interface LevelDef {
   objective?: MissionObjective;
