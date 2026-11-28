@@ -31,7 +31,7 @@ export const MISSION_LEARNING_GOALS: Readonly<Record<number, MissionLearningGoal
   20: {"skill":"Timing and resource planning","goal":"Deliver energy with safe, timed steps.","reflect":"Why might waiting save resources?"},
   21: {"skill":"Complete sampling","goal":"Collect every sample before returning.","reflect":"Why might the fastest route miss a sample?"},
   22: {"skill":"Systematic observation","goal":"Pause at both marked observation stations.","reflect":"Why do repeated observations at one station not replace visiting another?"},
-  23: {"skill":"Periodic signals","goal":"Time your movement using the repeating signal.","reflect":"How does waiting change when you reach the barrier?"},
+  23: {"skill":"Comparing periodic signals","goal":"Cross two gates with different repeating patterns.","reflect":"Why might the second gate need a different wait from the first?"},
   24: {"skill":"Repair and restoration","goal":"Fix the routine and power both beacon cores.","reflect":"How did you check that both the code and the beacon worked?"}
 };
 

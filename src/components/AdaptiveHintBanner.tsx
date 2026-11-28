@@ -13,12 +13,14 @@ import {
 import type { SensorCondition } from '../game/engine';
 import type { AdaptiveHint, ParsonsStarterTemplate } from '../game/educationStrategy';
 import { SPEECH, useReadAloud } from '../game/readAloud';
+import { SFX } from '../game/audio';
 import type { DemoTopic } from './ConceptDemoPopover';
 
 interface AdaptiveHintBannerProps {
   hint: AdaptiveHint | null;
   isGentleRetry?: boolean;
   autoReadAloud?: boolean;
+  muted?: boolean;
   onEscalateTier: () => void;
   onOpenDemo?: (topic: DemoTopic, condition?: SensorCondition) => void;
   onStepByStep?: () => void;
@@ -31,6 +33,7 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
   hint,
   isGentleRetry = false,
   autoReadAloud = false,
+  muted = false,
   onEscalateTier,
   onOpenDemo,
   onStepByStep,
@@ -44,16 +47,13 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
     hint && speech.speaking && speech.activeId === hintSpeechId
   );
 
+  const spokenClue=hint ? `Let’s try this! ${hint.clue}` : '';
   useEffect(() => {
-    if (!hint || !autoReadAloud || !SPEECH.isSupported()) return;
-    SPEECH.speak(`${hint.headline}. ${hint.clue}`, `hint_${hint.phase}_${hint.tier}`);
-  }, [autoReadAloud, hint]);
-
-  useEffect(() => {
-    return () => {
-      SPEECH.stop();
-    };
-  }, []);
+    if (spokenClue && autoReadAloud && !muted && SPEECH.isSupported()) {
+      SFX.cancelSpeech();SPEECH.speak(spokenClue,hintSpeechId,{playful:true});
+    }
+    return ()=>SPEECH.stopOwned(hintSpeechId);
+  }, [autoReadAloud, muted, spokenClue, hintSpeechId]);
 
   if (!hint) return null;
 
@@ -104,13 +104,13 @@ export const AdaptiveHintBanner: React.FC<AdaptiveHintBannerProps> = ({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        {speech.supported && (
+        {speech.supported && !muted && (
           <button
             id="hintReadAloudBtn"
             type="button"
-            onClick={() => SPEECH.toggleSpeak(`${hint.headline}. ${hint.clue}`, hintSpeechId)}
+            onClick={() => {SFX.cancelSpeech();SPEECH.toggleSpeak(spokenClue,hintSpeechId,{playful:true});}}
             aria-label={isSpeakingThisHint ? 'Stop reading hint aloud' : 'Read hint aloud'}
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-transform active:scale-95 ${
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-transform active:scale-95 ${
               isSpeakingThisHint
                 ? 'border-rose-400/80 bg-rose-500/20 text-rose-100'
                 : 'border-slate-600 bg-slate-800 text-sky-200 hover:border-sky-400'

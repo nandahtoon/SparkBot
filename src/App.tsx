@@ -72,6 +72,12 @@ import {
 } from './game/profileRoster';
 import { SFX } from './game/audio';
 import { SPEECH } from './game/readAloud';
+import { missionVoice } from './game/characterGuidance';
+import { soundscapeFor } from './game/soundscape';
+import { getJourneyPreview } from './game/journey';
+import { canEnterCampaign,createMissionTravel,type MissionTravel } from './game/adventureMap';
+import { MissionTravelOverlay } from './components/MissionTravelOverlay';
+import { getBiomeForLevel } from './game/biomes';
 import { getPartPlacementSoundProfile } from './game/partAudio';
 import {
   normalizeGraphicsQualityMode,
@@ -254,6 +260,8 @@ export default function App() {
   const [juniorSession, setJuniorSession] = useState(false);
   const [paused, setPaused] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [missionTravel,setMissionTravel]=useState<MissionTravel|null>(null);
+  const finishMissionTravel=useCallback(()=>setMissionTravel(null),[]);
   const [showTrophies, setShowTrophies] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -450,6 +458,17 @@ export default function App() {
     SPEECH.applySettings(save.muted, normalizedAudio.voiceVolume);
   }, [save.muted, normalizedAudio]);
 
+  useEffect(()=>{
+    const sync=()=>SFX.setSoundscape(document.hidden||paused?null:soundscapeFor(getBiomeForLevel(currentLevel).id,mode,showGameRoom));
+    sync();document.addEventListener('visibilitychange',sync);
+    return ()=>document.removeEventListener('visibilitychange',sync);
+  },[currentLevel,mode,showGameRoom,paused]);
+  useEffect(()=>()=>SFX.setSoundscape(null),[]);
+  useEffect(()=>{
+    const sync=()=>SFX.setNarrationActive(SPEECH.getSnapshot().speaking);
+    sync();return SPEECH.subscribe(sync);
+  },[]);
+
   useEffect(() => {
     SPEECH.setEnabled(Boolean(save.readAloudEnabled));
   }, [save.readAloudEnabled]);
@@ -574,6 +593,8 @@ export default function App() {
 
   const beginLevel = useCallback(
     (lvl: LevelDef, preserveChassis = false, junior = false) => {
+      SPEECH.stop();
+      setMissionTravel(null);
       setJuniorSession(junior);
       const hasStarterChassis = Boolean(lvl.starterChassis);
       const startInCode = Boolean((lvl.isDebug || lvl.isPrototype || lvl.objective) && hasStarterChassis);
@@ -739,8 +760,8 @@ export default function App() {
   }, [program, programHistory]);
 
   useEffect(() => {
-    worldRef.current?.setLivePathPreview(livePathPreview, showPathPreview);
-  }, [livePathPreview, showPathPreview]);
+    worldRef.current?.setLivePathPreview(livePathPreview, showPathPreview && !pendingPredictQuiz);
+  }, [livePathPreview, showPathPreview, pendingPredictQuiz]);
 
   useEffect(() => {
     worldRef.current?.setHoveredCodeBlock(mode === 'CODE_3D' ? hoveredCodeBlockId : null);
@@ -1429,6 +1450,7 @@ export default function App() {
 
   const launchSimulation = useCallback(
     (sim: SimResult, stepMode: boolean) => {
+      SPEECH.stop();
       SFX.unlock();
       if (!stepMode) {
         SFX.speakWallE('excited', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
@@ -1494,8 +1516,7 @@ export default function App() {
       setPredictPromptedLevelKey(curQuiz.levelKey);
 
       if (!skipped && correct) {
-        SFX.installComplete();
-        SFX.speakWallE('proud', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
+        // The quiz already supplies spoken and musical feedback; do not replay it over the run.
         setSave((prev) => {
           const nextSkills = {
             chassisBuilds: 0,
@@ -1522,7 +1543,7 @@ export default function App() {
 
       launchSimulation(curQuiz.sim, false);
     },
-    [activeCharacter, launchSimulation, pendingPredictQuiz]
+    [launchSimulation, pendingPredictQuiz]
   );
 
   const handleStepProgram = () => {
@@ -2401,8 +2422,15 @@ export default function App() {
       }
       return null;
     }
-    return getLevelById(currentLevel.id + 1);
-  }, [currentLevel]);
+    const target=getLevelById(currentLevel.id + 1);
+    return target&&canEnterCampaign(target,save)?target:null;
+  }, [currentLevel,save.unlockedLevel]);
+  const travelToMission=(target:LevelDef)=>{
+    if(!target.isDebug&&!canEnterCampaign(target,save))return;
+    const travel=createMissionTravel(currentLevel,target);
+    beginLevel(target);
+    if(travel){setMissionTravel(travel);SFX.uiTick();}
+  };
 
   const currentLevelSavedStars = getLevelSavedStars(save, currentLevel);
   const currentAdaptiveHint = useMemo(() => {
@@ -2436,6 +2464,7 @@ export default function App() {
     <AdaptiveHintBanner
       hint={currentAdaptiveHint}
       isGentleRetry={consecutiveFails > 0}
+      muted={save.muted}
       autoReadAloud={Boolean(save.readAloudEnabled)}
       onEscalateTier={handleRequestHint}
       onOpenDemo={(topic, condition) => {
@@ -2527,6 +2556,7 @@ export default function App() {
           mode={mode}
           canCode={chassisInfo.hasDrive && chassisInfo.hasFrontLaser}
           muted={save.muted}
+          missionVoiceText={(mode==='BUILD_3D'||mode==='CODE_3D'||mode==='CIRCUIT_3D') && !activeMissionTutorialStep && !currentAdaptiveHint && !pendingPredictQuiz && !showMap && !showProfile && !paused ? missionVoice(currentLevel) : ''}
           ghostHelp={ghostHelp}
           moodCue={currentAdaptiveHint || activeMissionTutorialStep ? null : moodCue}
           challengeTimerEnabled={challengeTimerEnabled}
@@ -2615,6 +2645,7 @@ export default function App() {
           lastPlacement={lastPlacement}
           hintBanner={mode === 'BUILD_3D' ? adaptiveHintElement : null}
           suppressInlineGuide={Boolean(activeMissionTutorialStep)}
+          muted={save.muted}
           onSelectPart={(p) => {
             SFX.click();
             setSelectedPart(p);
@@ -2676,6 +2707,8 @@ export default function App() {
           objectiveLabel={currentLevel.objective ? getMissionObjectiveLabel(currentLevel) : undefined}
           objectiveTarget={currentLevel.objective ? getCollectionRequirement(currentLevel) : null}
           surveyTarget={getSurveyStations(currentLevel)?.length ?? null}
+          surveyStations={getSurveyStations(currentLevel)??[]}
+          showSignalPatterns={currentLevel.id===23&&Boolean(currentLevel.isBonus)&&!currentLevel.isDaily&&!currentLevel.isSandbox&&!currentLevel.isClassCode&&!currentLevel.isDebug}
           objectiveFeedback={currentLevel.isPrototype || lastFailedSim?.failCode === 'objective_unmet' ? lastFailedSim?.failReason : null}
           junior={juniorSession}
           program={program}
@@ -2762,6 +2795,10 @@ export default function App() {
       {mode === 'CODE_3D' && pendingPredictQuiz && (
         <PredictBeforeRunCard
           question={pendingPredictQuiz.question}
+          track={currentLevel.track}
+          program={program}
+          muted={save.muted}
+          autoReadAloud={Boolean(save.readAloudEnabled)}
           onComplete={handlePredictQuizComplete}
         />
       )}
@@ -2860,6 +2897,7 @@ export default function App() {
       <GuidedTutorialOverlay
         junior={juniorSession}
         muted={save.muted}
+        autoReadAloud={Boolean(save.readAloudEnabled)}
         step={activeMissionTutorialStep}
         onAcknowledgeStep={handleAcknowledgeTutorialStep}
         onSkip={handleSkipTutorial}
@@ -2990,6 +3028,8 @@ export default function App() {
             equippedDroneId={activeLoadout.equippedDroneId}
             totalBolts={save.totalBolts}
             hasNextLevel={Boolean(nextLevelDef)}
+            nextJourney={getJourneyPreview(currentLevel)}
+            voiceMuted={save.muted}
             chassisInfo={chassisInfo}
             externalSummary={planetSummary}
             onClearExternalSummary={() => setPlanetSummary(null)}
@@ -3000,7 +3040,7 @@ export default function App() {
             onNextLevel={() => {
               setPlanetSummary(null);
               setShowGameRoom(false);
-              if (nextLevelDef) beginLevel(nextLevelDef);
+              if (nextLevelDef) travelToMission(nextLevelDef);
             }}
             onClose={() => {
               setPlanetSummary(null);
@@ -3082,7 +3122,10 @@ export default function App() {
         </div>
       )}
       <VictoryModal
+        nextJourney={getJourneyPreview(currentLevel)}
         missionMessage={getOceanPresentation(currentLevel)?.victory}
+        voiceMuted={save.muted}
+        autoVoice={Boolean(save.readAloudEnabled)}
         learningGoal={getMissionLearningGoal(currentLevel)}
         visible={mode === 'VICTORY' && !currentLevel.isPrototype && !showGameRoom && !showShop && !showQuests}
         stars={victoryStars}
@@ -3136,7 +3179,7 @@ export default function App() {
         }
         onNextLevel={() => {
           SFX.click();
-          if (nextLevelDef) beginLevel(nextLevelDef);
+          if (nextLevelDef) travelToMission(nextLevelDef);
         }}
       />
 
@@ -3147,8 +3190,8 @@ export default function App() {
         initialTab={mapInitialTab}
         onSelectLevel={(id) => {
           SFX.click();
-          const target = getLevelById(id) || BONUS_LEVELS[0];
-          beginLevel(target);
+          const target = getLevelById(id);
+          if(target&&canEnterCampaign(target,save))travelToMission(target);
         }}
         onSelectPrototype={(id)=>{const level=getMissionPrototype(id);if(level){SFX.click();beginLevel(level);}}}
         onSelectDebugMission={handleSelectDebugMission}
@@ -3208,6 +3251,7 @@ export default function App() {
         onDismiss={() => setMilestoneCelebration(null)}
       />
 
+      {missionTravel&&!webglLost&&<MissionTravelOverlay travel={missionTravel} onFinish={finishMissionTravel}/>}
       {/* WebGL Context Lost Recovery */}
       {webglLost && (
         <div

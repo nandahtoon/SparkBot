@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "fullName": "nandahtoon/SparkBot",
+    "id": 1467911889,
+    "url": "https://github.com/nandahtoon/SparkBot"
+  },
+  "branches": {
+    "stable": "main",
+    "integration": "integration/sb-08r",
+    "topicPrefix": "sb-",
+    "archives": [
+      "archive/v0.2-family",
+      "archive/v0.3-rc1-accepted",
+      "archive/v0.3-family"
+    ],
+    "mainRole": "OWNER_TESTING_AI_STUDIO",
+    "acceptedStableRef": "archive/v0.3-family"
+  },
+  "stable": {
+    "version": "V0.3",
+    "sha": "7028aaa5aab718aff4cdbcfaea6cc4d11818ff33"
+  },
+  "release": {
+    "production": "HOLD",
+    "commercial": "HOLD",
+    "native": "HOLD",
+    "rc1Pr": 23,
+    "integrationPr": 29
+  },
+  "product": {
+    "promise": "Explore · Help · Invent",
+    "campaignMissions": 24,
+    "gameRoomActivities": 7,
+    "stack": [
+      "React",
+      "TypeScript",
+      "Three.js",
+      "Vite",
+      "Bun",
+      "PWA",
+      "Capacitor"
+    ]
+  },
+  "work": {
+    "stage": "SB-M01",
+    "status": "OWNER_TEST_MERGE_AUTHORIZED",
+    "next": "SB-M02",
+    "nextGate": "Owner authorized main testing merge and deployment before physical acceptance; production promotion and experimental integration remain HOLD. Independent review remains pending; confirm exact CI before merge and physical family acceptance before release.",
+    "evidence": {
+      "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
+      "gameplayCiRun": 46103652601,
+      "reconciliationSha": "374ba795f2927968dafdaa2cd9ec41245b704292",
+      "reconciliationCiRun": 46104060508,
+      "clubhouseRetest": {
+        "sha": "5c72abb6e241fd17cbafe7a125ac9ae76e38516f",
+        "ciRun": 46105568442,
+        "source": "parent-reported",
+        "pass": [
+          "Games / 3D Room switching",
+          "Seven mini-games playable",
+          "Portrait / landscape",
+          "Enter / exit",
+          "Child independently selects and plays"
+        ],
+        "notConfirmed": [
+          "No duplicate game cards"
+        ],
+        "feedback": "3D Room tab က အပိုလိုပဲ"
+      },
+      "singleArcadeCandidate": {
+        "sha": "c395205d08354b5f812ad61a284423521aaaac1f",
+        "ciRuns": [
+          46106222207,
+          46106215464
+        ],
+        "preview": "https://sparkbot-g3bmw3elq-btk10.vercel.app",
+        "physical": "NOT_RUN"
+      },
+      "architecturePreflight": {
+        "sha": "bbbdb4905d13731458af7de51fd67eec53c16e7c",
+        "ciRuns": [
+          46106418246,
+          46106413639
+        ],
+        "scope": "documentation only"
+      },
+      "regressionQa": {
+        "sha": "128a99e72e830764cab803068bcde317a2522dd9",
+        "ciRuns": [
+          46122935735,
+          46122931752
+        ]
+      }
+    },
+    "pending": [
+      "Differentiated worlds",
+      "Single Arcade catalog follow-up retest (previous seven-game and navigation checks passed; duplicate cards not confirmed)",
+      "Map and next mission",
+      "Mission transition animation",
+      "Rescue family playtest"
+    ],
+    "preparation": {
+      "stage": "SB-08A3",
+      "status": "EXPERIMENTAL_IMPLEMENTATION_APPROVED",
+      "document": "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
+      "implementation": "ISOLATED_BRANCH_ONLY",
+      "branch": "sb-08a3-spatial-experiment",
+      "baseSha": "128a99e72e830764cab803068bcde317a2522dd9",
+      "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
+      "familyAcceptance": "PENDING",
+      "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
+      "nextPackage": "A3-1 spatial mapping, isolated scene and renderer lifecycle"
+    },
+    "currentIteration": {
+      "id": "SB-08A2-code-error-recovery",
+      "status": "PROPOSED_PHYSICAL_RETEST_REQUIRED",
+      "document": "docs/SB-08A2_CODE_ERROR_RECOVERY.md"
+    },
+    "previousStage": {
+      "stage": "SB-08A2",
+      "status": "AWAITING_FAMILY_ACCEPTANCE",
+      "next": "SB-08A3",
+      "nextGate": "A2 family acceptance remains required for integration of experimental 3D gameplay and release; isolated SB-08A3 development is owner-approved."
+    },
+    "mainGame": {
+      "document": "docs/SB-M01_MAIN_GAME_FOUNDATION.md",
+      "baseSha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",
+      "rc1Pr": 23,
+      "integrationPr": 29,
+      "isolatedExperimentPrs": [
+        38,
+        40
+      ],
+      "miniGameExpansion": "HOLD",
+      "experimentalIntegration": "HOLD",
+      "physical": "NOT_RUN",
+      "ci": "VERIFY_EXACT_PR_HEAD",
+      "testingPolicy": {
+        "main": "AI_STUDIO_TESTING",
+        "stable": "archive/v0.3-family",
+        "productionAutoDeploy": "DISABLED_IN_VERCEL_JSON",
+        "physicalAcceptance": "PENDING"
+      }
+    }
+  },
+  "requiredReads": [
+    "AGENTS.md",
+    "docs/START_HERE.md",
+    "docs/REPOSITORY_GOVERNANCE.md",
+    "docs/AI_HANDOFF_PROTOCOL.md",
+    "docs/SB-08A_ADVENTURE_FIRST_REDESIGN.md",
+    "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md",
+    "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
+    "docs/SB-08A3_EXPERIMENTAL_GATE.md",
+    "docs/SB-M01_MAIN_GAME_FOUNDATION.md"
+  ]
+}

@@ -87,7 +87,7 @@ test('empty LOOP/IF container triggers empty_container failCode for confused pos
 test('audio volume channels normalize cleanly and stay independent of master mute', async () => {
   const AC = await import('./audioConfig');
   const norm = AC.normalizeAudioSettings({ sfxVolume: 1.8, uiVolume: -0.2, voiceVolume: 0.45 });
-  assert.deepEqual(norm, { sfxVolume: 1, uiVolume: 0, voiceVolume: 0.45 });
+  assert.deepEqual(norm, { sfxVolume: 1, uiVolume: 0, voiceVolume: 0.45, musicVolume: 0.28, ambienceVolume: 0.22 });
 
   // Master mute returns 0 gain without altering underlying channel volumes
   assert.equal(AC.computeEffectiveChannelGain(true, norm.voiceVolume), 0);

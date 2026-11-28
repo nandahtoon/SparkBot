@@ -1,0 +1,7 @@
+# SB-08A2 — One Arcade catalog (family feedback iteration)
+## Evidence
+Parent retest at 5c72abb6e241fd17cbafe7a125ac9ae76e38516f: five PASS (Games/3D Room switching, all seven games, portrait/landscape, enter/exit, independent selection/play); absence of duplicate cards NOT CONFIRMED. Feedback verbatim: "3D Room tab က အပိုလိုပဲ". CI 46105568442 PASS. Family feedback is not a measurement of learning or all-device reliability.
+## Director decision
+A decorative duplicate selection mode has no distinct play objective. Remove the 3D Room tab from the player-facing Arcade on all screen sizes; one visual catalog remains. Retain Clubhouse3D and clubhouseScene source and regression tests as experimental reusable assets; no runtime mount in GameRoomModal, no deletion of 3D gameplay elsewhere. Return only as meaningful interactive play after separate review, not as another menu. Put existing Next Journey card above game catalog when available so the adventure route is easy to find; preserve existing top Next button, all seven game handlers, rewards, loadout, voice, offline and saves. No new progression or telemetry.
+## Retest
+Verify direct game selection, no duplicate mode or cards, all seven games, next journey, portrait/landscape, close/reopen and independent selection. Prior PASS applies to previous SHA only. Physical retest of new build NOT RUN. Other A2 gates remain pending (world differentiation, map, transitions, Rescue Adventure direct/code and changed map). A3 remains gated. Rollback: revert this PR. Stable main and public release HOLD.

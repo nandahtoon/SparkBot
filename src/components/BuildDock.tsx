@@ -37,6 +37,8 @@ import {
   type PlacementUiBurst
 } from '../game/partParticles';
 import { BuildPartTooltip } from './BuildPartTooltip';
+import { CharacterVoiceButton } from './CharacterVoiceButton';
+import { buildVoice } from '../game/characterGuidance';
 import type { DemoTopic } from './ConceptDemoPopover';
 import { PartIcon } from './Icons';
 import { WorkshopOrbitStrip, type WorkshopCameraControls } from './WorkshopOrbitStrip';
@@ -57,6 +59,7 @@ interface BuildDockProps {
   lastPlacement?: { id: number; part: PartId; r: number; c: number } | null;
   hintBanner?: React.ReactNode;
   suppressInlineGuide?: boolean;
+  muted?: boolean;
   onSelectPart: (part: PartId | null) => void;
   onChangeBotTheme: (theme: BotThemeId) => void;
   onHoverSlot: (hover: { r: number; c: number; valid: boolean; part: PartId } | null) => void;
@@ -95,6 +98,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
   lastPlacement = null,
   hintBanner = null,
   suppressInlineGuide = false,
+  muted = false,
   onSelectPart,
   onChangeBotTheme,
   onHoverSlot,
@@ -747,6 +751,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
+                <CharacterVoiceButton id="build_voice" text={buildVoice(guide.nextStep?.part??null,guide.nextStep?.name,guide.nextStep?.slotLabel)} muted={muted} label="Listen to build help"/>
                 {guide.nextStep ? (
                   <button
                     type="button"

@@ -40,6 +40,12 @@ import {
   type StemFactCardDef
 } from '../game/educationStrategy';
 import { SPEECH, useReadAloud } from '../game/readAloud';
+import { CharacterVoiceButton } from './CharacterVoiceButton';
+import { JourneyCard } from './JourneyCard';
+import { AdventureMap } from './AdventureMap';
+import { RescueAdventure } from './RescueAdventure';
+import { getJourneyPreview, type JourneyPreview } from '../game/journey';
+import { victoryVoice } from '../game/characterGuidance';
 import { getMissionLearningGoal, type MissionLearningGoal } from '../game/missionCurriculum';
 
 export interface VictorySpeedRunSummary {
@@ -50,6 +56,9 @@ export interface VictorySpeedRunSummary {
 
 interface VictoryModalProps {
   missionMessage?: string;
+  nextJourney?: JourneyPreview | null;
+  voiceMuted?: boolean;
+  autoVoice?: boolean;
   learningGoal?: MissionLearningGoal | null;
   visible: boolean;
   stars: number;
@@ -83,6 +92,9 @@ interface VictoryModalProps {
 export const VictoryModal: React.FC<VictoryModalProps> = ({
   learningGoal = null,
   missionMessage,
+  nextJourney,
+  voiceMuted = false,
+  autoVoice = false,
   visible,
   stars,
   bonusEarned,
@@ -142,7 +154,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
         )}
 
-        <h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2>
+        <div className="flex items-center justify-center gap-2"><h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2><CharacterVoiceButton id="victory_voice" text={victoryVoice(missionMessage,hasNextLevel)} muted={voiceMuted} auto={autoVoice} label="Hear celebration"/></div>
         <p className="-mt-2 text-center text-sm text-emerald-200">{missionMessage || 'Great work, SparkBot explorer.'}</p>
         {/* 3 Big Stars */}
         <div className="flex items-center gap-3">
@@ -306,6 +318,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </button>
         )}
 
+          {hasNextLevel && nextJourney && <JourneyCard next={nextJourney}/>}
           {hasNextLevel && (
             <button
               type="button"
@@ -444,10 +457,14 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
 }) => {
   const speech = useReadAloud();
   const [mapTab, setMapTab] = useState<'story' | 'debug'>(initialTab);
+  const [detailedMap,setDetailedMap]=useState(false);
+  const [rescueOpen,setRescueOpen]=useState(false);
 
   useEffect(() => {
     if (visible) {
       setMapTab(initialTab);
+      setDetailedMap(false);
+      setRescueOpen(false);
     } else {
       SPEECH.stop();
     }
@@ -633,6 +650,10 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
           </section>
         )}
 
+        {mapTab==='story' && <section className="rounded-2xl border border-emerald-500/60 bg-emerald-950/30 p-3" data-testid="adventure-first-practice">
+          <button type="button" aria-expanded={rescueOpen} onClick={()=>setRescueOpen(v=>!v)} className="flex min-h-12 w-full items-center justify-between gap-2 rounded-xl bg-emerald-800 px-3 text-left font-black text-white"><span>🛟 Rescue Adventure · Try it</span><span aria-hidden="true">{rescueOpen?'−':'▶'}</span></button>
+          {rescueOpen&&<RescueAdventure muted={save.muted}/>}
+        </section>}
         {mapTab === 'story' && onSelectPrototype && (
           <section aria-label="Try new challenges" className="rounded-2xl border border-cyan-700/60 bg-cyan-950/25 p-3">
             <h3 className="font-black text-white">Try New Challenges</h3>
@@ -648,8 +669,13 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
             </div>
           </section>
         )}
-        {/* Story Campaign */}
-        {mapTab === 'story' && (
+        {mapTab==='story' && (()=>{const level=allLevelsById.get(currentLevelId);const next=level?getJourneyPreview(level):null;return next?<JourneyCard next={next} locked={next.id<=LEVELS.length && next.id>save.unlockedLevel}/>:null;})()}
+        {/* Story Campaign — overview by default; full original cards remain available. */}
+        {mapTab==='story'&&<>
+          <div className="flex items-center justify-between gap-2"><span className="text-sm font-black text-white">{detailedMap?'Mission list':'Explore worlds'}</span><button type="button" aria-pressed={detailedMap} onClick={()=>setDetailedMap(v=>!v)} className="min-h-11 rounded-xl border border-slate-600 bg-slate-800 px-3 text-xs font-bold text-sky-100">{detailedMap?'World Map':'Mission List'}</button></div>
+          {!detailedMap&&<AdventureMap save={save} currentLevelId={currentLevelId} onSelectLevel={onSelectLevel} muted={save.muted}/>}
+        </>}
+        {mapTab === 'story' && detailedMap && (
         <div className="flex flex-col gap-3">
           {STORY_CHAPTERS.map((chapter) => {
             const chapterSpeechId = `chapter_${chapter.id}`;

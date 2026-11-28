@@ -27,6 +27,7 @@ import {
 import type { WorldMode } from '../three/worldScene';
 import { HazardIcon, PartIcon, SparkBotEmblem } from './Icons';
 import { MuteIndicator, useMuteFlash } from './MuteIndicator';
+import { CharacterVoiceButton } from './CharacterVoiceButton';
 
 export interface MoodCue {
   mood: 'happy' | 'sad' | 'confused';
@@ -44,6 +45,7 @@ interface TopHudProps {
   mode: WorldMode;
   canCode: boolean;
   muted: boolean;
+  missionVoiceText?: string;
   ghostHelp: boolean;
   moodCue: MoodCue | null;
   challengeTimerEnabled: boolean;
@@ -74,6 +76,7 @@ export const TopHud: React.FC<TopHudProps> = ({
   mode,
   canCode,
   muted,
+  missionVoiceText = '',
   ghostHelp,
   moodCue,
   challengeTimerEnabled,
@@ -218,6 +221,7 @@ export const TopHud: React.FC<TopHudProps> = ({
 
         {/* Center: 4-Stage Visual Icons + Icon-First Challenge Timer */}
         <div className="pointer-events-auto order-3 flex w-full items-center justify-center gap-1.5 md:order-2 md:w-auto">
+          {missionVoiceText && <CharacterVoiceButton id={`mission_voice_${levelId}`} text={missionVoiceText} muted={muted} label="Listen to mission"/>}
           <div className="flex h-9 items-center gap-1 rounded-2xl border border-slate-700/90 bg-slate-900/92 px-1.5 shadow-md md:h-10">
             <button
               id="toBuildBtn"

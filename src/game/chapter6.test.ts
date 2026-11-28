@@ -6,7 +6,7 @@ import {getBiomeForLevel} from './biomes';
 const blocks=(...types:CodeBlock['type'][]):CodeBlock[]=>types.map((type,i)=>({id:'ocean-'+i,type}));
 const level=(id:number)=>getLevelById(id)!;
 const run=(id:number,program:CodeBlock[])=>simulateProgram(level(id),level(id).starterChassis!,program);
-const solutions:Record<number,CodeBlock[]>={21:blocks('MOVE','MOVE','JUMP','MOVE'),22:blocks('MOVE','WAIT','MOVE','JUMP','WAIT','MOVE','MOVE'),23:blocks('MOVE','WAIT','MOVE','MOVE','MOVE','MOVE'),24:[{id:'fixed-loop',type:'LOOP',count:2,children:blocks('MOVE','JUMP')}]};
+const solutions:Record<number,CodeBlock[]>={21:blocks('MOVE','MOVE','JUMP','MOVE'),22:blocks('MOVE','WAIT','MOVE','JUMP','WAIT','MOVE','MOVE'),23:blocks('MOVE','WAIT','MOVE','MOVE','MOVE','WAIT','MOVE','MOVE'),24:[{id:'fixed-loop',type:'LOOP',count:2,children:blocks('MOVE','JUMP')}]};
 for(const id of [21,22,23,24])test(`Ocean ${id}: intended program meets route objective, budget and three-star par`,()=>{
  const l=level(id),result=run(id,solutions[id]);
  assert.equal(result.status,'win',result.failReason??undefined);

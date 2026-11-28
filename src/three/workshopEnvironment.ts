@@ -4,6 +4,8 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import type { ProceduralTextures } from './materials';
 import type { GraphicsQualityBudget } from '../game/graphicsConfig';
 import type { BiomeThemeDef } from '../game/biomes';
+import { createChapterLandmarks } from './chapterLandmarks';
+import { createLivingOcean } from './livingOcean';
 
 export interface WorkshopEnvironmentHandles {
   workshopGroup: THREE.Group;
@@ -21,6 +23,7 @@ export interface WorkshopEnvironmentHandles {
   moteSeeds: Array<{ x: number; y: number; z: number; phase: number; speed: number; scale: number }>;
   solarRing: THREE.Mesh;
   applyBiome: (biome: BiomeThemeDef) => void;
+  animateEnvironment: (time:number,reduced:boolean) => void;
   setQualityBudget: (budget: GraphicsQualityBudget) => void;
   dispose: () => void;
 }
@@ -345,6 +348,8 @@ export function buildWorkshopEnvironment(
   for(const mesh of [islands,coral,ripples])mesh.instanceMatrix.needsUpdate=true;
   if(coral.instanceColor)coral.instanceColor.needsUpdate=true;
   oceanGroup.add(islands,coral,ripples);skyportGroup.add(oceanGroup);
+  const livingOcean=createLivingOcean(trackDisposable);oceanGroup.add(livingOcean.root);
+  let oceanEco=false;
   // Distinct landmarks share geometry, never obstruct the playable deck.
   const oceanLandmarks = {sampling:new THREE.Group(),reef:new THREE.Group(),signal:new THREE.Group(),beacon:new THREE.Group()};
   const floatGeo=trackDisposable(new THREE.CylinderGeometry(0.75,0.9,0.7,12));
@@ -405,6 +410,9 @@ export function buildWorkshopEnvironment(
   solarStands.instanceMatrix.needsUpdate = true;
   energyArrays.add(solarFrames, solarPanels, solarStands);
   skyportGroup.add(energyArrays);
+
+  const chapterLandmarks=createChapterLandmarks(trackDisposable);
+  for(const group of Object.values(chapterLandmarks.groups))skyportGroup.add(group);
 
   // 3. Upgraded Dual-Tier Studio Workshop Pedestal & Gantry
   const workshopGroup = new THREE.Group();
@@ -729,15 +737,19 @@ export function buildWorkshopEnvironment(
     if (softboxTop) softboxTop.visible = !isSoftwareGl && budget.softboxEnabled;
     if (softboxSide) softboxSide.visible = !isSoftwareGl && budget.softboxEnabled;
     ambientMotes.visible = budget.ambientMotesVisible;
+    oceanEco=budget.lowGraphics;
   };
 
   const applyBiome = (biome: BiomeThemeDef) => {
+    chapterLandmarks.show(biome.id);
     energyArrays.visible = biome.id === 'energy_valley';
     const ocean = biome.id === 'ocean_discovery';
     oceanGroup.visible = ocean;
+    livingOcean.show(ocean?biome.oceanZone:undefined);
+    if(ocean)chapterLandmarks.groups.ocean_discovery!.visible=false;
     for(const [zone,group] of Object.entries(oceanLandmarks)) group.visible=ocean && zone===biome.oceanZone;
-    for(const mesh of [solarRing,mesas,mesaCaps,mesaBands,beacons]) mesh.visible = !ocean;
-    for(const rotor of windmills) if(rotor.parent) rotor.parent.visible = !ocean;
+    for(const mesh of [solarRing,mesas,mesaCaps,mesaBands,beacons]) mesh.visible = biome.id==='skyport_canyon';
+    for(const rotor of windmills) if(rotor.parent) rotor.parent.visible = biome.id==='skyport_canyon'||biome.id==='energy_valley';
     hemi.color.setHex(biome.hemiSkyHex);
     hemi.groundColor.setHex(biome.hemiGroundHex);
     key.color.setHex(biome.keyLightHex);
@@ -776,6 +788,13 @@ export function buildWorkshopEnvironment(
     moteSeeds,
     solarRing,
     applyBiome,
+    animateEnvironment: (time,reduced)=>{
+      chapterLandmarks.animate(time,reduced);
+      if(!oceanGroup.visible||!skyportGroup.visible)return;
+      livingOcean.animate(time,reduced,oceanEco);
+      waveMat.opacity=reduced?.55:.43+Math.sin(time*.8)*.12;
+      for(const group of Object.values(oceanLandmarks))if(group.visible)group.position.y=reduced?0:Math.sin(time*1.1)*.08;
+    },
     setQualityBudget,
     dispose: () => {
       for (const item of disposables) {

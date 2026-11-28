@@ -17,7 +17,40 @@ import type { PartId } from './engine';
 import { getPartPlacementSoundProfile } from './partAudio';
 import { MILESTONE_SOUND_PROFILES, type MilestoneUnlockKind } from './milestoneParticles';
 
+import { renderSoundscape, type Soundscape } from './soundscape';
+
 class SoundEngine {
+  private bedScene:Soundscape|null=null;
+  private playingBed:Soundscape|null=null;
+  private bedNodes:{source:AudioBufferSourceNode;gain:GainNode;kind:'music'|'ambience'}[]=[];
+  private musicVolume=0.28;
+  private ambienceVolume=0.22;
+  private bedDucked=false;
+  private bedCache=new Map<string,AudioBuffer>();
+
+  public setSoundscape(scene:Soundscape|null){this.bedScene=scene;this.syncSoundscape();}
+  public setNarrationActive(active:boolean){if(active)this.cancelSpeech();this.bedDucked=active;this.syncSoundscape();}
+  private stopBed(){
+    for(const {source,gain} of this.bedNodes){try{source.stop();}catch{}source.disconnect();gain.disconnect();}
+    this.bedNodes=[];this.playingBed=null;
+  }
+  private syncSoundscape(){
+    const ctx=this.ctx,scene=this.bedScene;
+    if(!scene||!ctx||!this.unlocked||ctx.state!=='running'||this.muted||(this.musicVolume<=0&&this.ambienceVolume<=0)){this.stopBed();return;}
+    if(this.playingBed!==scene){
+      this.stopBed();
+      try{
+        for(const kind of ['music','ambience'] as const){
+          const key=scene+':'+kind;let buffer=this.bedCache.get(key);
+          if(!buffer){const samples=renderSoundscape(scene,kind);buffer=ctx.createBuffer(1,samples.length,22050);buffer.getChannelData(0).set(samples);this.bedCache.set(key,buffer);if(this.bedCache.size>6)this.bedCache.delete(this.bedCache.keys().next().value!);}
+          const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=buffer;source.loop=true;gain.gain.value=0;
+          source.connect(gain);gain.connect(ctx.destination);source.start();this.bedNodes.push({source,gain,kind});
+        }
+        this.playingBed=scene;
+      }catch{this.stopBed();return;}
+    }
+    for(const {gain,kind} of this.bedNodes){const volume=kind==='music'?this.musicVolume*.19:this.ambienceVolume*.32;gain.gain.cancelScheduledValues(ctx.currentTime);gain.gain.setTargetAtTime(volume*(this.bedDucked?(kind==='music'?.14:.25):1),ctx.currentTime,.12);}
+  }
   private ctx: AudioContext | null = null;
   private masterBus: GainNode | null = null;
   private masterComp: DynamicsCompressorNode | null = null;
@@ -73,6 +106,7 @@ class SoundEngine {
         .resume()
         .then(() => {
           this.unlocked = this.ctx?.state === 'running';
+          this.syncSoundscape();
         })
         .catch(() => {});
     }
@@ -85,6 +119,7 @@ class SoundEngine {
       src.start(0);
       if (this.ctx.state === 'running') {
         this.unlocked = true;
+        this.syncSoundscape();
       }
     } catch {
       // Ignore if context cannot accept buffer yet
@@ -97,6 +132,9 @@ class SoundEngine {
     this.sfxVolume = norm.sfxVolume;
     this.uiVolume = norm.uiVolume;
     this.voiceVolume = norm.voiceVolume;
+    this.musicVolume = norm.musicVolume ?? 0.28;
+    this.ambienceVolume = norm.ambienceVolume ?? 0.22;
+    this.syncSoundscape();
 
     if (this.muted || this.sfxVolume <= 0) {
       if (this.glideGain && this.ctx) {
@@ -277,6 +315,12 @@ class SoundEngine {
   public click() {
     this.filteredTone('ui', 520, 710, 0.05, 'sine', 0.075, 2200);
     this.filteredTone('ui', 820, 1020, 0.038, 'triangle', 0.032, 2400, 0.01);
+  }
+
+  // Soft original quiz motifs, separate from speech and governed by UI volume.
+  public predictionCue(kind:'invite'|'correct'|'try') {
+    const notes=kind==='correct'?[523.25,659.25,783.99]:kind==='try'?[392,440]:[440,587.33];
+    notes.forEach((note,i)=>this.filteredTone('ui',note,note*1.035,0.105,'sine',0.045,1800,i*0.09));
   }
 
   public uiTick() {
@@ -545,7 +589,9 @@ class SoundEngine {
    * Zero text-to-speech or human voice APIs are used.
    */
   public speakWallE(phrase: WallEPhraseId = 'greeting', pitchScale = 1.0, variant = 0) {
+    if(this.bedDucked)return;
     this.withReadyAudio('voice', ({ ctx, out, gainScale }) => {
+      if(this.bedDucked)return;
       this.cancelSpeech();
 
       const syllables = composeWallEPhrase(phrase, pitchScale, variant);
