@@ -29,7 +29,7 @@ class SoundEngine {
   private bedCache=new Map<string,AudioBuffer>();
 
   public setSoundscape(scene:Soundscape|null){this.bedScene=scene;this.syncSoundscape();}
-  public setNarrationActive(active:boolean){this.bedDucked=active;this.syncSoundscape();}
+  public setNarrationActive(active:boolean){if(active)this.cancelSpeech();this.bedDucked=active;this.syncSoundscape();}
   private stopBed(){
     for(const {source,gain} of this.bedNodes){try{source.stop();}catch{}source.disconnect();gain.disconnect();}
     this.bedNodes=[];this.playingBed=null;
@@ -42,14 +42,14 @@ class SoundEngine {
       try{
         for(const kind of ['music','ambience'] as const){
           const key=scene+':'+kind;let buffer=this.bedCache.get(key);
-          if(!buffer){const samples=renderSoundscape(scene,kind);buffer=ctx.createBuffer(1,samples.length,22050);buffer.getChannelData(0).set(samples);this.bedCache.set(key,buffer);if(this.bedCache.size>4)this.bedCache.delete(this.bedCache.keys().next().value!);}
+          if(!buffer){const samples=renderSoundscape(scene,kind);buffer=ctx.createBuffer(1,samples.length,22050);buffer.getChannelData(0).set(samples);this.bedCache.set(key,buffer);if(this.bedCache.size>6)this.bedCache.delete(this.bedCache.keys().next().value!);}
           const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=buffer;source.loop=true;gain.gain.value=0;
           source.connect(gain);gain.connect(ctx.destination);source.start();this.bedNodes.push({source,gain,kind});
         }
         this.playingBed=scene;
       }catch{this.stopBed();return;}
     }
-    for(const {gain,kind} of this.bedNodes){const volume=kind==='music'?this.musicVolume*.19:this.ambienceVolume*.32;gain.gain.setTargetAtTime(volume*(this.bedDucked?.2:1),ctx.currentTime,.12);}
+    for(const {gain,kind} of this.bedNodes){const volume=kind==='music'?this.musicVolume*.19:this.ambienceVolume*.32;gain.gain.cancelScheduledValues(ctx.currentTime);gain.gain.setTargetAtTime(volume*(this.bedDucked?(kind==='music'?.14:.25):1),ctx.currentTime,.12);}
   }
   private ctx: AudioContext | null = null;
   private masterBus: GainNode | null = null;
@@ -589,7 +589,9 @@ class SoundEngine {
    * Zero text-to-speech or human voice APIs are used.
    */
   public speakWallE(phrase: WallEPhraseId = 'greeting', pitchScale = 1.0, variant = 0) {
+    if(this.bedDucked)return;
     this.withReadyAudio('voice', ({ ctx, out, gainScale }) => {
+      if(this.bedDucked)return;
       this.cancelSpeech();
 
       const syllables = composeWallEPhrase(phrase, pitchScale, variant);

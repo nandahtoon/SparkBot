@@ -56,7 +56,7 @@ export const PredictBeforeRunCard:React.FC<PredictBeforeRunCardProps>=({question
  const read=()=>{
   if(speech.activeId===voiceId){SPEECH.stop();return;}
   SFX.cancelSpeech();
-  SPEECH.speak(answered?getPredictionResultSpeech(question,isCorrect):narration,voiceId,{playful:true});
+  SPEECH.speak(answered?getPredictionResultSpeech(question,isCorrect):narration,voiceId,{playful:true,mood:answered?(isCorrect?'celebrate':'encourage'):'curious'});
  };
  const choose=(id:string)=>{
   setSelectedId(id);
@@ -64,7 +64,7 @@ export const PredictBeforeRunCard:React.FC<PredictBeforeRunCardProps>=({question
   if(muted)return;
   SFX.cancelSpeech();
   const cue=()=>SFX.predictionCue(correct?'correct':'try');
-  if(!SPEECH.speak(getPredictionResultSpeech(question,correct),voiceId,{playful:true,onFinished:cue}))cue();
+  if(!SPEECH.speak(getPredictionResultSpeech(question,correct),voiceId,{playful:true,mood:correct?'celebrate':'encourage',onFinished:cue}))cue();
  };
  return <div id="predictBeforeRunCard" role="dialog" aria-modal="false" aria-label="Predict Before Run Check" className="pointer-events-auto fixed inset-x-2 bottom-2 z-30 mx-auto max-w-xl sm:inset-x-4 sm:bottom-4">
   <div className="anim-pop flex max-h-[58dvh] flex-col gap-2 overflow-y-auto rounded-3xl border-2 border-sky-400/80 bg-slate-900/95 p-3 text-slate-100 shadow-2xl sm:p-4">

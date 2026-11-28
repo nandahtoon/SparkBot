@@ -33,11 +33,11 @@ test('playful speech follows cancellation and mute, with gentle cues after narra
  const audio=fs.readFileSync('src/game/audio.ts','utf8');
  const card=fs.readFileSync('src/components/PredictBeforeRunCard.tsx','utf8');
  assert.match(controller,/utteranceGeneration === generation/);
- assert.match(controller,/style\.playful \? 0\.88/);
+ assert.match(controller,/style\.playful \? profile\.rate/);
  assert.match(controller,/localService/);
  assert.match(audio,/predictionCue\(kind:/);
  assert.match(audio,/filteredTone\('ui',note/);
  assert.match(card,/if\(muted\)return/);
- assert.match(card,/playful:true,onFinished:cue/);
+ assert.match(card,/playful:true,mood:correct\?'celebrate':'encourage',onFinished:cue/);
  assert.match(card,/autoReadAloud&&!muted/);
 });

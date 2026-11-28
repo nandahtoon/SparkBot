@@ -461,8 +461,9 @@ export default function App() {
   useEffect(()=>{
     const sync=()=>SFX.setSoundscape(document.hidden||paused?null:soundscapeFor(getBiomeForLevel(currentLevel).id,mode,showGameRoom));
     sync();document.addEventListener('visibilitychange',sync);
-    return ()=>{document.removeEventListener('visibilitychange',sync);SFX.setSoundscape(null);};
+    return ()=>document.removeEventListener('visibilitychange',sync);
   },[currentLevel,mode,showGameRoom,paused]);
+  useEffect(()=>()=>SFX.setSoundscape(null),[]);
   useEffect(()=>{
     const sync=()=>SFX.setNarrationActive(SPEECH.getSnapshot().speaking);
     sync();return SPEECH.subscribe(sync);

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { characterVoiceStyle,type CharacterVoiceMood } from './characterVoiceStyle';
 
 export interface ReadAloudState {
   supported: boolean;
@@ -8,7 +9,7 @@ export interface ReadAloudState {
 }
 
 type Listener = () => void;
-export interface SpeechStyle { playful?: boolean; onFinished?: () => void; }
+export interface SpeechStyle { playful?: boolean; mood?:CharacterVoiceMood; onFinished?: () => void; }
 
 function hasSpeechSupport(): boolean {
   return (
@@ -126,8 +127,9 @@ class ReadAloudController {
       const voice = pickKidFriendlyVoice(style.playful && localEnglish.length ? localEnglish : voices);
       if (voice) utter.voice = voice;
       if(style.playful) utter.lang=voice && /^en(-|_|$)/i.test(voice.lang)?voice.lang:'en-US';
-      utter.rate = style.playful ? 0.88 : 0.94;
-      utter.pitch = style.playful ? 1.18 : 1.05;
+      const profile=characterVoiceStyle(id,style.mood);
+      utter.rate = style.playful ? profile.rate : 0.94;
+      utter.pitch = style.playful ? profile.pitch : 1.05;
       utter.volume = this.voiceVolume;
 
       this.speaking = true;
