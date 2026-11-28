@@ -43,6 +43,7 @@ import { SPEECH, useReadAloud } from '../game/readAloud';
 import { CharacterVoiceButton } from './CharacterVoiceButton';
 import { JourneyCard } from './JourneyCard';
 import { AdventureMap } from './AdventureMap';
+import { RescueAdventure } from './RescueAdventure';
 import { getJourneyPreview, type JourneyPreview } from '../game/journey';
 import { victoryVoice } from '../game/characterGuidance';
 import { getMissionLearningGoal, type MissionLearningGoal } from '../game/missionCurriculum';
@@ -457,11 +458,13 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
   const speech = useReadAloud();
   const [mapTab, setMapTab] = useState<'story' | 'debug'>(initialTab);
   const [detailedMap,setDetailedMap]=useState(false);
+  const [rescueOpen,setRescueOpen]=useState(false);
 
   useEffect(() => {
     if (visible) {
       setMapTab(initialTab);
       setDetailedMap(false);
+      setRescueOpen(false);
     } else {
       SPEECH.stop();
     }
@@ -647,6 +650,10 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
           </section>
         )}
 
+        {mapTab==='story' && <section className="rounded-2xl border border-emerald-500/60 bg-emerald-950/30 p-3" data-testid="adventure-first-practice">
+          <button type="button" aria-expanded={rescueOpen} onClick={()=>setRescueOpen(v=>!v)} className="flex min-h-12 w-full items-center justify-between gap-2 rounded-xl bg-emerald-800 px-3 text-left font-black text-white"><span>🛟 Rescue Adventure · Try it</span><span aria-hidden="true">{rescueOpen?'−':'▶'}</span></button>
+          {rescueOpen&&<RescueAdventure muted={save.muted}/>}
+        </section>}
         {mapTab === 'story' && onSelectPrototype && (
           <section aria-label="Try new challenges" className="rounded-2xl border border-cyan-700/60 bg-cyan-950/25 p-3">
             <h3 className="font-black text-white">Try New Challenges</h3>
