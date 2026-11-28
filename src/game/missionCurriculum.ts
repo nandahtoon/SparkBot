@@ -24,7 +24,11 @@ export const MISSION_LEARNING_GOALS: Readonly<Record<number, MissionLearningGoal
   13: {skill:'Timing and IF/ELSE', goal:'Decide when to wait or move.', reflect:'Why can waiting help you reach the goal?'},
   14: {skill:'Reusable functions', goal:'Reuse a group of commands.', reflect:'What makes MY BLOCK useful?'},
   15: {skill:'Combining strategies', goal:'Plan for changing hazards and terrain.', reflect:'Which part of your code could you reuse?'},
-  16: {skill:'Systems thinking', goal:'Combine timing, movement and light.', reflect:'Which strategy helped you solve the rescue mission?'}
+  16: {skill:'Systems thinking', goal:'Combine timing, movement and light.', reflect:'Which strategy helped you solve the rescue mission?'},
+  17: {"skill":"Efficient construction","goal":"Finish with a lightweight robot.","reflect":"Which parts did you not need?"},
+  18: {"skill":"Resource trade-offs","goal":"Choose useful parts within the budget.","reflect":"Why is the cheapest robot not always the best?"},
+  19: {"skill":"Reusable optimization","goal":"Reuse a route pattern across ramps.","reflect":"How does repeating a command group help?"},
+  20: {"skill":"Timing and resource planning","goal":"Deliver energy with safe, timed steps.","reflect":"Why might waiting save resources?"}
 };
 
 export function getMissionLearningGoal(level: LevelDef): MissionLearningGoal | null {

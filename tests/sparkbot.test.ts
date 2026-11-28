@@ -762,7 +762,7 @@ test('IF [GAP], IF [MUD], and IF [RAMP] buttons exist in code-dock and react to 
 });
 
 test('all 4 Bonus Sector levels (9-12) start unsolved, solve gently, and award Optional Bonus Stars within Par', () => {
-  assert.deepEqual(Array.from(E.BONUS_LEVELS, l => l.id), [9, 10, 11, 12, 13, 14, 15, 16]);
+  assert.deepEqual(Array.from(E.BONUS_LEVELS, l => l.id), [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
   const starportLevels = E.BONUS_LEVELS.filter(l => Number(l.id) >= 9 && Number(l.id) <= 12);
   for (const id of [9, 10, 11, 12]) {
     assert.equal(E.getLevelById(id)?.id, id);

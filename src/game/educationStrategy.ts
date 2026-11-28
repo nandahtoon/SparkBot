@@ -31,7 +31,7 @@ import type { MilestoneUnlockKind } from './milestoneParticles';
  * 1. STORY-DRIVEN 4-CHAPTER CAMPAIGN & AGE BAND SCAFFOLDING (Ages 6–12)
  * ========================================================================== */
 
-export type StoryChapterId = 1 | 2 | 3 | 4;
+export type StoryChapterId = 1 | 2 | 3 | 4 | 5;
 
 export interface StoryChapterDef {
   id: StoryChapterId;
@@ -96,6 +96,16 @@ export const STORY_CHAPTERS: StoryChapterDef[] = [
     stemFocus: 'IF/ELSE Branching, Functions, Deterministic Timing & Boss Rescue',
     levelIds: [13, 14, 15, 16],
     accentColor: '#f59e0b'
+  },
+  {
+    id: 5,
+    title: 'Chapter 5 · Energy Explorers',
+    ageBand: 'Ages 8–12',
+    subtitle: 'Smart Builds & Sustainable Deliveries',
+    briefingLines: ['Help SparkBot deliver supplies to remote stations.', 'Choose efficient parts, reuse code and plan safe delivery routes.'],
+    stemFocus: 'Resource trade-offs, reusable code and timing',
+    levelIds: [17, 18, 19, 20],
+    accentColor: '#2dd4bf'
   }
 ];
 

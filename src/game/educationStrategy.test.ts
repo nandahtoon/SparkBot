@@ -46,8 +46,8 @@ import {
   type LogicGateKind
 } from './educationalMiniGames';
 
-test('4-chapter story campaign covers Levels 1–16 with progressive Ages 6–12 bands', () => {
-  assert.equal(STORY_CHAPTERS.length, 4);
+test('5-chapter story campaign covers Levels 1–20 with progressive Ages 6–12 bands', () => {
+  assert.equal(STORY_CHAPTERS.length, 5);
   assert.equal(STORY_CHAPTERS[0].ageBand, 'Ages 6–8');
   assert.equal(STORY_CHAPTERS[1].ageBand, 'Ages 7–9');
   assert.equal(STORY_CHAPTERS[2].ageBand, 'Ages 8–11');
@@ -60,6 +60,7 @@ test('4-chapter story campaign covers Levels 1–16 with progressive Ages 6–12
   assert.equal(getStoryChapterForLevel(11).id, 3);
   assert.equal(getStoryChapterForLevel(13).id, 4);
   assert.equal(getStoryChapterForLevel(16).id, 4);
+  assert.equal(getStoryChapterForLevel(20).id, 5);
 });
 
 test('STEM Fact Cards registry has 14 cards and lookup helpers work', () => {

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { LEVELS, BONUS_LEVELS, getLevelById, createEmptyChassis, computeChassisInfo, findShortestTrackPlan, simulateProgram, cloneCircuitGrid, traceCircuit, findCircuitFixCell, type CodeBlock, type BlockType } from './engine';
 
 const campaign = [...LEVELS, ...BONUS_LEVELS];
-test('campaign contains unique mission IDs 1–16', () => {
-  assert.deepEqual(campaign.map(l => l.id).sort((a,b) => Number(a)-Number(b)), Array.from({length:16}, (_,i)=>i+1));
+test('campaign contains unique mission IDs 1–20', () => {
+  assert.deepEqual(campaign.map(l => l.id).sort((a,b) => Number(a)-Number(b)), Array.from({length:20}, (_,i)=>i+1));
 });
 for (const level of campaign) {
   test(`campaign ${level.id}: budget-valid route reaches gate`, () => {
