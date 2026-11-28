@@ -2704,7 +2704,7 @@ export default function App() {
       {/* Stage 2: 3D Track Visual Coding */}
       {(mode === 'CODE_3D' || mode === 'SIMULATING') && !pendingPredictQuiz && (
         <CodeDock
-          objectiveLabel={currentLevel.objective ? getMissionObjectiveLabel(currentLevel) : undefined}
+          objectiveLabel={getMissionObjectiveLabel(currentLevel)}
           objectiveTarget={currentLevel.objective ? getCollectionRequirement(currentLevel) : null}
           surveyTarget={getSurveyStations(currentLevel)?.length ?? null}
           surveyStations={getSurveyStations(currentLevel)??[]}
@@ -3123,7 +3123,7 @@ export default function App() {
       )}
       <VictoryModal
         nextJourney={getJourneyPreview(currentLevel)}
-        missionMessage={getOceanPresentation(currentLevel)?.victory}
+        missionMessage={getOceanPresentation(currentLevel)?.victory ?? (currentLevel.objective?.kind === 'delivery' ? 'Supplies delivered safely!' : currentLevel.objective?.kind === 'collect' ? 'All required supplies collected and delivered!' : undefined)}
         voiceMuted={save.muted}
         autoVoice={Boolean(save.readAloudEnabled)}
         learningGoal={getMissionLearningGoal(currentLevel)}
