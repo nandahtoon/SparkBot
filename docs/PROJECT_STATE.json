@@ -43,10 +43,10 @@
     ]
   },
   "work": {
-    "stage": "SB-M01",
-    "status": "OWNER_TEST_MERGE_AUTHORIZED",
-    "next": "SB-M02",
-    "nextGate": "Owner authorized main testing merge and deployment before physical acceptance; production promotion and experimental integration remain HOLD. Independent review remains pending; confirm exact CI before merge and physical family acceptance before release.",
+    "stage": "SB-M03A",
+    "status": "ISOLATED_CAMPAIGN_RULE_TEST",
+    "next": "SB-M03B",
+    "nextGate": "All 24 redesign contracts; first 4 rule prototypes isolated. CI and physical preview test, reconcile #42 home feedback; no experimental runtime merge or production release. No new IDs.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -141,6 +141,22 @@
         "stable": "archive/v0.3-family",
         "productionAutoDeploy": "DISABLED_IN_VERCEL_JSON",
         "physicalAcceptance": "PENDING"
+      },
+      "campaignRedesign": {
+        "document": "docs/SB-M03A_ALL_CAMPAIGN_REDESIGN.md",
+        "designIds": 24,
+        "rulePrototypeIds": [
+          13,
+          14,
+          15,
+          16
+        ],
+        "branch": "sb-m03a-campaign-redesign",
+        "previewRoute": "/?campaignTest=1",
+        "physical": "NOT_RUN",
+        "uiPr": 42,
+        "uiFeedback": "Home layout awkward; gameplay repetitive by Level 13",
+        "integration": "HOLD"
       }
     }
   },
@@ -153,6 +169,7 @@
     "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md",
     "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
     "docs/SB-08A3_EXPERIMENTAL_GATE.md",
-    "docs/SB-M01_MAIN_GAME_FOUNDATION.md"
+    "docs/SB-M01_MAIN_GAME_FOUNDATION.md",
+    "docs/SB-M03A_ALL_CAMPAIGN_REDESIGN.md"
   ]
 }
