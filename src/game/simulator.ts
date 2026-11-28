@@ -835,7 +835,7 @@ export function findShortestTrackPlan(level: LevelDef): {
   const canWait = Boolean(level.waitUnlocked);
   const survey = getSurveyStations(level);
   const collectTarget = getCollectionRequirement(level);
-  if ((level.objective?.kind==='survey' && !survey) || (level.objective?.kind==='collect' && collectTarget===null)) return null;
+  if ((level.objective?.kind==='survey' && !survey) || ((level.objective?.kind==='collect' || (level.objective?.kind==='survey' && level.objective.requiredCrystals!==undefined)) && collectTarget===null)) return null;
 
   for (const prof of CHASSIS_SOLVER_PROFILES) {
     if (prof.cost > level.budget) continue;
