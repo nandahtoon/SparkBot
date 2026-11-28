@@ -2708,6 +2708,7 @@ export default function App() {
           objectiveTarget={currentLevel.objective ? getCollectionRequirement(currentLevel) : null}
           surveyTarget={getSurveyStations(currentLevel)?.length ?? null}
           surveyStations={getSurveyStations(currentLevel)??[]}
+          showSignalPatterns={currentLevel.id===23&&Boolean(currentLevel.isBonus)&&!currentLevel.isDaily&&!currentLevel.isSandbox&&!currentLevel.isClassCode&&!currentLevel.isDebug}
           objectiveFeedback={currentLevel.isPrototype || lastFailedSim?.failCode === 'objective_unmet' ? lastFailedSim?.failReason : null}
           junior={juniorSession}
           program={program}

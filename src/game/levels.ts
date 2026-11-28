@@ -692,11 +692,11 @@ export const BONUS_LEVELS: LevelDef[] = [
     circuit:makeCircuit([])
   },
   {
-    id:23,name:"Current Patterns",ageLabel:'Ch. 6',brief:"The research walkway has a timed safety barrier. Observe its repeating signal and choose a safe time to move.",
-    isBonus:true,objective:{"kind":"delivery"},budget:45,parBudget:45,parBlocks:7,loopUnlocked:true,waitUnlocked:true,
+    id:23,name:"Current Patterns",ageLabel:'Ch. 6',brief:"Two tide gates blink in different patterns. Watch their signals, wait on a safe deck, and cross when each gate is open.",
+    isBonus:true,objective:{"kind":"delivery"},budget:45,parBudget:45,parBlocks:8,loopUnlocked:true,waitUnlocked:true,
     starterChassis:[[null,null,null],[null,null,'laser'],['wheels',null,null]],
-    hazards:[{"id":"hz_23_tide_signal","kind":"laser_gate","tileIndex":2,"period":2,"activeOffset":0}],
-    track:[{type:'start',crystal:false},{type:'normal',crystal:true},{type:'normal',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:true},{type:'gate',crystal:false}],
+    hazards:[{"id":"hz_23_tide_signal","kind":"laser_gate","tileIndex":2,"period":2,"activeOffset":0},{"id":"hz_23_outer_signal","kind":"laser_gate","tileIndex":5,"period":3,"activeOffset":0}],
+    track:[{type:'start',crystal:false},{type:'normal',crystal:true},{type:'normal',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:true},{type:'normal',crystal:false},{type:'gate',crystal:false}],
     circuit:makeCircuit([])
   },
   {

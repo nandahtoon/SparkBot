@@ -60,6 +60,7 @@ import {
 } from '../game/codeFeedback';
 import type { DemoTopic } from './ConceptDemoPopover';
 import { BlockIcon, HazardIcon } from './Icons';
+import { SignalPatternGuide } from './SignalPatternGuide';
 
 function getDropZoneShiftClass(
   state: DropZoneFeedbackState | undefined,
@@ -101,6 +102,7 @@ interface CodeDockProps {
   objectiveTarget?: number | null;
   surveyTarget?: number | null;
   surveyStations?: readonly number[];
+  showSignalPatterns?: boolean;
   objectiveFeedback?: string | null;
   junior?: boolean;
   program: CodeBlock[];
@@ -267,6 +269,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   objectiveTarget = null,
   surveyTarget = null,
   surveyStations = [],
+  showSignalPatterns = false,
   objectiveFeedback = null,
   junior = false,
   program,
@@ -1208,6 +1211,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                 <ArrowRight className="h-4 w-4 text-slate-400" aria-hidden="true"/><Flag className="h-5 w-5 text-emerald-300" aria-hidden="true"/>
                 <span className="ml-auto flex items-center gap-1 text-sm" aria-live="polite"><CheckCircle2 className="h-4 w-4" aria-hidden="true"/>{stepInspection?.surveysCompleted ?? 0}/{surveyTarget}</span>
               </div>}
+              {showSignalPatterns && <SignalPatternGuide hazards={hazards} tick={simulating?(stepInspection?.event.tick??0):0}/>}
               {!simulating && objectiveFeedback && <p role="status" className="mt-1 text-amber-200">{objectiveFeedback}</p>}
             </div>
           )}
