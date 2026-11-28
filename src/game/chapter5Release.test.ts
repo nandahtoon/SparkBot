@@ -14,7 +14,7 @@ for (const id of [17,18,19,20]) {
   const sequence: BlockType[]=id===17?Array(8).fill('MOVE'):id===18?['MOVE','JUMP','MOVE','JUMP','MOVE','MOVE','MOVE']:id===19?['BOOST','BOOST','BOOST']:findShortestTrackPlan(level)!.sequence as BlockType[];
   const program: CodeBlock[]=sequence.map((type,i)=>({id:`ch5-${i}`,type}));
   const result=simulateProgram(level,chassis,program);
-  assert.equal(result.status,'win',result.failReason);
+  assert.equal(result.status,'win',result.failReason ?? undefined);
   assert.equal(result.collectedCrystals,result.totalCrystals);
   assert.equal(calculateStars(level,computeChassisInfo(chassis).cost,countBlocks(program),result.collectedCrystals,result.totalCrystals).stars,3);
   assert.equal(traceCircuit(level.circuit).solved,false);
