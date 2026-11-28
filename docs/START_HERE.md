@@ -12,3 +12,7 @@ Open docs/PROJECT_STATE.json for the current stage and gates; use docs/AI_START_
 
 ## SB-08A3 preflight
 The spatial architecture is documented in docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md. This is a design-only preparation while A2 acceptance remains open. Do not implement A3 until gate review. Single Arcade catalog supersedes the decorative 3D tab; keep source assets isolated.
+
+
+## Owner-approved experimental exception (2026-11-28)
+See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.

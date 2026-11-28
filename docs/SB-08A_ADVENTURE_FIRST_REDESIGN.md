@@ -35,3 +35,7 @@ Missions → Rescue Adventure · Try it. Two small, actual branching 2D dock map
 
 ## Stage gates
 A1 prototype and CI → A2 supervised family trial (child finds/repairs/returns, learns to plan a different route, explore vs code recorded separately; compare preference with linear track) → A3 3D renderer for same grid/graph rules, camera, arrows and interaction points → A4 scoped Ocean vertical slice with real connected sites, optional legacy level entry and migration → A5 all-chapter redesign plan, only accepted mechanics reused → A6 consolidated RC with family regression. Freeze V0.4 expansion, SB-06G7C cinematic-only work and commercial/native release until prototype strategy accepted. Existing V0.3 stable remains unchanged; V0.3.1 production HOLD. No fabricated learning gains, no new data collection, no ads/purchases.
+
+
+## Owner-approved experimental exception (2026-11-28)
+See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.

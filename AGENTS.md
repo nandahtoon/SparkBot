@@ -10,3 +10,7 @@ Record changed files, exact SHA, CI run, unresolved gates, rollback and next wor
 
 ## Cross-tool handoff (mandatory)
 Read docs/PROJECT_STATE.json, docs/AI_HANDOFF_PROTOCOL.md and docs/AI_START_PROMPT.md. Before local edits fetch origin and run node scripts/check-project-context.mjs --preflight from a scoped topic branch. CI runs the context contract check. Update state and evidence in the same reviewed increment when the active stage changes. A plain Next means one unblocked package, not release authorization. Never use an AI Studio preview as source of truth.
+
+
+## Owner-approved experimental exception (2026-11-28)
+See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.

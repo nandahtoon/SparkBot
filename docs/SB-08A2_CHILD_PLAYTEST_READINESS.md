@@ -23,3 +23,7 @@ Use child agency, wonder and meaningful goal-directed play, with optional guidan
 Build SHA / device category / orientation; per task mark independent / verbal hint / demonstration / not attempted. Note confusing icon or interaction (no child name, recordings or identifiers). Record explore completion, code planning, debugging, changed-map attempt, preference separately. No fixed speed target, forced completion or diagnostic interpretation. Stop if frustrated or tired.
 
 A2 gate: physical device shows understandable visual/voice goal, route choice and repair/return loop without persistent adult direction; code optional and mode switch/pause safe; no clipping/crash or loss of legacy progress. If not met, iterate A2. Individual family feedback is usability evidence, not population learning efficacy. A3 only after explicit review; same rules with a 3D renderer, no new campaign IDs. A4 connected Ocean vertical slice after A3, followed by chapter redesign and consolidated RC.
+
+
+## Owner-approved experimental exception (2026-11-28)
+See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.

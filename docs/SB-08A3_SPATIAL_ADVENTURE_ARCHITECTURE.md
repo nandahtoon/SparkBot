@@ -29,3 +29,7 @@ Missions > Rescue Adventure > Beacon Bay > see beacon objective (icon + optional
 
 ## Implementation order once unblocked
 A3-1 pure presentation mapping/tests and renderer ownership audit; A3-2 bounded scene + accessible fallback; A3-3 integration and lifecycle parity; A3-4 device/family QA. A4 then connected Ocean restoration; avoid committing entire chapter redesign simultaneously.
+
+
+## Owner-approved experimental exception (2026-11-28)
+See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.
