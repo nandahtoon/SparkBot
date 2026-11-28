@@ -10,10 +10,10 @@ export function requiresMissionCircuit(level: LevelDef): boolean {
 }
 export function getCollectionRequirement(level: LevelDef): number | null {
   const objective = getMissionObjective(level);
-  if (objective.kind !== 'collect') return null;
+  if (objective.kind !== 'collect' && objective.kind !== 'survey') return null;
   const available = level.track.filter(tile => tile.crystal && tile.type !== 'gap' && tile.type !== 'start').length;
   const target = objective.requiredCrystals;
-  if (!Number.isSafeInteger(target) || target < 1 || target > available) return null;
+  if (typeof target !== 'number' || !Number.isSafeInteger(target) || target < 1 || target > available) return null;
   return target;
 }
 export function getSurveyStations(level: LevelDef): number[] | null {
@@ -33,7 +33,14 @@ export function getRouteObjectiveFailure(level: LevelDef, collected: number, eve
     const stations = getSurveyStations(level);
     if (!stations) return 'This survey needs valid observation stations.';
     const count = getSurveyProgress(level, events);
-    return count === stations.length ? null : `Pause with WAIT at every survey station (${count}/${stations.length}).`;
+    if (count !== stations.length) return `Pause with WAIT at every survey station (${count}/${stations.length}).`;
+    const objective=getMissionObjective(level);
+    if (objective.kind==='survey' && objective.requiredCrystals!==undefined) {
+      const target=getCollectionRequirement(level);
+      if (target===null) return 'This survey needs a valid collection goal.';
+      if (collected<target) return `Collect ${target} crystals before reaching the station (${collected}/${target}).`;
+    }
+    return null;
   }
   if (getMissionObjective(level).kind !== 'collect') return null;
   const target = getCollectionRequirement(level);
@@ -50,6 +57,6 @@ export function getMissionObjectiveLabel(level: LevelDef): string {
     case 'collect': return `Collect ${getCollectionRequirement(level) ?? 'the required'} crystals and reach the station.`;
     case 'repair': return 'Fix the program and reach the station.';
     case 'power': return 'Reach the station and power every core.';
-    case 'survey': return `Use WAIT at the marked survey stations (tiles ${(getSurveyStations(level) ?? []).join(' and ')}), then reach the station.`;
+    case 'survey': return `Use WAIT at the marked survey stations (tiles ${(getSurveyStations(level) ?? []).join(' and ')}), ${getCollectionRequirement(level)===null?'':`collect ${getCollectionRequirement(level)} crystals, `}then reach the station.`;
   }
 }

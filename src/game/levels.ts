@@ -690,34 +690,34 @@ export const BONUS_LEVELS: LevelDef[] = [
     ])
   },
   {
-    id:21,name:"Tide Survey",ageLabel:'Ch. 6',brief:"Collect every research crystal on the floating walkway. A shortcut can miss a sample.",
-    isBonus:true,objective:{"kind":"collect","requiredCrystals":3},budget:80,parBudget:80,parBlocks:4,loopUnlocked:false,waitUnlocked:false,
+    id:21,name:"Tide Survey",ageLabel:'Ch. 6',brief:"Collect all five research crystals across two broken walkways. A shortcut can miss a sample.",
+    isBonus:true,objective:{"kind":"collect","requiredCrystals":5},budget:80,parBudget:80,parBlocks:7,loopUnlocked:false,waitUnlocked:false,
     starterChassis:[[null,null,null],['thrusters',null,'laser'],['wheels',null,null]],
-    track:[{type:'start',crystal:false},{type:'normal',crystal:true},{type:'normal',crystal:true},{type:'gap',crystal:false},{type:'normal',crystal:true},{type:'gate',crystal:false}],
+    track:[{"type":"start","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":true},{"type":"gap","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":false},{"type":"gap","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":true},{"type":"gate","crystal":false}],
     circuit:makeCircuit([])
   },
   {
-    id:22,name:"Reef Survey",ageLabel:'Ch. 6',brief:"Visit the two marked research decks. Use WAIT to record an observation at each before returning.",
-    isBonus:true,objective:{"kind":"survey","stations":[1,4]},budget:80,parBudget:80,parBlocks:7,loopUnlocked:true,waitUnlocked:true,
+    id:22,name:"Reef Survey",ageLabel:'Ch. 6',brief:"Record observations at all three clock decks AND collect three reef samples before reaching the research station.",
+    isBonus:true,objective:{"kind":"survey","stations":[1,4,7],"requiredCrystals":3},budget:80,parBudget:80,parBlocks:11,loopUnlocked:true,waitUnlocked:true,
     starterChassis:[[null,null,null],['thrusters',null,'laser'],['wheels',null,null]],
-    track:[{type:'start',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:false},{type:'gap',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:false},{type:'gate',crystal:false}],
+    track:[{"type":"start","crystal":false},{"type":"normal","crystal":false},{"type":"normal","crystal":true},{"type":"gap","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":false},{"type":"gap","crystal":false},{"type":"normal","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":false},{"type":"gate","crystal":false}],
     circuit:makeCircuit([])
   },
   {
-    id:23,name:"Current Patterns",ageLabel:'Ch. 6',brief:"Two tide gates blink in different patterns. Watch their signals, wait on a safe deck, and cross when each gate is open.",
-    isBonus:true,objective:{"kind":"delivery"},budget:45,parBudget:45,parBlocks:8,loopUnlocked:true,waitUnlocked:true,
+    id:23,name:"Current Patterns",ageLabel:'Ch. 6',brief:"Three tide gates use different rhythms. Watch the signals and wait on safe decks to deliver the supplies.",
+    isBonus:true,objective:{"kind":"delivery"},budget:45,parBudget:45,parBlocks:12,loopUnlocked:true,waitUnlocked:true,
     starterChassis:[[null,null,null],[null,null,'laser'],['wheels',null,null]],
-    hazards:[{"id":"hz_23_tide_signal","kind":"laser_gate","tileIndex":2,"period":2,"activeOffset":0},{"id":"hz_23_outer_signal","kind":"laser_gate","tileIndex":5,"period":3,"activeOffset":0}],
-    track:[{type:'start',crystal:false},{type:'normal',crystal:true},{type:'normal',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:true},{type:'normal',crystal:false},{type:'gate',crystal:false}],
+    hazards:[{"id":"hz_23_tide_signal","kind":"laser_gate","tileIndex":2,"period":2,"activeOffset":0},{"id":"hz_23_outer_signal","kind":"laser_gate","tileIndex":5,"period":3,"activeOffset":0},{"id":"hz_23_deep_signal","kind":"laser_gate","tileIndex":8,"period":4,"activeOffset":2}],
+    track:[{"type":"start","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":false},{"type":"normal","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":false},{"type":"normal","crystal":false},{"type":"normal","crystal":true},{"type":"normal","crystal":false},{"type":"gate","crystal":false}],
     circuit:makeCircuit([])
   },
   {
-    id:24,name:"Ocean Beacon",ageLabel:'Ch. 6',brief:"Repair the robot's broken repeating routine, then restore the beacon by lighting its two cores.",
-    isBonus:true,objective:{"kind":"power"},budget:80,parBudget:80,parBlocks:4,loopUnlocked:true,waitUnlocked:false,
+    id:24,name:"Ocean Beacon",ageLabel:'Ch. 6',brief:"Repair the broken repeating routine, finish the approach to the station, then restore both beacon cores.",
+    isBonus:true,objective:{"kind":"power"},budget:80,parBudget:80,parBlocks:5,loopUnlocked:true,waitUnlocked:false,
     starterChassis:[[null,null,null],['thrusters',null,'laser'],['wheels',null,null]],
-    debugClue:'The repeating routine makes the robot roll into a gap. Inspect it and repair the commands.',
-    starterProgram:[{id:'beacon-loop',type:'LOOP',count:2,children:[{id:'beacon-move',type:'MOVE'},{id:'beacon-bug',type:'MOVE'}]}],
-    track:[{type:'start',crystal:false},{type:'normal',crystal:true},{type:'gap',crystal:false},{type:'normal',crystal:false},{type:'normal',crystal:true},{type:'gap',crystal:false},{type:'gate',crystal:false}],
+    debugClue:'The repeating routine makes the robot roll into a gap. Inspect it, repair the commands, and add steps to reach the beacon.',
+    starterProgram:[{id:'beacon-loop',type:'LOOP',count:3,children:[{id:'beacon-move',type:'MOVE'},{id:'beacon-bug',type:'MOVE'}]}],
+    track:[{"type":"start","crystal":false},{"type":"normal","crystal":true},{"type":"gap","crystal":false},{"type":"normal","crystal":false},{"type":"normal","crystal":true},{"type":"gap","crystal":false},{"type":"normal","crystal":false},{"type":"normal","crystal":true},{"type":"gap","crystal":false},{"type":"normal","crystal":false},{"type":"normal","crystal":true},{"type":"gate","crystal":false}],
     circuit:makeCircuit([{r:2,c:2,type:'splitter',rot:1},{r:0,c:2,type:'core',rot:0},{r:2,c:4,type:'mirror',rot:0},{r:4,c:4,type:'core',rot:0},{r:4,c:2,type:'wall',rot:0}])
   }
 ];

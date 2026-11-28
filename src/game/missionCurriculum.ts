@@ -30,9 +30,9 @@ export const MISSION_LEARNING_GOALS: Readonly<Record<number, MissionLearningGoal
   19: {"skill":"Reusable optimization","goal":"Reuse a route pattern across ramps.","reflect":"How does repeating a command group help?"},
   20: {"skill":"Timing and resource planning","goal":"Deliver energy with safe, timed steps.","reflect":"Why might waiting save resources?"},
   21: {"skill":"Complete sampling","goal":"Collect every sample before returning.","reflect":"Why might the fastest route miss a sample?"},
-  22: {"skill":"Systematic observation","goal":"Pause at both marked observation stations.","reflect":"Why do repeated observations at one station not replace visiting another?"},
-  23: {"skill":"Comparing periodic signals","goal":"Cross two gates with different repeating patterns.","reflect":"Why might the second gate need a different wait from the first?"},
-  24: {"skill":"Repair and restoration","goal":"Fix the routine and power both beacon cores.","reflect":"How did you check that both the code and the beacon worked?"}
+  22: {"skill":"Systematic observation","goal":"Record all three observations and collect three reef samples.","reflect":"Why do repeated observations at one station not replace visiting another?"},
+  23: {"skill":"Comparing periodic signals","goal":"Cross three gates with different repeating patterns.","reflect":"Why might each gate need a different wait?"},
+  24: {"skill":"Repair and restoration","goal":"Repair the repeating routine, finish the journey and power both beacon cores.","reflect":"How did you check that both the code and the beacon worked?"}
 };
 
 export function getMissionLearningGoal(level: LevelDef): MissionLearningGoal | null {

@@ -43,10 +43,10 @@
     ]
   },
   "work": {
-    "stage": "MAIN_GAME_IMPROVEMENTS",
-    "status": "OWNER_TEST_MERGE_AUTHORIZED",
-    "next": "MAIN_GAME_CHAPTER_REDESIGN",
-    "nextGate": "Owner approved main-game improvement through merge for testing. Verify exact CI and retain production HOLD. Do not merge isolated prototype or outdated UI PRs; physical acceptance pending.",
+    "stage": "MAIN_GAME_OCEAN_ADVENTURE",
+    "status": "OWNER_TEST_CANDIDATE",
+    "next": "MAIN_GAME_PLAYER_CONTROL",
+    "nextGate": "Exact CI and direct main testing merge per owner workflow; production HOLD. Physical acceptance pending. Next focus on real player interaction in existing 3D campaign rather than extra track length.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -152,7 +152,19 @@
           40
         ],
         "physical": "NOT_RUN",
-        "production": "HOLD"
+        "production": "HOLD",
+        "previous": {
+          "mainSha": "4e8180891ee48c84d6ac4c15f057f1d7b8c1d46b",
+          "pr": 44,
+          "ciRun": 46187699541,
+          "physical": "NOT_RUN"
+        },
+        "ocean": {
+          "scope": "21–24 expanded live campaign, dual survey/sample objective, three gate rhythms, multi-stage finale",
+          "physical": "NOT_RUN",
+          "production": "HOLD",
+          "rollback": "revert this scoped PR"
+        }
       }
     }
   },
