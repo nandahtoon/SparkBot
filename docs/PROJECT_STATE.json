@@ -108,13 +108,13 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "Verify selected companion in Rescue Adventure, physical acceptance; A4/A5 chapter work remains gated",
-      "experimentalStatus": "COMPANION_RESCUE_INTEGRATION_PENDING_CI",
+      "nextPackage": "Exact CI and preview; physical character and rescue acceptance",
+      "experimentalStatus": "COMPANION_GESTURE_POLISH_PENDING_CI",
       "experimentalEntry": "/?experiment=rescue3d",
       "lastVerifiedExperiment": {
-        "sha": "49a35e60a70e433ea7b071c024977f03be6e22ee",
-        "ciRun": 46167515949,
-        "preview": "https://sparkbot-d4nx1ycnb-btk10.vercel.app/"
+        "sha": "e55750916cda66a03d950e2951a17c8aa2d4f02f",
+        "ciRun": 46168889371,
+        "preview": "https://sparkbot-97l1odqye-btk10.vercel.app/"
       },
       "policyIntegration": {
         "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",

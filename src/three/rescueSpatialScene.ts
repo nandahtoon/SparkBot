@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {BOT_CHARACTERS,type BotCharacterId} from '../game/customization';
 import {rescueSpatialSnapshot,RESCUE_TILE_SIZE} from '../game/rescueSpatialPresentation';
+import {sampleCompanionPose,interpolateCompanionHeading} from '../game/rescueCompanionPose';
 import {type RescueMotion,sampleRescueMotion} from '../game/rescueSpatialMotion';
 import {startRescue,type RescueMap,type RescueState} from '../game/rescueAdventure';
 
@@ -41,18 +42,21 @@ export function createRescueSpatialScene(map:RescueMap,character:BotCharacterId=
  const robot=new THREE.Group();robot.name='rescue-robot';robot.userData.character=character;scene.add(robot);
  const def=BOT_CHARACTERS[character],bodyMat=mat(parseInt(def.defaultBodyHex.slice(1),16)),headMat=mat(parseInt(def.defaultHeadHex.slice(1),16)),accentMat=mat(parseInt(def.accentCss.slice(1),16));
  const rounded=own(new RoundedBoxGeometry(1,1,1,3,.18)),pink=mat(0xff8eaa),gold=mat(0xf5b740),red=mat(0xdc4941);
- mesh(robot,rounded,bodyMat,0,.57,0,.65,.57,.48);mesh(robot,rounded,headMat,0,1.06,0,.96,.64,.67);
- mesh(robot,rounded,dark,0,1.08,.34,.79,.43,.10);
- const feet:THREE.Mesh[]=[],arms:THREE.Mesh[]=[],eyes:THREE.Mesh[]=[];
- for(const x of [-.19,.19]){eyes.push(mesh(robot,ball,eye,x,1.13,.405,.085,.105,.035));mesh(robot,ball,pink,x*1.45,.99,.402,.06,.024,.02);feet.push(mesh(robot,rounded,dark,x,.18,0,.24,.25,.42));}
- for(const x of [-.46,.46]){arms.push(mesh(robot,rounded,bodyMat,x,.57,0,.17,.42,.23));mesh(robot,ball,accentMat,x,1.08,0,.12,.15,.15);}
- const mouth=mesh(robot,ball,pink,0,1.015,.406,.07,.027,.02);
+ mesh(robot,rounded,bodyMat,0,.57,0,.65,.57,.48);
+ const head=new THREE.Group();head.name='companion-head';head.position.y=.88;robot.add(head);
+ const face=(geo:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number,sx:number,sy:number,sz:number)=>mesh(head,geo,m,x,y-.88,z,sx,sy,sz);
+ face(rounded,headMat,0,1.06,0,.96,.64,.67);face(rounded,dark,0,1.08,.34,.79,.43,.10);
+ const feet:THREE.Mesh[]=[],arms:THREE.Group[]=[],eyes:THREE.Mesh[]=[],wings:THREE.Mesh[]=[];
+ for(const x of [-.19,.19]){const eyeMesh=face(ball,eye,x,1.13,.405,.085,.105,.035);eyeMesh.name='companion-eye-'+eyes.length;eyes.push(eyeMesh);face(ball,pink,x*1.45,.99,.402,.06,.024,.02);const foot=mesh(robot,rounded,dark,x,.18,0,.24,.25,.42);foot.name='companion-foot-'+feet.length;feet.push(foot);}
+ for(const x of [-.46,.46]){const pivot=new THREE.Group();pivot.name='companion-arm-'+arms.length;pivot.position.set(x,.76,0);robot.add(pivot);arms.push(pivot);mesh(pivot,rounded,bodyMat,0,-.19,0,.17,.42,.23);face(ball,accentMat,x,1.08,0,.12,.15,.15);}
+ const mouth=face(ball,pink,0,1.015,.406,.07,.027,.02);mouth.name='companion-mouth';
  mesh(robot,ball,accentMat,0,.59,.25,.15,.15,.035);
  const accessory=new THREE.Group();accessory.name='companion-'+character;robot.add(accessory);
- if(character==='sprout'){mesh(accessory,rounded,red,0,.79,0,.67,.12,.53);for(const s of [-1,1]){const l=mesh(accessory,ball,green,s*.10,1.49,0,.15,.055,.06);l.rotation.z=s*.65;mesh(accessory,ball,gold,s*.20,1.37,.24,.15,.10,.09);}}
- else if(character==='nova'){mouth.material=gold;mouth.scale.set(.09,.065,.045);for(const s of [-1,1]){const wing=mesh(accessory,ball,headMat,s*.48,.70,-.20,.20,.36,.08);wing.rotation.z=-s*.48;mesh(accessory,cone,gold,s*.32,1.46,0,.10,.20,.10);}}
- else if(character==='robobuddy'){mesh(accessory,cylinder,gold,0,1.40,0,.56,.065,.43);mesh(accessory,cylinder,accentMat,0,1.49,0,.33,.20,.30);mesh(accessory,ball,eye,0,1.49,.30,.085,.085,.065);}
- else {mesh(accessory,cylinder,headMat,0,1.43,0,.04,.22,.04);mesh(accessory,character==='learnbot'?cone:ball,accentMat,0,1.59,0,.11,.14,.11);}
+ const headAccessory=new THREE.Group();headAccessory.position.y=-.88;head.add(headAccessory);
+ if(character==='sprout'){mesh(accessory,rounded,red,0,.79,0,.67,.12,.53);for(const s of [-1,1]){const l=mesh(headAccessory,ball,green,s*.10,1.49,0,.15,.055,.06);l.rotation.z=s*.65;mesh(headAccessory,ball,gold,s*.20,1.37,.24,.15,.10,.09);}}
+ else if(character==='nova'){mouth.material=gold;mouth.scale.set(.09,.065,.045);for(const s of [-1,1]){const wing=mesh(accessory,ball,headMat,s*.48,.70,-.20,.20,.36,.08);wing.rotation.z=-s*.48;wings.push(wing);mesh(headAccessory,cone,gold,s*.32,1.46,0,.10,.20,.10);}}
+ else if(character==='robobuddy'){mesh(headAccessory,cylinder,gold,0,1.40,0,.56,.065,.43);mesh(headAccessory,cylinder,accentMat,0,1.49,0,.33,.20,.30);mesh(headAccessory,ball,eye,0,1.49,.30,.085,.085,.065);}
+ else {mesh(headAccessory,cylinder,headMat,0,1.43,0,.04,.22,.04);mesh(headAccessory,character==='learnbot'?cone:ball,accentMat,0,1.59,0,.11,.14,.11);}
  const effect=mesh(scene,ringGeo,on,0,.17,0,1,1,1);effect.rotation.x=-Math.PI/2;effect.visible=false;
  const warning=mesh(scene,ringGeo,coral,0,.18,0,1,1,1);warning.rotation.x=-Math.PI/2;warning.visible=false;
  scene.add(new THREE.HemisphereLight(0xe0f2fe,0x78613c,2.2));
@@ -69,10 +73,21 @@ export function createRescueSpatialScene(map:RescueMap,character:BotCharacterId=
   const cx=(minX+maxX)/2,cy=(minY+maxY)/2,halfH=Math.max((maxY-minY)/2+.32,((maxX-minX)/2+.32)/aspect);
   camera.left=cx-halfH*aspect;camera.right=cx+halfH*aspect;camera.top=cy+halfH;camera.bottom=cy-halfH;camera.updateProjectionMatrix();
  }
- function clearPose(){robot.position.y=.09;arms.forEach(a=>a.rotation.x=0);feet.forEach(f=>f.position.z=0);effect.visible=false;warning.visible=false;}
- function update(state:RescueState){if(disposed)return;const happy=state.feedback==='repair'||state.won;const unsure=['blocked','wrong-place','already'].includes(state.feedback);eyes.forEach((e,i)=>{e.scale.y=happy?.060:unsure&&i===0?.055:.105;});mouth.scale.y=character==='nova'?.065:happy?.055:.027;const snap=rescueSpatialSnapshot(map,state);clearPose();robot.position.set(snap.robot.x,.09,snap.robot.z);for(const tile of snap.tiles){const beacon=beacons.get(tile.id);if(beacon){beacon.lamp.material=tile.repaired?on:off;beacon.flag.visible=tile.repaired;}}}
- function animate(motion:RescueMotion,elapsed:number){if(disposed)return false;const p=sampleRescueMotion(motion,elapsed);clearPose();robot.position.set(p.x,.09+p.bob,p.z);if(motion.heading!==null)robot.rotation.y=motion.heading;
-  if(!p.done){arms[0].rotation.x=p.swing-p.repair*.9;arms[1].rotation.x=-p.swing-p.celebrate*.9;feet[0].position.z=p.swing*.16;feet[1].position.z=-p.swing*.16;
+ let eyeBase=[.105,.105],mouthBase=character==='nova'?.065:.027;
+ let activeMotion:RescueMotion|null=null,headingStart=0;
+ function clearPose(){robot.position.y=.09;head.rotation.set(0,0,0);arms.forEach(a=>a.rotation.set(0,0,0));feet.forEach(f=>{f.position.z=0;f.position.y=.18;});eyes.forEach((e,i)=>e.scale.y=eyeBase[i]);mouth.scale.y=mouthBase;wings.forEach((w,i)=>w.rotation.z=i===0?.48:-.48);effect.visible=false;warning.visible=false;}
+ function update(state:RescueState){if(disposed)return;activeMotion=null;const happy=state.feedback==='repair'||state.won;const unsure=['blocked','wrong-place','already'].includes(state.feedback);eyeBase=[unsure?.055:happy?.060:.105,happy?.060:.105];mouthBase=character==='nova'?.065:happy?.055:.027;
+  const snap=rescueSpatialSnapshot(map,state);clearPose();robot.position.set(snap.robot.x,.09,snap.robot.z);if(state.feedback==='ready')robot.rotation.y=0;
+  for(const tile of snap.tiles){const beacon=beacons.get(tile.id);if(beacon){beacon.lamp.material=tile.repaired?on:off;beacon.flag.visible=tile.repaired;}}}
+ function animate(motion:RescueMotion,elapsed:number){if(disposed)return false;
+  if(activeMotion!==motion){activeMotion=motion;headingStart=robot.rotation.y;}
+  const p=sampleRescueMotion(motion,elapsed),t=motion.duration?Math.max(0,Math.min(1,elapsed/motion.duration)):1;
+  const pose=sampleCompanionPose(character,motion.kind,t);clearPose();robot.position.set(p.x,.09+p.bob,p.z);
+  if(motion.heading!==null)robot.rotation.y=interpolateCompanionHeading(headingStart,motion.heading,t);
+  if(!p.done){arms[0].rotation.x=pose.armL;arms[1].rotation.x=pose.armR;feet[0].position.z=pose.footL;feet[1].position.z=pose.footR;feet[0].position.y+=pose.liftL;feet[1].position.y+=pose.liftR;head.rotation.z=pose.headTilt;head.rotation.x=pose.headNod;
+   eyes.forEach((e,i)=>e.scale.y=Math.max(.012,eyeBase[i]*(1-.88*pose.blink)));
+   if(character!=='nova')mouth.scale.y=mouthBase+.035*pose.cheer;
+   wings.forEach((w,i)=>w.rotation.z=(i===0?1:-1)*(.48+pose.wing));
    if(p.repair||p.celebrate){effect.position.set(p.x,.17,p.z);effect.scale.setScalar(1+.34*Math.max(p.repair,p.celebrate));effect.visible=true;}
    if(p.blocked){warning.position.set(p.x,.18,p.z);warning.scale.setScalar(.9+.15*p.blocked);warning.visible=true;}
   }return !p.done;
