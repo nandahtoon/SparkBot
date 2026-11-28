@@ -108,13 +108,13 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "Exact CI and preview; physical character and rescue acceptance",
-      "experimentalStatus": "COMPANION_GESTURE_POLISH_PENDING_CI",
+      "nextPackage": "Exact CI, preview and A3 physical acceptance of environment, landmarks and companion guidance",
+      "experimentalStatus": "RESCUE_WORLD_STORY_POLISH_PENDING_CI",
       "experimentalEntry": "/?experiment=rescue3d",
       "lastVerifiedExperiment": {
-        "sha": "e55750916cda66a03d950e2951a17c8aa2d4f02f",
-        "ciRun": 46168889371,
-        "preview": "https://sparkbot-97l1odqye-btk10.vercel.app/"
+        "sha": "e25e415960e67441f824aed0ec91ac0310e908fd",
+        "ciRun": 46180492563,
+        "preview": "https://sparkbot-oups8nwfi-btk10.vercel.app/"
       },
       "policyIntegration": {
         "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",
