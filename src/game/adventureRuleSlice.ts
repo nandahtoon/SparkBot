@@ -1,11 +1,13 @@
-// Isolated rules prototype for campaign IDs 13–16. No save writes or experiment imports.
-export type SliceId=13|14|15|16;
+// Isolated rules prototype for campaign IDs 1–8 and 13–16. No save writes or experiment imports.
+import {EARLY_MISSIONS,isEarlyId,earlyActions,stepEarly,type EarlyId,type EarlyAction} from './adventureEarlyRules';
+export type SliceId=EarlyId|13|14|15|16;
 export type Site={id:string;name:string;links:readonly string[];icon:string};
-export type SliceAction='collect'|'repair'|'rescue'|'signal'|'allocate'|'reclaim'|'scan'|'align'|'restart';
+export type SliceAction=EarlyAction|'collect'|'repair'|'rescue'|'signal'|'allocate'|'reclaim'|'scan'|'align'|'restart';
 export type Command={kind:'move';to:string}|{kind:'act';action:SliceAction};
 export type SliceState={at:string;flags:readonly string[];power:Readonly<Record<string,number>>;won:boolean;message:string};
 export type SliceMission={id:SliceId;sites:readonly Site[];goal:string};
 export const SLICE_MISSIONS:Readonly<Record<SliceId,SliceMission>>={
+ ...EARLY_MISSIONS,
  13:{id:13,goal:'Find a tool, repair the bridge, rescue the lost robot and bring it home.',sites:[
  {id:'home',name:'Base',icon:'🏠',links:['tools','lookout']},{id:'tools',name:'Tool cache',icon:'🔧',links:['home','lookout','bridge']},{id:'lookout',name:'Lookout',icon:'🌲',links:['home','tools','bridge']},{id:'bridge',name:'Broken bridge',icon:'🌉',links:['tools','lookout','robot']},{id:'robot',name:'Lost robot',icon:'🤖',links:['bridge']}]},
  14:{id:14,goal:'Switch both waiting convoy signals to safe, then reach the terminal.',sites:[
@@ -18,6 +20,7 @@ export const SLICE_MISSIONS:Readonly<Record<SliceId,SliceMission>>={
 export const startSlice=():SliceState=>({at:'home',flags:[],power:{shelter:0,lift:0},won:false,message:'Choose a route.'});
 const has=(s:SliceState,k:string)=>s.flags.includes(k);
 export function sliceActions(id:SliceId,at:string):readonly SliceAction[]{
+ if(isEarlyId(id))return earlyActions(id,at);
  if(id===13)return at==='tools'?['collect']:at==='bridge'?['repair']:at==='robot'?['rescue']:[];
  if(id===14)return at==='north'||at==='south'?['signal']:[];
  if(id===15)return at==='shelter'||at==='lift'?['allocate','reclaim']:[];
@@ -25,6 +28,7 @@ export function sliceActions(id:SliceId,at:string):readonly SliceAction[]{
 }
 export function stepSlice(id:SliceId,s:SliceState,c:Command):SliceState{
  if(s.won)return s;
+ if(isEarlyId(id))return stepEarly(id,s,c);
  const say=(message:string):SliceState=>({...s,message});
  const mark=(flag:string,message:string):SliceState=>has(s,flag)?say('Already done.'):({...s,flags:[...s.flags,flag],message});
  if(c.kind==='move'){
@@ -48,5 +52,6 @@ export function stepSlice(id:SliceId,s:SliceState,c:Command):SliceState{
   case 'scan':return mark('scan','Fault found: align both switches.');
   case 'align':return has(s,'scan')?mark(s.at,'Switch aligned.'):say('Scan the fault first.');
   case 'restart':return has(s,'scan')&&has(s,'west')&&has(s,'east')?{...s,won:true,message:'Guardian restored!'}:say('Scan and align both switches first.');
+  default:return say('That action is not available here.');
  }
 }
