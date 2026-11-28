@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import type { ProceduralTextures } from './materials';
 import type { GraphicsQualityBudget } from '../game/graphicsConfig';
 import type { BiomeThemeDef } from '../game/biomes';
+import { createChapterLandmarks } from './chapterLandmarks';
 
 export interface WorkshopEnvironmentHandles {
   workshopGroup: THREE.Group;
@@ -407,6 +408,9 @@ export function buildWorkshopEnvironment(
   energyArrays.add(solarFrames, solarPanels, solarStands);
   skyportGroup.add(energyArrays);
 
+  const chapterLandmarks=createChapterLandmarks(trackDisposable);
+  for(const group of Object.values(chapterLandmarks.groups))skyportGroup.add(group);
+
   // 3. Upgraded Dual-Tier Studio Workshop Pedestal & Gantry
   const workshopGroup = new THREE.Group();
 
@@ -733,12 +737,13 @@ export function buildWorkshopEnvironment(
   };
 
   const applyBiome = (biome: BiomeThemeDef) => {
+    chapterLandmarks.show(biome.id);
     energyArrays.visible = biome.id === 'energy_valley';
     const ocean = biome.id === 'ocean_discovery';
     oceanGroup.visible = ocean;
     for(const [zone,group] of Object.entries(oceanLandmarks)) group.visible=ocean && zone===biome.oceanZone;
-    for(const mesh of [solarRing,mesas,mesaCaps,mesaBands,beacons]) mesh.visible = !ocean;
-    for(const rotor of windmills) if(rotor.parent) rotor.parent.visible = !ocean;
+    for(const mesh of [solarRing,mesas,mesaCaps,mesaBands,beacons]) mesh.visible = biome.id==='skyport_canyon';
+    for(const rotor of windmills) if(rotor.parent) rotor.parent.visible = biome.id==='skyport_canyon'||biome.id==='energy_valley';
     hemi.color.setHex(biome.hemiSkyHex);
     hemi.groundColor.setHex(biome.hemiGroundHex);
     key.color.setHex(biome.keyLightHex);
@@ -778,6 +783,7 @@ export function buildWorkshopEnvironment(
     solarRing,
     applyBiome,
     animateEnvironment: (time,reduced)=>{
+      chapterLandmarks.animate(time,reduced);
       if(!oceanGroup.visible)return;
       waveMat.opacity=reduced?.55:.43+Math.sin(time*.8)*.12;
       for(const group of Object.values(oceanLandmarks))if(group.visible)group.position.y=reduced?0:Math.sin(time*1.1)*.08;

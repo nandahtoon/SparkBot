@@ -7,6 +7,7 @@ export function JourneyCard({next,locked=false,onStart}:{next:JourneyPreview;loc
    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-40" style={{background:ocean?'linear-gradient(160deg,#164e63,#0e7490,#082f49)':'linear-gradient(160deg,#172554,#155e75,#111827)'}}/>
    <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1 text-xs font-bold text-sky-200"><MapPin className="h-4 w-4"/> Next · {next.world}</span>{locked?<Lock className="h-4 w-4 text-slate-300"/>:<ArrowRight className="h-4 w-4 text-sky-300"/>}</div>
    <div className="my-1 text-sm font-black text-white">{next.id} · {next.name}</div>
+   <div className="mb-2 text-xs text-sky-100">{next.landmark}</div>
    <div className="flex items-center gap-1 overflow-hidden" aria-label="Next mission route preview">
      {next.track.map((tile,i)=><span key={i} className={'flex h-6 min-w-0 flex-1 items-center justify-center rounded border '+(tile.type==='gap'?'border-dashed border-slate-400 bg-slate-950/40':tile.type==='gate'?'border-emerald-300 bg-emerald-900':'border-sky-700 bg-sky-950')} aria-label={tile.type+(tile.crystal?' with crystal':'')}>{tile.type==='gate'?<Flag className="h-3 w-3 text-emerald-200"/>:tile.crystal?<Gem className="h-3 w-3 text-cyan-200"/>:null}</span>)}
    </div>

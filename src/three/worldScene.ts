@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { getJourneyPreview } from '../game/journey';
+import { getWorldArchitecture } from '../game/worldArchitecture';
+import { requiresMissionCircuit } from '../game/missionObjectives';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type {
@@ -1028,11 +1030,12 @@ export class UnifiedWorldController {
     this.gateRightDoor = null;
     this.gateOpenAmt = 0;
 
+    const architecture=getWorldArchitecture(this.activeBiome.id);
     const normalMat = new THREE.MeshStandardMaterial({
       map: this.tex.floorDeck,
       bumpMap: this.tex.floorBump,
       bumpScale: 0.02,
-      color: 0x334155,
+      color: architecture.deck,
       roughness: 0.55,
       metalness: 0.48
     });
@@ -1064,13 +1067,13 @@ export class UnifiedWorldController {
       clearcoat: 1.0
     });
     const railMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: 0x0284c7,
+      color: architecture.rail,
+      emissive: architecture.rail,
       emissiveIntensity: 0.42
     });
 
     const pylonMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
+      color: architecture.support,
       roughness: 0.45,
       metalness: 0.72
     });
@@ -1087,11 +1090,15 @@ export class UnifiedWorldController {
     const next=getJourneyPreview(level);
     if(next){
       const group=new THREE.Group();group.name='next-mission-hologram';
-      group.position.set(3.7,1.8,TRACK_START_Z-(track.length-1)*TILE_SPACING);
+      group.position.set(3.7,1.4,TRACK_START_Z-(track.length-1)*TILE_SPACING+1.8);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.78,.95,.16,12),new THREE.MeshStandardMaterial({color:0x164e63,emissive:0x0891b2,emissiveIntensity:.25}));group.add(base);
       const mat=new THREE.MeshBasicMaterial({color:0x67e8f9,transparent:true,opacity:.7});const flagMat=new THREE.MeshBasicMaterial({color:0x34d399});
-      const step=new THREE.BoxGeometry(.36,.07,.23);
-      next.track.forEach((tile,i)=>{if(tile.type==='gap')return;const mesh=new THREE.Mesh(step,tile.type==='gate'?flagMat:mat);mesh.position.set(0,.25,-i*.29);group.add(mesh);});
+      const step=new THREE.BoxGeometry(.42,.07,.28);
+      const spacing=Math.min(.35,2.5/Math.max(1,next.track.length-1));
+      const jewel=new THREE.OctahedronGeometry(.095);
+      mat.color.setHex(getWorldArchitecture(next.biome).rail);
+      next.track.forEach((tile,i)=>{if(tile.type==='gap')return;const mesh=new THREE.Mesh(step,tile.type==='gate'?flagMat:mat);mesh.position.set(0,.25,.8-i*spacing);group.add(mesh);if(tile.crystal){const crystal=new THREE.Mesh(jewel,mat);crystal.position.set(0,.44,.8-i*spacing);group.add(crystal);}});
+      const arch=new THREE.Mesh(new THREE.TorusGeometry(.44,.055,6,16),flagMat);arch.position.set(0,.77,.8-(next.track.length-1)*spacing);group.add(arch);
       this.trackGroup.add(group);
     }
     for (let i = 0; i < track.length; i++) {
@@ -1179,7 +1186,7 @@ export class UnifiedWorldController {
 
       if (tile.type === 'gate') {
         const gateZ = tz + GATE_WALL_Z_OFFSET;
-        const pillarMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.7 });
+        const pillarMat = new THREE.MeshStandardMaterial({ color: architecture.destination, roughness: 0.4, metalness: 0.7 });
         [-2.25, 2.25].forEach((gx) => {
           const pillar = new THREE.Mesh(new RoundedBoxGeometry(0.65, 5.1, 0.85, 2, 0.08), pillarMat);
           pillar.position.set(gx, 2.45, gateZ);
@@ -1213,6 +1220,13 @@ export class UnifiedWorldController {
         this.gateRightDoor = new THREE.Mesh(new THREE.BoxGeometry(1.95, 4.6, 0.35), doorMat);
         this.gateRightDoor.position.set(0.975, 2.3, gateZ);
         this.trackGroup.add(this.gateLeftDoor, this.gateRightDoor);
+        if(!requiresMissionCircuit(level)){
+          this.gateLeftDoor.visible=false;this.gateRightDoor.visible=false;
+          const sign=new THREE.Mesh(new THREE.BoxGeometry(2.4,.44,.18),new THREE.MeshBasicMaterial({color:0x34d399}));sign.position.set(0,4.65,gateZ+.48);this.trackGroup.add(sign);
+        }
+        if(architecture.silhouette==='reef'){
+          for(const x of [-2.25,2.25]){const buoy=new THREE.Mesh(new THREE.CylinderGeometry(.45,.62,.8,10),new THREE.MeshStandardMaterial({color:0xf6aa53,roughness:.65}));buoy.position.set(x,.45,gateZ+.3);this.trackGroup.add(buoy);}
+        }
 
         // Mount 3D Circuit Board elevated cleanly on the front face of the closed Gate doors
         this.circuitGroup.position.set(0, CIRCUIT_BOARD_Y, gateZ + CIRCUIT_BOARD_Z_OFFSET);
@@ -2074,7 +2088,7 @@ export class UnifiedWorldController {
     if (mode !== 'ACTION_RUN_3D' && mode !== 'PLANET_ADVENTURE_3D') {
       this.runnerGroup.visible = false;
       this.trackGroup.visible = true;
-      this.circuitGroup.visible = true;
+      this.circuitGroup.visible = !this.level || requiresMissionCircuit(this.level);
       this.clearActionTrails();
       SFX.setGlide(false);
     }
