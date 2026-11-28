@@ -33,3 +33,21 @@ export function buildMainGameSnapshot(save: AdventureSave) {
     totalMissions: nodes.length,
   };
 }
+
+export type MainGameSnapshot = ReturnType<typeof buildMainGameSnapshot>;
+
+// Title and map use the same read-only campaign projection; no new save fields.
+export function getMainGameLaunch(snapshot: MainGameSnapshot) {
+  const chapter = snapshot.chapters.find(c =>
+    c.missions.some(m => m.id === snapshot.recommendedMissionId && m.unlocked));
+  const mission = chapter?.missions.find(m => m.id === snapshot.recommendedMissionId && m.unlocked);
+  return {
+    missionId: mission?.id ?? null,
+    chapterId: chapter?.id ?? null,
+    chapterTitle: chapter?.title ?? '',
+    goal: mission?.learning?.goal ?? '',
+    actionLabel: !mission ? 'Choose a Mission' :
+      snapshot.completedMissions === snapshot.totalMissions ? 'Replay Adventure' :
+      snapshot.completedMissions > 0 || mission.id !== 1 ? 'Continue Adventure' : 'Start Adventure',
+  };
+}
