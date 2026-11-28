@@ -1494,8 +1494,7 @@ export default function App() {
       setPredictPromptedLevelKey(curQuiz.levelKey);
 
       if (!skipped && correct) {
-        SFX.installComplete();
-        SFX.speakWallE('proud', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
+        // The quiz already supplies spoken and musical feedback; do not replay it over the run.
         setSave((prev) => {
           const nextSkills = {
             chassisBuilds: 0,
@@ -1522,7 +1521,7 @@ export default function App() {
 
       launchSimulation(curQuiz.sim, false);
     },
-    [activeCharacter, launchSimulation, pendingPredictQuiz]
+    [launchSimulation, pendingPredictQuiz]
   );
 
   const handleStepProgram = () => {

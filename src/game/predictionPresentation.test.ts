@@ -13,7 +13,10 @@ test('landing choices map to real track tiles and distinct visual shapes',()=>{
  assert.equal(getPredictionTile('tile_999',level.track),null);
  assert.equal(getPredictionTile('clear',level.track),null);
  const speech=getPredictionSpeech(question);
- question.options.forEach((opt,i)=>assert.ok(speech.includes('Choice '+(i+1)+'. '+opt.label)));
+ question.options.forEach((opt,i)=>{assert.ok(speech.includes(['circle','diamond','triangle'][i]));assert.ok(speech.includes('tile '+getPredictionTile(opt.id,level.track)));});
+ assert.ok(speech.startsWith('Beep beep!'));
+ assert.ok(speech.length<=420);
+ assert.match(getPredictionResultSpeech(question,true),/Woo hoo!/);
  assert.ok(getPredictionResultSpeech(question,false).startsWith('Good try!'));
 });
 test('prediction UI preserves direct run, visual track and manual audio',()=>{
@@ -23,4 +26,18 @@ test('prediction UI preserves direct run, visual track and manual audio',()=>{
  assert.match(card,/disabled=\{!speech.supported\|\|muted\}/);
  const app=fs.readFileSync('src/App.tsx','utf8');
  assert.match(app,/showPathPreview && !pendingPredictQuiz/);
+});
+
+test('playful speech follows cancellation and mute, with gentle cues after narration',()=>{
+ const controller=fs.readFileSync('src/game/readAloud.ts','utf8');
+ const audio=fs.readFileSync('src/game/audio.ts','utf8');
+ const card=fs.readFileSync('src/components/PredictBeforeRunCard.tsx','utf8');
+ assert.match(controller,/utteranceGeneration === generation/);
+ assert.match(controller,/style\.playful \? 0\.88/);
+ assert.match(controller,/localService/);
+ assert.match(audio,/predictionCue\(kind:/);
+ assert.match(audio,/filteredTone\('ui',note/);
+ assert.match(card,/if\(muted\)return/);
+ assert.match(card,/playful:true,onFinished:cue/);
+ assert.match(card,/autoReadAloud&&!muted/);
 });

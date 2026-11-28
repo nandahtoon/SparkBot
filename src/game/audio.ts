@@ -279,6 +279,12 @@ class SoundEngine {
     this.filteredTone('ui', 820, 1020, 0.038, 'triangle', 0.032, 2400, 0.01);
   }
 
+  // Soft original quiz motifs, separate from speech and governed by UI volume.
+  public predictionCue(kind:'invite'|'correct'|'try') {
+    const notes=kind==='correct'?[523.25,659.25,783.99]:kind==='try'?[392,440]:[440,587.33];
+    notes.forEach((note,i)=>this.filteredTone('ui',note,note*1.035,0.105,'sine',0.045,1800,i*0.09));
+  }
+
   public uiTick() {
     this.filteredTone('ui', 650, 840, 0.04, 'sine', 0.058, 2100);
   }

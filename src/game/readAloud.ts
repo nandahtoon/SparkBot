@@ -8,6 +8,7 @@ export interface ReadAloudState {
 }
 
 type Listener = () => void;
+export interface SpeechStyle { playful?: boolean; onFinished?: () => void; }
 
 function hasSpeechSupport(): boolean {
   return (
@@ -39,6 +40,7 @@ class ReadAloudController {
   private muted = false;
   private voiceVolume = 0.85;
   private speaking = false;
+  private utteranceGeneration = 0;
   private activeId: string | null = null;
   private listeners = new Set<Listener>();
   private snapshot: ReadAloudState;
@@ -102,7 +104,7 @@ class ReadAloudController {
     }
   }
 
-  speak(rawText: string, id = 'default'): boolean {
+  speak(rawText: string, id = 'default', style: SpeechStyle = {}): boolean {
     const cleaned = String(rawText || '')
       .replace(/[➔→]/g, ' to ')
       .replace(/[^\S\r\n]+/g, ' ')
@@ -115,28 +117,33 @@ class ReadAloudController {
 
     try {
       const synth = window.speechSynthesis;
+      const generation=++this.utteranceGeneration;
       synth.cancel();
 
       const utter = new SpeechSynthesisUtterance(cleaned);
-      const voice = pickKidFriendlyVoice(synth.getVoices());
+      const voices=synth.getVoices();
+      const localEnglish=voices.filter(v=>v.localService && /^en(-|_|$)/i.test(v.lang));
+      const voice = pickKidFriendlyVoice(style.playful && localEnglish.length ? localEnglish : voices);
       if (voice) utter.voice = voice;
-      utter.rate = 0.94;
-      utter.pitch = 1.05;
+      if(style.playful) utter.lang=voice && /^en(-|_|$)/i.test(voice.lang)?voice.lang:'en-US';
+      utter.rate = style.playful ? 0.88 : 0.94;
+      utter.pitch = style.playful ? 1.18 : 1.05;
       utter.volume = this.voiceVolume;
 
       this.speaking = true;
       this.activeId = id;
       this.emit();
 
-      const clearIfActive = () => {
-        if (this.activeId === id) {
+      const clearIfActive = (finished:boolean) => {
+        if (this.utteranceGeneration === generation && this.activeId === id) {
           this.speaking = false;
           this.activeId = null;
           this.emit();
+          if(finished && !this.muted) style.onFinished?.();
         }
       };
-      utter.onend = clearIfActive;
-      utter.onerror = clearIfActive;
+      utter.onend = () => clearIfActive(true);
+      utter.onerror = () => clearIfActive(false);
 
       synth.speak(utter);
       return true;
@@ -157,6 +164,7 @@ class ReadAloudController {
   }
 
   stop(): void {
+    this.utteranceGeneration++;
     if (hasSpeechSupport()) {
       try {
         window.speechSynthesis.cancel();
