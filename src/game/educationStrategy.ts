@@ -26,6 +26,7 @@ import {
   type StemPillarId
 } from './engine';
 import type { MilestoneUnlockKind } from './milestoneParticles';
+import { getOceanPresentation } from './oceanPresentation';
 
 /* ============================================================================
  * 1. STORY-DRIVEN 4-CHAPTER CAMPAIGN & AGE BAND SCAFFOLDING (Ages 6–12)
@@ -810,7 +811,9 @@ export function computeAdaptiveHint(params: {
     };
   }
 
-  // CODE PHASE
+  // CODE PHASE: mission-specific nudges before generic route suggestions.
+  const ocean=getOceanPresentation(level);
+  if(ocean && tier<3) return {tier,phase,headline: tier===1?'Mission Hint':'Look Closely',clue:tier===1?ocean.hint:ocean.nextHint,highlightBlockId:failingBlockId};
   const demo = demoForFailure(lastSimResult, level);
   const blkCount = countBlocks(program || [], level.functionUnlocked ? functionBody : undefined);
   const ghostPlan = computeGhostPreviewPlan(level, 'code', chassis, program, circuitGrid, functionBody);

@@ -1,4 +1,5 @@
 import type { LevelDef } from './types';
+import { getOceanPresentation, type OceanZone } from './oceanPresentation';
 
 export type BiomeId =
   | 'skyport_canyon'
@@ -10,6 +11,7 @@ export type BiomeId =
 
 export interface BiomeThemeDef {
   id: BiomeId;
+  oceanZone?: OceanZone;
   name: string;
   chapterLabel: string;
   skyHex: number;
@@ -130,7 +132,8 @@ export function getBiomeForLevel(level: LevelDef | null | undefined): BiomeTheme
     const list: BiomeId[] = ['skyport_canyon', 'solar_dunes', 'aurora_glade', 'reactor_citadel'];
     return BIOME_THEMES[list[seed % list.length]];
   }
-  if ((level.isPrototype && level.id === 6103) || (!level.isSandbox && !level.isClassCode && level.isBonus && level.id >= 21 && level.id <= 24)) return BIOME_THEMES.ocean_discovery;
+  const ocean=getOceanPresentation(level);
+  if(ocean) return {...BIOME_THEMES.ocean_discovery,name:ocean.name,chapterLabel:'Ch. 6',oceanZone:ocean.zone};
   if (!level.isSandbox && !level.isClassCode && level.id >= 17 && level.id <= 20) return BIOME_THEMES.energy_valley;
   if (level.isBoss || level.id >= 13) return BIOME_THEMES.reactor_citadel;
   if (level.isBonus || level.id >= 9) return BIOME_THEMES.aurora_glade;

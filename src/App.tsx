@@ -125,6 +125,7 @@ import { TitleOverlay } from './components/TitleOverlay';
 import { getMissionLearningGoal, getRecommendedCampaignLevel } from './game/missionCurriculum';
 import { getCollectionRequirement, getMissionObjectiveLabel, getSurveyStations, isMissionComplete, requiresMissionCircuit } from './game/missionObjectives';
 import { getMissionPrototype } from './game/missionPrototypes';
+import { getOceanPresentation } from './game/oceanPresentation';
 import { TopHud, type MoodCue } from './components/TopHud';
 import { BuildDock } from './components/BuildDock';
 import { PaintBoothDock } from './components/PaintBoothDock';
@@ -3081,6 +3082,7 @@ export default function App() {
         </div>
       )}
       <VictoryModal
+        missionMessage={getOceanPresentation(currentLevel)?.victory}
         learningGoal={getMissionLearningGoal(currentLevel)}
         visible={mode === 'VICTORY' && !currentLevel.isPrototype && !showGameRoom && !showShop && !showQuests}
         stars={victoryStars}

@@ -49,6 +49,7 @@ export interface VictorySpeedRunSummary {
 }
 
 interface VictoryModalProps {
+  missionMessage?: string;
   learningGoal?: MissionLearningGoal | null;
   visible: boolean;
   stars: number;
@@ -81,6 +82,7 @@ interface VictoryModalProps {
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
   learningGoal = null,
+  missionMessage,
   visible,
   stars,
   bonusEarned,
@@ -141,7 +143,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         )}
 
         <h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2>
-        <p className="-mt-2 text-center text-sm text-emerald-200">Great work, SparkBot explorer.</p>
+        <p className="-mt-2 text-center text-sm text-emerald-200">{missionMessage || 'Great work, SparkBot explorer.'}</p>
         {/* 3 Big Stars */}
         <div className="flex items-center gap-3">
           {[1, 2, 3].map((s) => (
