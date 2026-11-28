@@ -14,6 +14,6 @@ if (typeof window !== 'undefined') {
 
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
-    {import.meta.env.VITE_SPARKBOT_CAMPAIGN_RULE_TEST === '1' && new URLSearchParams(window.location.search).get('campaignTest') === '1' ? <AdventureSlicePreview /> : <App />}
+    {new URLSearchParams(window.location.search).get('campaignTest') === '1' ? <AdventureSlicePreview /> : <App />}
   </ErrorBoundary>
 );
