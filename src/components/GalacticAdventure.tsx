@@ -33,7 +33,7 @@ export default function GalacticAdventure(){
   useEffect(()=>{if(!playing||paused)return;const id=window.setInterval(()=>setS(stepGalactic),TICK_MS);return()=>window.clearInterval(id);},[playing,paused]);
   useEffect(()=>{const hide=()=>{if(document.hidden)setPaused(true);};document.addEventListener('visibilitychange',hide);return()=>document.removeEventListener('visibilitychange',hide);},[]);
   useEffect(()=>{if(s.status!=='won')return;const next=nextGalacticUnlock(unlocked,s);if(next!==unlocked)setUnlocked(next);try{localStorage.setItem(GALACTIC_SAVE_KEY,JSON.stringify({version:1,unlocked:next}));}catch{setSaveError(true);}},[s,unlocked]);
-  useEffect(()=>{const key=(ev:KeyboardEvent)=>{if(!playing||paused||ev.altKey||ev.metaKey||ev.ctrlKey||ev.target instanceof HTMLButtonElement)return;
+  useEffect(()=>{const key=(ev:KeyboardEvent)=>{if(!playing||paused||ev.altKey||ev.metaKey||ev.ctrlKey||ev.target instanceof HTMLInputElement||ev.target instanceof HTMLTextAreaElement)return;
     if(ev.key==='ArrowLeft'||ev.key==='ArrowRight'){ev.preventDefault();setS(p=>moveGalactic(p,p.lane+(ev.key==='ArrowLeft'?-1:1)));}
     if(['1','2','3'].includes(ev.key)){setS(p=>transformGalactic(p,FORMS[Number(ev.key)-1]));}
   };window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[playing,paused]);
@@ -43,7 +43,7 @@ export default function GalacticAdventure(){
   const pointer=(ev:ReactPointerEvent<SVGSVGElement>)=>{if(!playing||paused)return;const matrix=ev.currentTarget.getScreenCTM();if(!matrix)return;const point=ev.currentTarget.createSVGPoint();point.x=ev.clientX;point.y=ev.clientY;const local=point.matrixTransform(matrix.inverse());setS(p=>moveGalactic(p,(local.x-40)/80));};
   const y=55+Math.min(1,s.tick/(TICKS_PER_ENCOUNTER-1))*300;
   const btn='rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 disabled:opacity-40';
-  return <main className="min-h-[100dvh] overflow-auto bg-slate-950 p-3 text-slate-100" style={{paddingTop:'max(12px, env(safe-area-inset-top))',paddingBottom:'max(12px, env(safe-area-inset-bottom))'}}>
+  return <main className="h-[100dvh] overflow-auto bg-slate-950 p-3 text-slate-100" style={{paddingTop:'max(12px, env(safe-area-inset-top))',paddingBottom:'max(12px, env(safe-area-inset-bottom))'}}>
     <div className="mx-auto max-w-4xl">
       <header className="flex flex-wrap items-center justify-between gap-2"><a href="/" className={btn}>← Home</a><div className="text-center"><h1 className="text-xl font-black text-cyan-200">Galactic Adventure</h1><p className="text-xs text-slate-400">SparkBot • Experimental</p></div><button className={btn} onClick={()=>setPaused(p=>!p)} disabled={!playing}>{paused?'Resume':'Pause'}</button></header>
       <nav aria-label="Missions" className="my-2 flex flex-wrap gap-2">{MISSION_NAMES.map((name,i)=><button key={name} className={btn} disabled={i>unlocked} aria-pressed={s.mission===i} onClick={()=>select(i)}>{i+1}. {name}{i>unlocked?' 🔒':''}</button>)}</nav>
