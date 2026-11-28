@@ -5,6 +5,8 @@ import {
   Brain,
   Bug,
   CheckCircle2,
+  Clock,
+  ArrowRight,
   ChevronDown,
   ChevronUp,
   Compass,
@@ -98,6 +100,7 @@ interface CodeDockProps {
   objectiveLabel?: string;
   objectiveTarget?: number | null;
   surveyTarget?: number | null;
+  surveyStations?: readonly number[];
   objectiveFeedback?: string | null;
   junior?: boolean;
   program: CodeBlock[];
@@ -263,6 +266,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
   objectiveLabel,
   objectiveTarget = null,
   surveyTarget = null,
+  surveyStations = [],
   objectiveFeedback = null,
   junior = false,
   program,
@@ -1199,7 +1203,11 @@ export const CodeDock: React.FC<CodeDockProps> = ({
             <div className="mb-2 rounded-xl border border-cyan-400/50 bg-cyan-950/45 px-3 py-2 text-xs font-bold text-cyan-100" data-testid="mission-objective">
               <p>{objectiveLabel}</p>
               {objectiveTarget !== null && stepInspection && <p aria-live="polite">Collected: {stepInspection.crystalsCollected}/{objectiveTarget}</p>}
-              {surveyTarget !== null && <p aria-live="polite">Survey stations: {stepInspection?.surveysCompleted ?? 0}/{surveyTarget}</p>}
+              {surveyTarget !== null && <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="survey-visual-goal" aria-label="Wait at each clock marker, then reach the flag">
+                {surveyStations.map((station,i)=><React.Fragment key={station}>{i>0&&<ArrowRight className="h-4 w-4 text-slate-400" aria-hidden="true"/>}<span className="flex items-center gap-1 rounded-lg border border-cyan-400/70 bg-slate-950 px-2 py-1 text-cyan-200"><Clock className="h-5 w-5" aria-hidden="true"/><span>{station}</span></span></React.Fragment>)}
+                <ArrowRight className="h-4 w-4 text-slate-400" aria-hidden="true"/><Flag className="h-5 w-5 text-emerald-300" aria-hidden="true"/>
+                <span className="ml-auto flex items-center gap-1 text-sm" aria-live="polite"><CheckCircle2 className="h-4 w-4" aria-hidden="true"/>{stepInspection?.surveysCompleted ?? 0}/{surveyTarget}</span>
+              </div>}
               {!simulating && objectiveFeedback && <p role="status" className="mt-1 text-amber-200">{objectiveFeedback}</p>}
             </div>
           )}
@@ -1302,6 +1310,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                   const isStart = idx === 0;
                   const isGate = idx === track.length - 1 || tile.type === 'gate';
                   const hasDynHazard = dynamicHazardTiles.has(idx);
+                  const isSurveyStation=surveyStations.includes(idx);
                   const hazardCond: SensorCondition | null =
                     tile.type === 'gap'
                       ? 'GAP'
@@ -1338,7 +1347,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                             ? 'border-pink-400/70 bg-pink-500/20 text-pink-200'
                             : hasDynHazard
                               ? 'border-fuchsia-400/70 bg-fuchsia-500/20 text-fuchsia-200'
-                              : 'border-slate-700 bg-slate-800/90 text-slate-300';
+                              : isSurveyStation ? 'border-cyan-400/80 bg-cyan-950 text-cyan-200' : 'border-slate-700 bg-slate-800/90 text-slate-300';
 
                   return (
                     <button
@@ -1356,7 +1365,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                           : isGate
                             ? 'Gate'
                             : hazardCond || tile.type
-                      }${tile.crystal ? ' with Crystal' : ''}`}
+                      }${tile.crystal ? ' with Crystal' : ''}${isSurveyStation?' — WAIT here to observe':''}`}
                       title={`Tile ${idx}${isGate ? ' (Gate)' : hazardCond ? ` (${hazardCond})` : ''}${tile.crystal ? ' · Crystal' : ''} — Tap to look`}
                       className={`relative flex h-7 min-w-[28px] shrink-0 items-center justify-center gap-0.5 rounded-lg border px-1.5 text-[10px] font-black tabular transition-transform active:scale-95 disabled:pointer-events-none ${chipTone} ${
                         isFailTarget
@@ -1373,6 +1382,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
                       ) : hazardCond ? (
                         <HazardIcon cond={hazardCond} className="h-3.5 w-3.5 shrink-0" />
                       ) : null}
+                      {isSurveyStation&&<Clock data-testid="survey-tile-clock" className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden="true"/>}
                       <span>{isStart ? 'S' : idx}</span>
                       {tile.crystal && (
                         <Diamond

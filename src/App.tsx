@@ -2707,6 +2707,7 @@ export default function App() {
           objectiveLabel={currentLevel.objective ? getMissionObjectiveLabel(currentLevel) : undefined}
           objectiveTarget={currentLevel.objective ? getCollectionRequirement(currentLevel) : null}
           surveyTarget={getSurveyStations(currentLevel)?.length ?? null}
+          surveyStations={getSurveyStations(currentLevel)??[]}
           objectiveFeedback={currentLevel.isPrototype || lastFailedSim?.failCode === 'objective_unmet' ? lastFailedSim?.failReason : null}
           junior={juniorSession}
           program={program}

@@ -1,6 +1,6 @@
 import type {LevelDef,PartId} from './types';
 import type {MissionTutorialStepDef} from './missionTutorial';
-import {getMissionObjectiveLabel} from './missionObjectives';
+import {getMissionObjectiveLabel,getSurveyStations} from './missionObjectives';
 export function tutorialVoice(step:MissionTutorialStepDef):string{
  switch(step.id){
  case 'build_budget':return 'Hi, explorer! Let’s build a robot. Tap Got it to start!';
@@ -14,7 +14,9 @@ export function tutorialVoice(step:MissionTutorialStepDef):string{
  }
 }
 export function missionVoice(level:LevelDef):string{
- return 'Ready, explorer? '+level.name+'. '+(level.brief||getMissionObjectiveLabel(level));
+ const stations=getSurveyStations(level);
+ const intro=stations?'Look for the clock circles! Stop on each one and tap the clock command. Then reach the flag. ':'';
+ return 'Ready, explorer? '+level.name+'. '+intro+(level.brief||getMissionObjectiveLabel(level));
 }
 export function buildVoice(part:PartId|null,name?:string,slot?:string):string{
  return part?`Let’s add ${name||part}! Tap the part, then the glowing ${slot||'robot slot'}.`:'I’m ready to roll! Tap the green arrow to start coding.';

@@ -1177,6 +1177,10 @@ export class UnifiedWorldController {
         // Survey deck marker: geometry sits flat, outside the robot collision model.
         const ring = new THREE.Mesh(new THREE.RingGeometry(0.73,0.88,24),new THREE.MeshBasicMaterial({color:0x22d3ee,side:THREE.DoubleSide}));
         ring.rotation.x=-Math.PI/2;ring.position.set(0,0.035,tz);this.trackGroup.add(ring);this.surveyMarkers.set(i,ring);
+        // Match the WAIT clock symbol used in the coding palette and tile map.
+        const face=new THREE.Mesh(new THREE.CircleGeometry(.72,24),new THREE.MeshBasicMaterial({color:0x123b50}));face.position.z=-.006;ring.add(face);
+        const longHand=new THREE.Mesh(new THREE.BoxGeometry(.10,.48,.012),ring.material);longHand.position.set(0,.23,.008);ring.add(longHand);
+        const shortHand=new THREE.Mesh(new THREE.BoxGeometry(.34,.10,.012),ring.material);shortHand.position.set(.16,0,.008);ring.add(shortHand);
         for(const x of [-1.27,1.27]){
           const post=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.14,0.65,8),new THREE.MeshStandardMaterial({color:0x164e63}));
           post.position.set(x,0.32,tz);this.trackGroup.add(post);
