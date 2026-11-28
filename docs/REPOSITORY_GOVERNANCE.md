@@ -38,3 +38,7 @@ main = accepted stable source, potential auto-production deploy. archive/* = pro
 V0.3.1 family feedback PASS: visual quiz, robot voice, music/environment sound, portrait/landscape 20-minute stability, save/offline, minimal adult help. Not confirmed: differentiated worlds, clubhouse/mini-games, map/next mission, transition animation. SB-08A2 family trial not yet run. Automated CI is not acceptance. Verify exact candidate preview SHA, device and orientation, accessibility, offline and prior progress, rescue direct/code separately. Record no child PII. Do not merge main or promote release until owner acceptance, independent review, current exact CI and rollback check. No commercial/native release.
 ## Safe next work
 A2 family acceptance → A3 spatial 3D renderer reusing rule model → A4 connected Ocean slice → A5 campaign redesign → A6 consolidated RC. No chapter expansion or premature production migration. Keep existing 24 missions/7 mini-games and current stack. For independent technical tasks, use topic PRs; do not duplicate open implementations.
+
+
+## Owner-approved experimental exception (2026-11-28)
+See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.

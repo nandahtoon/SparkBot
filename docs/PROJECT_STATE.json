@@ -44,7 +44,7 @@
     "stage": "SB-08A2",
     "status": "AWAITING_FAMILY_ACCEPTANCE",
     "next": "SB-08A3",
-    "nextGate": "Review simplified Arcade retest, physical family rescue trial and outstanding world/map/transition gates before 3D implementation",
+    "nextGate": "A2 family acceptance remains required for integration of experimental 3D gameplay and release; isolated SB-08A3 development is owner-approved.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -82,6 +82,13 @@
           46106413639
         ],
         "scope": "documentation only"
+      },
+      "regressionQa": {
+        "sha": "128a99e72e830764cab803068bcde317a2522dd9",
+        "ciRuns": [
+          46122935735,
+          46122931752
+        ]
       }
     },
     "pending": [
@@ -93,9 +100,15 @@
     ],
     "preparation": {
       "stage": "SB-08A3",
-      "status": "DESIGN_ONLY_PENDING_REVIEW",
+      "status": "EXPERIMENTAL_IMPLEMENTATION_APPROVED",
       "document": "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
-      "implementation": "BLOCKED_BY_A2_FAMILY_ACCEPTANCE"
+      "implementation": "ISOLATED_BRANCH_ONLY",
+      "branch": "sb-08a3-spatial-experiment",
+      "baseSha": "128a99e72e830764cab803068bcde317a2522dd9",
+      "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
+      "familyAcceptance": "PENDING",
+      "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
+      "nextPackage": "A3-1 spatial mapping, isolated scene and renderer lifecycle"
     },
     "currentIteration": {
       "id": "SB-08A2-code-error-recovery",
@@ -110,6 +123,7 @@
     "docs/AI_HANDOFF_PROTOCOL.md",
     "docs/SB-08A_ADVENTURE_FIRST_REDESIGN.md",
     "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md",
-    "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md"
+    "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
+    "docs/SB-08A3_EXPERIMENTAL_GATE.md"
   ]
 }

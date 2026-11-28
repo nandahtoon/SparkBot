@@ -14,3 +14,7 @@ Explore · Help · Invent. Goal-first child-friendly adventure, visual instructi
 
 ## Finish every increment
 Run node scripts/check-project-context.mjs, bun install --frozen-lockfile, bun run lint, node --import tsx --test src/game/*.test.ts tests/*.test.ts, bun run build. Record actual checks and exact head CI; do not conflate simulator tests with device/learning results. Update PROJECT_STATE.json if stage, gate, or approved baseline changes, and relevant design/QA docs in the same PR. Evidence SHAs refer to already verified commits, never guess the commit containing the record itself. State changes require review, and release HOLD stays until explicit owner approval. Document next action, untested areas and rollback. A new chat begins by re-reading these files, not relying on memory.
+
+
+## Owner-approved experimental exception (2026-11-28)
+See docs/SB-08A3_EXPERIMENTAL_GATE.md. Isolated experimental SB-08A3 development is authorized while A2 remains pending. This is not acceptance, integration authorization for experimental runtime, or release approval. Preserve the pinned family candidate and stable main. Read live experiment PR and branch before continuing.
