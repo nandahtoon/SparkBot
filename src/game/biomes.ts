@@ -4,7 +4,8 @@ export type BiomeId =
   | 'skyport_canyon'
   | 'solar_dunes'
   | 'aurora_glade'
-  | 'reactor_citadel';
+  | 'reactor_citadel'
+  | 'energy_valley';
 
 export interface BiomeThemeDef {
   id: BiomeId;
@@ -97,6 +98,14 @@ export const BIOME_THEMES: Record<BiomeId, BiomeThemeDef> = {
     mesaHex: 0x271b45,
     mesaBandHex: 0xf472b6,
     accentCss: '#f472b6'
+  },
+  energy_valley: {
+    id: 'energy_valley', name: 'Sunrise Energy Valley', chapterLabel: 'Ch. 5',
+    skyHex: 0x23495b, fogHex: 0x315b65, fogDensity: 0.009,
+    keyLightHex: 0xffe4ae, hemiSkyHex: 0xd7faff, hemiGroundHex: 0x284d42,
+    rimLightHex: 0xfde68a, skyFloorHex: 0x173b38,
+    solarRingHex: 0xfbbf24, solarRingEmissiveHex: 0xb45309,
+    mesaHex: 0x315f53, mesaBandHex: 0x2dd4bf, accentCss: '#2dd4bf'
   }
 };
 
@@ -113,6 +122,7 @@ export function getBiomeForLevel(level: LevelDef | null | undefined): BiomeTheme
     const list: BiomeId[] = ['skyport_canyon', 'solar_dunes', 'aurora_glade', 'reactor_citadel'];
     return BIOME_THEMES[list[seed % list.length]];
   }
+  if (!level.isSandbox && !level.isClassCode && level.id >= 17 && level.id <= 20) return BIOME_THEMES.energy_valley;
   if (level.isBoss || level.id >= 13) return BIOME_THEMES.reactor_citadel;
   if (level.isBonus || level.id >= 9) return BIOME_THEMES.aurora_glade;
   if (level.id >= 5) return BIOME_THEMES.solar_dunes;
