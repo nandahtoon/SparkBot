@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Check,
   Lock,
-  Music2,
   Paintbrush,
   Pencil,
   Plus,
@@ -22,6 +21,7 @@ import {
 import { MAX_PROFILE_NAME_LENGTH } from '../game/profileStorage';
 import { MAX_PROFILE_SLOTS, type RosterSlotSummary } from '../game/profileRoster';
 import { SparkBotEmblem } from './Icons';
+import { CompanionPortrait } from './CompanionPortrait';
 
 interface BotProfileModalProps {
   visible: boolean;
@@ -163,10 +163,10 @@ export const BotProfileModal: React.FC<BotProfileModalProps> = ({
       <div
         id="botProfileDialog"
         onClick={(e) => e.stopPropagation()}
-        className="anim-pop flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border-2 border-slate-700 bg-slate-900 shadow-2xl"
+        className="anim-pop flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-y-auto overscroll-contain rounded-3xl border-2 border-slate-700 bg-slate-900 shadow-2xl"
       >
         {/* Header with editable Academy Save Profile Name & active character summary */}
-        <div className="flex items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/70 px-4 py-3 sm:items-center sm:px-6 sm:py-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/70 px-4 py-3 sm:items-center sm:px-6 sm:py-4">
           <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
             <div
               className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 bg-slate-800 shadow-lg sm:h-16 sm:w-16"
@@ -313,13 +313,13 @@ export const BotProfileModal: React.FC<BotProfileModalProps> = ({
         </div>
 
         {/* Tab Bar + Quick Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 bg-slate-950/40 px-4 py-2.5 sm:px-6">
-          <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-800 bg-slate-950 p-1">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 bg-slate-950/40 px-4 py-2.5 sm:px-6">
+          <div className="grid w-full grid-cols-2 gap-1.5 rounded-xl sm:w-auto border border-slate-800 bg-slate-950 p-1">
             <button
               id="profileTabBotBtn"
               type="button"
-              onClick={() => setTab('bot')}
-              className={`flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-black transition-colors ${
+              onClick={() => setTab('bot')} aria-pressed={tab==='bot'}
+              className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-black transition-colors ${
                 tab === 'bot' ? 'bg-sky-400 text-slate-950' : 'text-slate-300 hover:text-white'
               }`}
             >
@@ -329,8 +329,8 @@ export const BotProfileModal: React.FC<BotProfileModalProps> = ({
             <button
               id="profileTabSlotsBtn"
               type="button"
-              onClick={() => setTab('slots')}
-              className={`flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-black transition-colors tabular-nums ${
+              onClick={() => setTab('slots')} aria-pressed={tab==='slots'}
+              className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-black transition-colors tabular-nums ${
                 tab === 'slots' ? 'bg-emerald-400 text-slate-950' : 'text-slate-300 hover:text-white'
               }`}
             >
@@ -371,105 +371,28 @@ export const BotProfileModal: React.FC<BotProfileModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="touch-pan-y overflow-y-auto p-4 sm:p-6">
+        <div className="touch-pan-y shrink-0 p-3 sm:p-6">
           {tab === 'bot' ? (
             <>
-              <h3 className="mb-3 text-xs font-black uppercase tracking-wider text-slate-400">
-                Choose Your Profile Bot Character
-              </h3>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {BOT_CHARACTER_ORDER.map((charId) => {
-                  const def = BOT_CHARACTERS[charId];
-                  const isSelected = activeCharacter === charId;
-                  return (
-                    <button
-                      key={charId}
-                      type="button"
-                      data-character={charId}
-                      aria-pressed={isSelected}
-                      onClick={() => onSelectCharacter(charId)}
-                      className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${
-                        isSelected
-                          ? 'border-emerald-300 bg-emerald-500/12 shadow-[0_0_22px_rgba(52,211,153,0.3)]'
-                          : 'border-slate-700/90 bg-slate-800/80 hover:border-sky-400'
-                      }`}
-                    >
-                      <div className="relative h-36 w-full overflow-hidden bg-slate-950">
-                        {def.portraitUrl ? (
-                          <img
-                            src={def.portraitUrl}
-                            alt={`${def.name} character portrait`}
-                            className="h-full w-full object-cover transition-transform duration-300"
-                            style={{
-                              objectPosition: def.portraitPosition,
-                              transform: `scale(${def.portraitScale})`,
-                              transformOrigin: def.portraitOrigin
-                            }}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-amber-950/60">
-                            <SparkBotEmblem className="h-24 w-24 transition-transform duration-300 group-hover:scale-110" />
-                          </div>
-                        )}
-
-                        {isSelected && (
-                          <span className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-slate-950 shadow-lg">
-                            <Check className="h-4 w-4 stroke-[3]" />
-                          </span>
-                        )}
-
-                        <div className="absolute bottom-2 left-2.5 flex items-center gap-1 rounded-lg bg-slate-950/80 px-1.5 py-1">
-                          <span
-                            className="h-3 w-3 rounded-full border border-white/40"
-                            style={{ backgroundColor: def.defaultBodyHex }}
-                          />
-                          <span
-                            className="h-3 w-3 rounded-full border border-white/40"
-                            style={{ backgroundColor: def.defaultHeadHex }}
-                          />
-                          <span
-                            className="h-3 w-3 rounded-full border border-white/40"
-                            style={{ backgroundColor: def.defaultAccentHex }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex flex-1 flex-col justify-between p-3">
-                        <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-base font-black text-white">{def.name}</span>
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: def.accentCss }}
-                            />
-                          </div>
-                          <p className="mt-0.5 text-xs font-bold text-sky-300">{def.title}</p>
-                        </div>
-                        <div
-                          className="mt-2.5 flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/75 px-2.5 py-1.5"
-                          aria-hidden="true"
-                        >
-                          <Music2 className="h-3.5 w-3.5 shrink-0" style={{ color: def.accentCss }} />
-                          <div className="flex h-3.5 items-end gap-1">
-                            {[0.45, 0.85, 0.65, 1, 0.55].map((bar, i) => (
-                              <span
-                                key={i}
-                                className="w-1 rounded-full"
-                                style={{
-                                  height: `${Math.round(
-                                    bar * (9 + Math.max(0, (def.voicePitch - 0.95) * 14))
-                                  )}px`,
-                                  backgroundColor: def.accentCss
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <h3 className="mb-2 text-sm font-black text-sky-100">Your adventure companion</h3>
+               <div data-testid="companion-catalog" className="space-y-2">
+                 <div data-character={activeCharacter} className="w-full overflow-hidden rounded-2xl border-2 border-emerald-300 bg-slate-950 text-left">
+                   <CompanionPortrait character={activeCharacter} className="block h-auto max-h-56 w-full"/>
+                   <div className="flex items-center justify-between gap-2 px-3 py-3">
+                     <div className="min-w-0"><span className="text-xl font-black text-white">{activeDef.name}</span><p className="text-xs font-bold text-sky-300">{activeDef.title}</p></div>
+                     <span role="status" className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 py-2 text-xs font-black text-slate-950"><Check className="h-4 w-4" aria-hidden="true"/> Active</span>
+                   </div>
+                 </div>
+                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {BOT_CHARACTER_ORDER.filter(id=>id!==activeCharacter).map(charId=>{
+                    const def=BOT_CHARACTERS[charId];
+                    return <button key={charId} type="button" data-character={charId} onClick={()=>onSelectCharacter(charId)} aria-label={'Choose '+def.name} className="flex min-h-24 items-center gap-3 overflow-hidden rounded-xl border border-slate-600 bg-slate-800 pr-3 text-left hover:border-sky-300 focus-visible:ring-2 focus-visible:ring-white">
+                      <CompanionPortrait character={charId} className="h-24 w-28 shrink-0"/>
+                      <div className="min-w-0 flex-1"><span className="block font-black text-white">{def.name}</span><span className="block text-xs font-bold text-sky-200">{def.title}</span><span className="mt-1 inline-block text-xs font-black text-emerald-300">Choose bot</span></div>
+                    </button>;
+                  })}
+                 </div>
+               </div>
             </>
           ) : (
             <div className="flex flex-col gap-4">

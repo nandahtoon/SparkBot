@@ -908,6 +908,14 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
   headGroup.add(gogglesGroup);
 
   // 5c. Sprout Flowing Red Scarf + Glowing Eco Leaf Medallion
+  const sproutCrest = new THREE.Group();
+  const crestMat = new THREE.MeshStandardMaterial({color:0x76ce65,roughness:.44,metalness:.04});
+  for(const side of [-1,1]){
+    const leaf=new THREE.Mesh(new THREE.SphereGeometry(.10,12,8),crestMat);
+    leaf.scale.set(1.45,.55,.35);leaf.rotation.z=side*.65;leaf.position.set(side*.10,.57,.07);
+    sproutCrest.add(leaf);
+  }
+  sproutCrest.visible=false;headGroup.add(sproutCrest);
   const sproutExtrasGroup = new THREE.Group();
   const redScarfMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.72, metalness: 0.04 });
   const scarfCollar = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.105, 14, 28), redScarfMat);
@@ -2250,6 +2258,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     visorHelmetGroup.visible = isVisor;
     gogglesGroup.visible = norm === 'sprout' || norm === 'nova';
     sproutExtrasGroup.visible = norm === 'sprout';
+    sproutCrest.visible = norm === 'sprout';
     novaHeadGroup.visible = norm === 'nova';
     novaWingsGroup.visible = norm === 'nova';
     roboBuddyHatGroup.visible = norm === 'robobuddy';
@@ -2271,7 +2280,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
     // Clean non-Z-fighting front Z clearance for eyes, rosy cheeks, and mouth
     const eyeZ = isVisor ? -0.442 : isLearn ? -0.305 : -0.258;
     const eyeXSpan = isVisor ? 0.195 : isLearn ? 0.29 : 0.24;
-    const eyeScale = isLearn ? 1.36 : isVisor ? 0.96 : 1.06;
+    const eyeScale = isLearn ? 1.36 : norm === 'nova' ? 1.08 : isVisor ? 1.04 : 1.06;
     currentEyeXSpan = eyeXSpan;
 
     eyeGroups.forEach((eg, idx) => {
@@ -2642,7 +2651,7 @@ export function createRobotRig(tex: ProceduralTextures, isSoftwareGl: boolean): 
       saccadeY = Math.cos(p.time * 5.9) * 0.008;
     }
 
-    const baseEyeScale = activeCharacter === 'learnbot' ? 1.36 : activeCharacter === 'sparkbot' ? 1.06 : 0.96;
+    const baseEyeScale = activeCharacter === 'learnbot' ? 1.36 : activeCharacter === 'sparkbot' ? 1.06 : activeCharacter === 'nova' ? 1.08 : 1.04;
     eyeGroups.forEach((eg, idx) => {
       eg.visible = !showHappy;
       happyArcs[idx].visible = showHappy;
