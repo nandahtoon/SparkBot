@@ -65,6 +65,15 @@
           "No duplicate game cards"
         ],
         "feedback": "3D Room tab က အပိုလိုပဲ"
+      },
+      "singleArcadeCandidate": {
+        "sha": "c395205d08354b5f812ad61a284423521aaaac1f",
+        "ciRuns": [
+          46106222207,
+          46106215464
+        ],
+        "preview": "https://sparkbot-g3bmw3elq-btk10.vercel.app",
+        "physical": "NOT_RUN"
       }
     },
     "pending": [
@@ -73,7 +82,13 @@
       "Map and next mission",
       "Mission transition animation",
       "Rescue family playtest"
-    ]
+    ],
+    "preparation": {
+      "stage": "SB-08A3",
+      "status": "DESIGN_ONLY_PENDING_REVIEW",
+      "document": "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
+      "implementation": "BLOCKED_BY_A2_FAMILY_ACCEPTANCE"
+    }
   },
   "requiredReads": [
     "AGENTS.md",
@@ -81,6 +96,7 @@
     "docs/REPOSITORY_GOVERNANCE.md",
     "docs/AI_HANDOFF_PROTOCOL.md",
     "docs/SB-08A_ADVENTURE_FIRST_REDESIGN.md",
-    "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md"
+    "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md",
+    "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md"
   ]
 }

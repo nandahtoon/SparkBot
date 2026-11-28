@@ -9,3 +9,6 @@ Checkpoint: 2026-11-27 US Eastern / SB-08R.
 
 ## New chat / AI Studio
 Open docs/PROJECT_STATE.json for the current stage and gates; use docs/AI_START_PROMPT.md as the reusable tool instruction and docs/AI_HANDOFF_PROTOCOL.md for import, patch, verification and handoff. The canonical nandahtoon/SparkBot integration/sb-08r branch is authoritative; read live HEAD before every task. Run node scripts/check-project-context.mjs --preflight in a local topic checkout after fetching origin.
+
+## SB-08A3 preflight
+The spatial architecture is documented in docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md. This is a design-only preparation while A2 acceptance remains open. Do not implement A3 until gate review. Single Arcade catalog supersedes the decorative 3D tab; keep source assets isolated.
