@@ -1,6 +1,6 @@
 {
 	"appId": "com.sparkbot.academy",
-	"appName": "SparkBot: Engineering Academy",
+	"appName": "SparkBot — Play & Learn",
 	"webDir": "dist",
 	"server": {
 		"androidScheme": "https"

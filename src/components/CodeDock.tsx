@@ -1185,7 +1185,7 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           data-code-feedback-tier={lastFeedbackTier || ''}
           data-logic-tier={programTiers.complexityTier}
           data-logic-optimality={programTiers.optimality}
-          className="pointer-events-auto w-full max-w-4xl rounded-2xl border border-slate-600/80 bg-slate-900/94 px-2 py-1.5 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2"
+          className="pointer-events-auto w-full max-w-4xl rounded-3xl border border-slate-600/70 bg-slate-900/95 px-2.5 py-2 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2"
         >
           {/* Boss Mission Header Banner (Chapter 4 Finale) */}
           {bossMeta && (

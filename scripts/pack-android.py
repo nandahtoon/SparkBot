@@ -21,7 +21,7 @@ USED_AISTUDIO_ASSETS = {
     "image_abb9114d.png",
 }
 
-README_TEXT = """SparkBot: Engineering Academy — Native Android App Build Guide
+README_TEXT = """SparkBot — Play & Learn — Native Android App Build Guide
 ===============================================================
 
 This archive is completely self-contained (includes the synced web bundle and

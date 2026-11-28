@@ -1,12 +1,12 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * Capacitor configuration for packaging SparkBot: Engineering Academy
+ * Capacitor configuration for packaging SparkBot — Play & Learn
  * as a full-frame adaptive landscape & portrait Android tablet/phone APK & AAB.
  */
 const config: CapacitorConfig = {
   appId: 'com.sparkbot.academy',
-  appName: 'SparkBot: Engineering Academy',
+  appName: 'SparkBot — Play & Learn',
   webDir: 'dist',
   server: {
     androidScheme: 'https'

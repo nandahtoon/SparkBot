@@ -1,6 +1,6 @@
-# SparkBot: Engineering Academy — Full-Frame Android Tablet & Phone Export Guide
+# SparkBot — Play & Learn — Full-Frame Android Tablet & Phone Export Guide
 
-SparkBot: Engineering Academy ships with **both** a ready-to-build **native Capacitor Android project (`/android`)** and an **offline-first full-frame Tablet PWA**.
+SparkBot — Play & Learn ships with **both** a ready-to-build **native Capacitor Android project (`/android`)** and an **offline-first full-frame Tablet PWA**.
 
 ---
 

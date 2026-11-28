@@ -239,7 +239,7 @@ export const BotProfileModal: React.FC<BotProfileModalProps> = ({
                       </span>
                     ) : (
                       <span id="profileNameHint" className="font-medium text-slate-400">
-                        Personalize your Engineering Academy save profile
+                        Make your SparkBot profile your own
                       </span>
                     )}
                     <span className="tabular shrink-0 font-mono text-slate-400">

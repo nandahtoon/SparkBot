@@ -3188,9 +3188,9 @@ export default function App() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 p-6 backdrop-blur-md"
         >
           <div className="w-full max-w-sm rounded-3xl border border-sky-400/45 bg-slate-900/95 p-6 text-center shadow-2xl">
-            <h2 className="text-lg font-black text-white">3D Workshop Paused</h2>
+            <h2 className="text-lg font-black text-white">Let's get back to playing</h2>
             <p className="mt-1.5 text-xs text-slate-300">
-              Graphics memory was paused by your device. Tap below to restore the 3D arena — all progress is saved.
+              SparkBot needs a quick restart. Tap below to try again.
             </p>
             <button
               type="button"
@@ -3199,7 +3199,7 @@ export default function App() {
               className="mx-auto mt-5 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-sky-400 px-6 text-sm font-black text-slate-950 shadow-lg transition-transform hover:bg-sky-300 active:scale-95"
             >
               <RotateCcw className="h-5 w-5" />
-              <span>Restore 3D View</span>
+              <span>Try again</span>
             </button>
           </div>
         </div>

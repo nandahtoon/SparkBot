@@ -56,23 +56,18 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               <AlertTriangle className="h-7 w-7" />
             </div>
             <h1 className="text-xl font-black tracking-tight text-white">
-              Workshop Glitched!
+              Let's try again
             </h1>
             <p className="mt-2 text-sm text-slate-300">
-              Your stars, profiles, and unlocked parts are safely saved on this device.
+              Something went wrong. Try again or restart SparkBot.
             </p>
-            {this.state.errorMessage && (
-              <p className="mt-3 rounded-xl border border-slate-700/80 bg-slate-950/70 px-3 py-2 font-mono text-xs text-slate-400 break-words">
-                {this.state.errorMessage}
-              </p>
-            )}
             <div className="mt-5 flex items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={this.handleRecover}
                 className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-slate-100 transition-colors hover:bg-slate-700"
               >
-                Try Resume
+                Try again
               </button>
               <button
                 type="button"
@@ -80,7 +75,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 className="flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 transition-transform hover:bg-amber-300 active:scale-95"
               >
                 <RotateCcw className="h-4 w-4" />
-                <span>Reload Workshop</span>
+                <span>Restart</span>
               </button>
             </div>
           </div>

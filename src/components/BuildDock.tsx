@@ -494,7 +494,7 @@ export const BuildDock: React.FC<BuildDockProps> = ({
       {/* Reorganized Compact Bottom 3D Workshop Part Dock */}
       <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-1.5 px-2 sm:px-3">
         {hintBanner}
-        <div className="pointer-events-auto w-full max-w-3xl rounded-2xl border border-slate-600/80 bg-slate-900/92 px-2 py-1.5 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2">
+        <div className="pointer-events-auto w-full max-w-3xl rounded-3xl border border-slate-600/70 bg-slate-900/95 px-2.5 py-2 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2">
           {/* Compact Top Dock Bar: Energy, Swatches, Quick Tools, Collapse, Next */}
           <div className="flex items-center justify-between gap-1.5 sm:gap-2">
             <div className="flex min-w-0 items-center gap-1.5 sm:flex-1">
@@ -630,12 +630,13 @@ export const BuildDock: React.FC<BuildDockProps> = ({
                 onClick={onProceedToCode}
                 disabled={!readyForCode}
                 aria-label="Proceed to 3D Coding"
-                className={`flex h-10 min-w-[52px] shrink-0 items-center justify-center rounded-xl border-2 px-3 shadow-md transition-all active:translate-y-0.5 sm:min-w-[60px] ${
+                className={`flex min-h-11 min-w-[52px] shrink-0 items-center justify-center gap-1.5 rounded-xl border-2 px-3 shadow-md transition-all active:translate-y-0.5 sm:min-w-[60px] ${
                   readyForCode
                     ? 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_4px_0_#047857]'
                     : 'border-slate-700 bg-slate-800 text-slate-500 opacity-50'
                 }`}
               >
+                <span className="hidden text-sm font-black sm:inline">Code</span>
                 <ArrowRight className="h-5 w-5 stroke-[3]" />
               </button>
             </div>

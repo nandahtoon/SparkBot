@@ -136,6 +136,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
         )}
 
+        <h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2>
+        <p className="-mt-2 text-center text-sm text-emerald-200">Great work, SparkBot explorer.</p>
         {/* 3 Big Stars */}
         <div className="flex items-center gap-3">
           {[1, 2, 3].map((s) => (
@@ -298,6 +300,19 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </button>
         )}
 
+          {hasNextLevel && (
+            <button
+              type="button"
+              data-start="true"
+              onClick={onNextLevel}
+              aria-label="Next Level"
+              className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_5px_0_#047857] active:translate-y-0.5"
+            >
+              <Play className="h-6 w-6 fill-slate-950" />
+              <span className="text-base font-black">Next Mission</span>
+            </button>
+          )}
+
         {/* Enter Mission Game Room CTA */}
         <button
           id="victoryWallRunBtn"
@@ -318,12 +333,12 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         </button>
 
         {/* Bottom Action Row */}
-        <div className="flex w-full items-center justify-center gap-3 pt-1">
+        <div className="flex w-full flex-wrap items-center justify-center gap-2 pt-1">
           <button
             type="button"
             onClick={onReplay}
             aria-label="Replay Level"
-            className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-slate-100 hover:border-sky-400 active:scale-95"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-slate-100 hover:border-sky-400 active:scale-95"
           >
             <RotateCcw className="h-7 w-7" />
           </button>
@@ -331,7 +346,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             type="button"
             onClick={onOpenMap}
             aria-label="Level Map"
-            className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-sky-300 hover:border-sky-400 active:scale-95"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-sky-300 hover:border-sky-400 active:scale-95"
           >
             <LayoutGrid className="h-7 w-7" />
           </button>
@@ -341,7 +356,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               type="button"
               onClick={onOpenTrophies}
               aria-label="Open STEM Trophy Shelf"
-              className={`relative flex h-16 w-16 items-center justify-center rounded-2xl border-2 transition-transform active:scale-95 ${
+              className={`relative flex h-12 w-12 items-center justify-center rounded-2xl border-2 transition-transform active:scale-95 ${
                 upgradedPillars.length > 0
                   ? 'border-amber-300 bg-amber-500/25 text-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.45)]'
                   : 'border-slate-600 bg-slate-800 text-amber-300 hover:border-amber-300'
@@ -363,7 +378,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               type="button"
               onClick={onOpenShop}
               aria-label="Open Bolt Upgrade Shop"
-              className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-amber-400/70 bg-amber-500/15 text-amber-300 hover:border-amber-300 active:scale-95"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-amber-400/70 bg-amber-500/15 text-amber-300 hover:border-amber-300 active:scale-95"
             >
               <ShoppingBag className="h-7 w-7" />
             </button>
@@ -380,17 +395,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               <span>Edit Lab</span>
             </button>
           )}
-          {hasNextLevel && (
-            <button
-              type="button"
-              data-start="true"
-              onClick={onNextLevel}
-              aria-label="Next Level"
-              className="flex h-16 flex-1 items-center justify-center rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_5px_0_#047857] active:translate-y-0.5"
-            >
-              <Play className="h-8 w-8 fill-slate-950" />
-            </button>
-          )}
+
         </div>
       </div>
     </div>

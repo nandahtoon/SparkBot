@@ -301,7 +301,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           <span className="text-amber-300">Spark</span>Bot
         </h1>
         <p className="mt-0.5 text-[11px] font-semibold tracking-[0.14em] text-sky-200/90 drop-shadow-[0_2px_10px_rgba(2,6,23,0.9)] sm:text-xs">
-          Engineering Academy
+          Play &amp; Learn
         </p>
       </div>
 

@@ -22,7 +22,7 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'SparkBot: Engineering Academy',
+          name: 'SparkBot — Play & Learn',
           short_name: 'SparkBot',
           description:
             'Build, code, and solve puzzles in this interactive 3D robotics adventure for young engineers.',
