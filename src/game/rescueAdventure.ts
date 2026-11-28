@@ -63,3 +63,13 @@ export function rescueGoalCue(map:RescueMap,state:RescueState):RescueGoalCue{
 }
 // Pause/step resumes from the visible state; a completed trace can be replayed.
 export function rescueRunStartCursor(cursor:number,last:number){return cursor>=last?0:Math.max(0,cursor);}
+
+// A failed command is actionable only after the player has observed its result.
+export function rescueFailedCommandIndex(trace:readonly RescueState[],cursor:number):number|null{
+ if(!Number.isInteger(cursor)||cursor<1||cursor>=trace.length)return null;
+ return ['blocked','wrong-place','already'].includes(trace[cursor].feedback)?cursor-1:null;
+}
+export function replaceRescueCommand(program:readonly RescueAction[],index:number,action:RescueAction):RescueAction[]{
+ if(!Number.isInteger(index)||index<0||index>=program.length)return [...program];
+ return program.map((value,i)=>i===index?action:value);
+}
