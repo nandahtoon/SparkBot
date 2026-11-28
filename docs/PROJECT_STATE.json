@@ -13,7 +13,9 @@
       "archive/v0.2-family",
       "archive/v0.3-rc1-accepted",
       "archive/v0.3-family"
-    ]
+    ],
+    "mainRole": "OWNER_TESTING_AI_STUDIO",
+    "acceptedStableRef": "archive/v0.3-family"
   },
   "stable": {
     "version": "V0.3",
@@ -42,9 +44,9 @@
   },
   "work": {
     "stage": "SB-M01",
-    "status": "PROPOSED_FOUNDATION_REVIEW_REQUIRED",
+    "status": "OWNER_TEST_MERGE_AUTHORIZED",
     "next": "SB-M02",
-    "nextGate": "M01 exact-head CI and independent review before integration; A2 family acceptance and explicit experimental integration approval remain required; RC1 and production/native/commercial HOLD.",
+    "nextGate": "Owner authorized main testing merge and deployment before physical acceptance; production promotion and experimental integration remain HOLD. Independent review remains pending; confirm exact CI before merge and physical family acceptance before release.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -133,7 +135,13 @@
       "miniGameExpansion": "HOLD",
       "experimentalIntegration": "HOLD",
       "physical": "NOT_RUN",
-      "ci": "VERIFY_EXACT_PR_HEAD"
+      "ci": "VERIFY_EXACT_PR_HEAD",
+      "testingPolicy": {
+        "main": "AI_STUDIO_TESTING",
+        "stable": "archive/v0.3-family",
+        "productionAutoDeploy": "DISABLED_IN_VERCEL_JSON",
+        "physicalAcceptance": "PENDING"
+      }
     }
   },
   "requiredReads": [
