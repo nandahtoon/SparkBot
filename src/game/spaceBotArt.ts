@@ -4,7 +4,7 @@ import {spaceBotTransformPose,type SpaceBotForm} from './spaceBotForms';
 // Render the same recognizable robot head, body, arms and feet in each form. No aircraft silhouette.
 export function drawSpaceBot(ctx:CanvasRenderingContext2D,character:BotCharacterId,from:SpaceBotForm,to:SpaceBotForm,progress:number,guardReady:boolean){
  const p=spaceBotTransformPose(from,to,progress),def=BOT_CHARACTERS[character],accent=def.accentCss;
- const part=(x:number,y:number,w:number,h:number,r:number,color:string,stroke='#263b55')=>{ctx.fillStyle=color;ctx.strokeStyle=stroke;ctx.lineWidth=1.1;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();ctx.stroke();};
+ const part=(x:number,y:number,w:number,h:number,r:number,color:string,stroke='#263b55')=>{const finish=ctx.createLinearGradient(x,y,x+w,y+h);finish.addColorStop(0,color);finish.addColorStop(.72,color);finish.addColorStop(1,'#263b55');ctx.fillStyle=finish;ctx.strokeStyle=stroke;ctx.lineWidth=1.1;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();ctx.stroke();};
  if(p.guard>.01){ctx.save();ctx.globalAlpha*=p.guard*(guardReady?.9:.3);ctx.strokeStyle='#6ee7b7';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,28,0,Math.PI*2);ctx.stroke();ctx.restore();}
  for(const side of [-1,1]){
   const x=side*p.footX;part(x-5,11,10,11,4,'#253c56');part(x-4,21,8,5,2,accent);
@@ -13,6 +13,8 @@ export function drawSpaceBot(ctx:CanvasRenderingContext2D,character:BotCharacter
   part(-5,-8,10,19,4,def.defaultBodyHex);part(-4,-11,8,7,3,accent);ctx.restore();
  }
  part(-12,-4,24,23,8,def.defaultBodyHex);part(-5,3,10,8,3,accent);
+ ctx.fillStyle='#e4faff';ctx.beginPath();ctx.arc(0,7,2.4,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='rgba(226,232,240,.6)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-9,1);ctx.lineTo(-9,11);ctx.moveTo(9,1);ctx.lineTo(9,11);ctx.stroke();
  part(-16,-24,32,24,9,def.defaultHeadHex);part(-12,-20,24,15,6,'#0b223a');
  ctx.fillStyle='#67e8f9';for(const x of [-5,5]){ctx.beginPath();ctx.ellipse(x,-13,3.2,4,0,0,Math.PI*2);ctx.fill();}
  ctx.strokeStyle='#fda4af';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,-10,3,.15,Math.PI-.15);ctx.stroke();

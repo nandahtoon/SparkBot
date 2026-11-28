@@ -77,6 +77,8 @@ import { ArcadeSceneArt } from './KidVisualArt';
 import { WallBreakerCanvasGame } from './WallBreakerCanvasGame';
 import { SPACE_BOT_FORM_INFO, SPACE_TRANSFORM_DURATION, nextSpaceBotForm, spaceBotShots, spaceBotImpact, type SpaceBotForm } from '../game/spaceBotForms';
 import { drawSpaceBot } from '../game/spaceBotArt';
+import {drawExpeditionBackdrop} from '../game/spaceBackdrop';
+import {advanceExpeditionObstacle,advanceSpaceTransition,SPACE_STAGE_TRANSITION_SECONDS} from '../game/spaceExpeditionMotion';
 import {SPACE_EXPEDITION_STAGES,SPACE_RESCUE_GOAL,spaceStageCount,spaceRoundOutcome,spawnExpeditionWave,moveSpaceBotToward,rescueSignalPosition,type SpaceRoundMode} from '../game/spaceExpedition';
 
 interface GameRoomModalProps {
@@ -313,7 +315,8 @@ const SpaceShooterRound: React.FC<{
     burstReady: true,
     form: 'scout' as SpaceBotForm,
     guardReady: true,
-    rescued: 0
+    rescued: 0,
+    transitioning: false
   });
   const finishRef = useRef(onFinish);
   finishRef.current = onFinish;
@@ -328,6 +331,8 @@ const SpaceShooterRound: React.FC<{
     let arenaW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
     let arenaH = Math.max(180, Math.floor(container.clientHeight || window.innerHeight - 48));
     let dpr = Math.min(2, window.devicePixelRatio || 1);
+    const backdrop=document.createElement('canvas');let backdropStage=0;
+    const paintBackdrop=(stage:number)=>{if(backdropStage!==stage||backdrop.width!==arenaW||backdrop.height!==arenaH){backdrop.width=arenaW;backdrop.height=arenaH;const bg=backdrop.getContext('2d');if(bg){drawExpeditionBackdrop(bg,arenaW,arenaH,stage);backdropStage=stage;}}if(backdropStage===stage)ctx.drawImage(backdrop,0,0,arenaW,arenaH);};
 
     const configureCanvas = (w: number, h: number) => {
       dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -370,7 +375,7 @@ const SpaceShooterRound: React.FC<{
     let burstCooldown = 0;
     let invulnTimer = 0;
     let hudTimer = 0;
-    let ended = false;
+    let ended = false,transitionRemaining=0,stageElapsed=0;
     let form: SpaceBotForm = 'scout', previousForm: SpaceBotForm = 'scout', transformTime = SPACE_TRANSFORM_DURATION, guardCooldown = 0;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const transform = () => {
@@ -422,7 +427,7 @@ const SpaceShooterRound: React.FC<{
     };
 
     const triggerTurboBurst = () => {
-      if (burstCooldown > 0 || ended || (expedition&&wave===8)) return;
+      if (burstCooldown > 0 || ended || transitionRemaining>0 || (expedition&&wave===8)) return;
       burstCooldown = 1.25;
       bullets.push(
         { x: shipX - 10, y: shipY - 18, vx: -105, vy: -520 },
@@ -477,10 +482,12 @@ const SpaceShooterRound: React.FC<{
     };
 
     const loop = (now: number) => {
-      const dt = Math.max(0,Math.min(0.04, (now - last) / 1000));
+      const frameDt = Math.max(0,Math.min(0.04, (now - last) / 1000));
       last = now;
       if (ended) return;
       if (document.hidden) { rafId=requestAnimationFrame(loop); return; }
+      const transition=advanceSpaceTransition(transitionRemaining,frameDt,reducedMotion.matches);
+      transitionRemaining=transition.remaining;const dt=transition.gameplayDt;stageElapsed+=dt;
       transformTime=Math.min(SPACE_TRANSFORM_DURATION,transformTime+dt);
       if(reducedMotion.matches)transformTime=SPACE_TRANSFORM_DURATION;
       guardCooldown=Math.max(0,guardCooldown-dt);
@@ -503,7 +510,7 @@ const SpaceShooterRound: React.FC<{
       invulnTimer = Math.max(0, invulnTimer - dt);
 
       // Auto-fire friendly twin lasers
-      if (fireCooldown <= 0 && !(expedition&&wave===8)) {
+      if (dt>0&&fireCooldown <= 0 && !(expedition&&wave===8)) {
         fireCooldown = SPACE_BOT_FORM_INFO[form].interval;
         const bulletSpd = Math.max(490, arenaH * 0.95);
         bullets.push(...spaceBotShots(form,shipX,shipY,bulletSpd));
@@ -522,12 +529,10 @@ const SpaceShooterRound: React.FC<{
       // Move enemies & collide
       for (let i = enemies.length - 1; i >= 0; i--) {
         const en = enemies[i];
-        en.x += en.vx * dt;
-        en.y += en.vy * verticalScale * dt;
-        if (en.x < en.radius + 10 || en.x > arenaW - en.radius - 10) {
-          en.vx = -en.vx;
-          en.x = Math.max(en.radius + 10, Math.min(arenaW - en.radius - 10, en.x));
-        }
+        if(expedition){const next=advanceExpeditionObstacle(en,wave,stageElapsed,dt,arenaW,verticalScale);en.x=next.x;en.y=next.y;en.vx=next.vx;}
+        else {en.x += en.vx * dt;en.y += en.vy * verticalScale * dt;
+          if(en.x<en.radius+10||en.x>arenaW-en.radius-10){en.vx=-en.vx;en.x=Math.max(en.radius+10,Math.min(arenaW-en.radius-10,en.x));}}
+        if(dt===0)continue;
 
         // Bullet hits
         let destroyed = false;
@@ -584,14 +589,15 @@ const SpaceShooterRound: React.FC<{
         }
         if(expedition){
           // Restore one shield between stages, without exceeding the starting three.
-          shields=Math.min(3,shields+1);
+          shields=Math.min(3,shields+1);stageElapsed=0;transitionRemaining=reducedMotion.matches?0:SPACE_STAGE_TRANSITION_SECONDS;
+          bullets.length=0;sparks.length=0;setHud(old=>({...old,wave,shields,transitioning:transitionRemaining>0}));
           if(wave===8){bullets.length=0;stars.length=0;for(let i=0;i<SPACE_RESCUE_GOAL;i++)signals.push({x:rescueSignalPosition(arenaW,i),y:-25-i*42,index:i});}
         }
         enemies = spawn(wave, nextEnemyId);
         nextEnemyId += enemies.length + 2;
         SFX.laserSolved();
       }
-      if(expedition&&wave===8){
+      if(expedition&&wave===8&&transitionRemaining===0){
         for(let i=signals.length-1;i>=0;i--){const signal=signals[i];signal.y+=90*verticalScale*dt;
           if(Math.hypot(signal.x-shipX,signal.y-shipY)<=SPACE_BOT_FORM_INFO[form].collectRadius){rescued++;score+=25;spawnBoom(signal.x,signal.y,'#6ee7b7',8);signals.splice(i,1);SFX.crystal();}
           else if(signal.y>arenaH+20)signal.y=-25;
@@ -631,8 +637,8 @@ const SpaceShooterRound: React.FC<{
       }
 
       // Render space canvas
-      ctx.fillStyle = expedition?['#07152b','#211a28','#161c3f','#10302c','#251f2e','#112941','#1c153c','#0a302d'][wave-1]:'#050a1a';
-      ctx.fillRect(0, 0, arenaW, arenaH);
+      ctx.fillStyle='#050a1a';ctx.fillRect(0,0,arenaW,arenaH);
+      if(expedition)paintBackdrop(wave);
 
       for (const s of bgStars) {
         ctx.fillStyle = 'rgba(226, 232, 240, 0.55)';
@@ -708,7 +714,7 @@ const SpaceShooterRound: React.FC<{
       }
       ctx.globalAlpha = 1;
 
-      hudTimer += dt;
+      hudTimer += frameDt;
       if (hudTimer >= 0.12) {
         hudTimer = 0;
         setHud({
@@ -717,10 +723,11 @@ const SpaceShooterRound: React.FC<{
           shields,
           stars: starsCollected,
           timeLeft: Math.ceil(timeLeft),
-          burstReady: burstCooldown <= 0.05&&!(expedition&&wave===8),
+          burstReady: burstCooldown <= 0.05&&transitionRemaining===0&&!(expedition&&wave===8),
           form,
           guardReady: guardCooldown <= 0,
-          rescued
+          rescued,
+          transitioning:transitionRemaining>0
         });
       }
       rafId = requestAnimationFrame(loop);
@@ -779,6 +786,7 @@ const SpaceShooterRound: React.FC<{
       </div>
 
       {expedition&&<div className="pointer-events-none absolute inset-x-3 top-12 z-10 text-center"><span className="rounded-lg bg-slate-950/85 px-2 py-1 text-xs font-black text-white">{SPACE_EXPEDITION_STAGES[hud.wave-1].title} · {hud.wave===8?hud.rescued+'/'+SPACE_RESCUE_GOAL:SPACE_EXPEDITION_STAGES[hud.wave-1].hint}</span></div>}
+      {expedition&&hud.transitioning&&<div className="pointer-events-none absolute inset-x-4 top-1/3 z-20 flex justify-center" role="status"><div className="rounded-2xl border border-emerald-300 bg-slate-950/95 px-4 py-3 text-center"><span className="block text-xs font-bold text-emerald-300">Stage {hud.wave} / {stageCount}</span><span className="block text-lg font-black text-white">{SPACE_EXPEDITION_STAGES[hud.wave-1].title}</span></div></div>}
       <canvas
         ref={canvasRef}
         data-testid="space-shooter-canvas"
