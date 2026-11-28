@@ -597,7 +597,7 @@ const SpaceShooterRound: React.FC<{
         nextEnemyId += enemies.length + 2;
         SFX.laserSolved();
       }
-      if(expedition&&wave===8&&transitionRemaining===0){
+      if(expedition&&wave===8&&transitionRemaining===0&&dt>0){
         for(let i=signals.length-1;i>=0;i--){const signal=signals[i];signal.y+=90*verticalScale*dt;
           if(Math.hypot(signal.x-shipX,signal.y-shipY)<=SPACE_BOT_FORM_INFO[form].collectRadius){rescued++;score+=25;spawnBoom(signal.x,signal.y,'#6ee7b7',8);signals.splice(i,1);SFX.crystal();}
           else if(signal.y>arenaH+20)signal.y=-25;
@@ -606,7 +606,7 @@ const SpaceShooterRound: React.FC<{
       }
 
       // Collectible stars
-      for (let i = stars.length - 1; i >= 0; i--) {
+      for (let i = stars.length - 1; dt>0&&transitionRemaining===0&&i >= 0; i--) {
         const st = stars[i];
         st.y += st.vy * dt;
         if (Math.hypot(st.x - shipX, st.y - shipY) <= SPACE_BOT_FORM_INFO[form].collectRadius) {
