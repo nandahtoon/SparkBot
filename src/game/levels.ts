@@ -570,6 +570,112 @@ export const BONUS_LEVELS: LevelDef[] = [
       { r: 1, c: 2, type: 'wall', rot: 0 },
       { r: 3, c: 2, type: 'wall', rot: 0 }
     ])
+  },
+  {
+    id: 17, name: "Lightweight Delivery", ageLabel: 'Ch. 5 · Ages 8–12',
+    brief: "Carry the crystals to the station using only the parts you need. Find a short repeating program.",
+    isBonus: true, loopUnlocked: true, ifUnlocked: true, elseUnlocked: true,
+    functionUnlocked: true, waitUnlocked: false,
+    budget: 55, parBudget: 45, parBlocks: 8,
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 3, type: 'mirror', rot: 1 },
+      { r: 0, c: 3, type: 'core', rot: 0 },
+      { r: 4, c: 3, type: 'wall', rot: 0 }
+    ])
+  },
+  {
+    id: 18, name: "Marsh Supply Run", ageLabel: 'Ch. 5 · Ages 8–12',
+    brief: "Deliver supplies across mud and gaps. Choose the right parts and plan your jumps.",
+    isBonus: true, loopUnlocked: true, ifUnlocked: true, elseUnlocked: true,
+    functionUnlocked: true, waitUnlocked: false,
+    budget: 100, parBudget: 95, parBlocks: 9,
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'mud', crystal: true },
+      { type: 'gap', crystal: false },
+      { type: 'normal', crystal: false },
+      { type: 'mud', crystal: true },
+      { type: 'gap', crystal: false },
+      { type: 'normal', crystal: false },
+      { type: 'mud', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 2, type: 'splitter', rot: 1 },
+      { r: 0, c: 2, type: 'core', rot: 0 },
+      { r: 2, c: 4, type: 'mirror', rot: 0 },
+      { r: 4, c: 4, type: 'core', rot: 0 },
+      { r: 4, c: 2, type: 'wall', rot: 0 }
+    ])
+  },
+  {
+    id: 19, name: "Sunrise Express", ageLabel: 'Ch. 5 · Ages 8–12',
+    brief: "Use the ramp pattern to make an energy-smart delivery. Try a reusable routine.",
+    isBonus: true, loopUnlocked: true, ifUnlocked: true, elseUnlocked: true,
+    functionUnlocked: true, waitUnlocked: false,
+    budget: 90, parBudget: 75, parBlocks: 9,
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'ramp', crystal: false },
+      { type: 'ramp', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'ramp', crystal: false },
+      { type: 'ramp', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'ramp', crystal: false },
+      { type: 'ramp', crystal: true },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 1, type: 'splitter', rot: 0 },
+      { r: 4, c: 1, type: 'mirror', rot: 0 },
+      { r: 4, c: 3, type: 'core', rot: 0 },
+      { r: 2, c: 3, type: 'mirror', rot: 1 },
+      { r: 0, c: 3, type: 'core', rot: 0 },
+      { r: 0, c: 1, type: 'wall', rot: 0 },
+      { r: 2, c: 4, type: 'wall', rot: 0 }
+    ])
+  },
+  {
+    id: 20, name: "Power Station Rescue", ageLabel: 'Ch. 5 · Ages 8–12',
+    brief: "Deliver energy to a station while its gates pulse. Plan safe steps and power both light cores.",
+    isBonus: true, loopUnlocked: true, ifUnlocked: true, elseUnlocked: true,
+    functionUnlocked: true, waitUnlocked: true,
+    budget: 85, parBudget: 45, parBlocks: 12,
+    hazards: [{"id":"hz_20_gate_a","kind":"laser_gate","tileIndex":2,"period":2,"activeOffset":0},{"id":"hz_20_gate_b","kind":"laser_gate","tileIndex":5,"period":2,"activeOffset":1}],
+    track: [
+      { type: 'start', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'normal', crystal: false },
+      { type: 'normal', crystal: true },
+      { type: 'gate', crystal: false }
+    ],
+    circuit: makeCircuit([
+      { r: 2, c: 1, type: 'splitter', rot: 1 },
+      { r: 0, c: 1, type: 'mirror', rot: 1 },
+      { r: 0, c: 4, type: 'core', rot: 0 },
+      { r: 2, c: 3, type: 'mirror', rot: 0 },
+      { r: 4, c: 3, type: 'mirror', rot: 1 },
+      { r: 4, c: 4, type: 'core', rot: 0 },
+      { r: 1, c: 2, type: 'wall', rot: 0 },
+      { r: 3, c: 2, type: 'wall', rot: 0 }
+    ])
   }
 ];
 

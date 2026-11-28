@@ -762,8 +762,8 @@ test('IF [GAP], IF [MUD], and IF [RAMP] buttons exist in code-dock and react to 
 });
 
 test('all 4 Bonus Sector levels (9-12) start unsolved, solve gently, and award Optional Bonus Stars within Par', () => {
-  assert.equal(E.BONUS_LEVELS.length, 4);
-  assert.deepEqual(Array.from(E.BONUS_LEVELS, l => l.id), [9, 10, 11, 12]);
+  assert.deepEqual(Array.from(E.BONUS_LEVELS, l => l.id), [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+  const starportLevels = E.BONUS_LEVELS.filter(l => Number(l.id) >= 9 && Number(l.id) <= 12);
   for (const id of [9, 10, 11, 12]) {
     assert.equal(E.getLevelById(id)?.id, id);
     assert.equal(E.getLevelById(id)?.isBonus, true);
@@ -800,8 +800,8 @@ test('all 4 Bonus Sector levels (9-12) start unsolved, solve gently, and award O
     }
   ];
 
-  for (let i = 0; i < E.BONUS_LEVELS.length; i++) {
-    const lvl = E.BONUS_LEVELS[i];
+  for (let i = 0; i < starportLevels.length; i++) {
+    const lvl = starportLevels[i];
     const sol = bonusSolutions[i];
     assert.equal(lvl.ifUnlocked, true);
     assert.equal(lvl.loopUnlocked, true);
@@ -931,14 +931,19 @@ test('TitleOverlay and TopHud include temporary Muted / Sound On visual flash in
   assert.match(muteIndSrc, /anim-mute-flash/);
 });
 
-test('TitleOverlay renders Daily Mission section with today challenge preview, reward ladder, and kid HUD animations', () => {
+test('TitleOverlay renders unified Mission Launch Console with daily mode, reward ladder, and kid HUD animations', () => {
   const titleSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/TitleOverlay.tsx'), 'utf8');
   const topHudSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/TopHud.tsx'), 'utf8');
   const cssSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/index.css'), 'utf8');
 
   assert.match(titleSrc, /id="dailyMissionSection"/);
-  assert.match(titleSrc, /aria-label="Daily Mission"/);
-  assert.match(titleSrc, /id="dailyMissionPlayBtn"/);
+  assert.match(titleSrc, /aria-label="Mission Launch Console"/);
+  assert.match(titleSrc, /id="modeDailyTab"/);
+  assert.match(titleSrc, /id="modeStoryTab"/);
+  assert.match(titleSrc, /aria-label="Choose Play Mode"/);
+  assert.match(titleSrc, /id=\{isDailyMode \? 'dailyMissionPlayBtn' : 'storyMissionPlayBtn'\}/);
+  assert.match(titleSrc, /Play Daily Mission/);
+  assert.match(titleSrc, /onStartDaily\(\)/);
   assert.match(titleSrc, /getDailyDateKey/);
   assert.match(titleSrc, /generateDailyChallenge/);
   assert.match(titleSrc, /aria-label="Daily Return Reward Ladder"/);
@@ -954,11 +959,9 @@ test('TitleOverlay renders Daily Mission section with today challenge preview, r
   ]) {
     assert.match(cssSrc, new RegExp(`\\.${animClass}\\b`), `Missing CSS animation class .${animClass}`);
   }
-  assert.match(titleSrc, /anim-calendar-pulse/);
-  assert.match(titleSrc, /anim-flame-flicker/);
   assert.match(titleSrc, /anim-reward-hop/);
   assert.match(titleSrc, /anim-dot-pulse/);
-  assert.match(topHudSrc, /anim-flame-flicker/);
+  assert.match(topHudSrc, /aria-label=\{isDaily \? 'Daily Challenge'/);
   assert.match(topHudSrc, /anim-stage-nudge/);
   assert.match(topHudSrc, /anim-reward-hop/);
 

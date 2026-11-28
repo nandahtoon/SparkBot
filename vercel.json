@@ -1,6 +1,6 @@
 {
   "framework": "vite",
-  "buildCommand": "bun run build",
+  "buildCommand": "SKIP_ANDROID_ZIP_COPY=1 bun run build",
   "installCommand": "bun install --frozen-lockfile",
   "outputDirectory": "dist",
   "headers": [

@@ -184,7 +184,7 @@ export const ParentDashboardModal: React.FC<ParentDashboardModalProps> = ({
                 Grown-Ups · Learning Progress
               </h2>
               <p className="truncate text-xs font-medium text-slate-400">
-                {report.profileName} · Local device summary (Ages 6–12 STEM Academy)
+                {report.profileName} · Local learning summary
               </p>
             </div>
           </div>

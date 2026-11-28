@@ -39,6 +39,7 @@ import {
   type StemFactCardDef
 } from '../game/educationStrategy';
 import { SPEECH, useReadAloud } from '../game/readAloud';
+import { getMissionLearningGoal, type MissionLearningGoal } from '../game/missionCurriculum';
 
 export interface VictorySpeedRunSummary {
   evaluation: SpeedRunEvaluation;
@@ -47,6 +48,7 @@ export interface VictorySpeedRunSummary {
 }
 
 interface VictoryModalProps {
+  learningGoal?: MissionLearningGoal | null;
   visible: boolean;
   stars: number;
   bonusEarned: boolean;
@@ -77,6 +79,7 @@ interface VictoryModalProps {
 }
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
+  learningGoal = null,
   visible,
   stars,
   bonusEarned,
@@ -136,6 +139,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
         )}
 
+        <h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2>
+        <p className="-mt-2 text-center text-sm text-emerald-200">Great work, SparkBot explorer.</p>
         {/* 3 Big Stars */}
         <div className="flex items-center gap-3">
           {[1, 2, 3].map((s) => (
@@ -298,6 +303,26 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </button>
         )}
 
+          {hasNextLevel && (
+            <button
+              type="button"
+              data-start="true"
+              onClick={onNextLevel}
+              aria-label="Next Level"
+              className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_5px_0_#047857] active:translate-y-0.5"
+            >
+              <Play className="h-6 w-6 fill-slate-950" />
+              <span className="text-base font-black">Next Mission</span>
+            </button>
+          )}
+
+        {learningGoal && (
+          <details className="w-full rounded-2xl border border-sky-700/60 bg-sky-950/30 p-3 text-left text-sm text-sky-100">
+            <summary className="cursor-pointer font-bold focus-visible:outline-2 focus-visible:outline-sky-300">Think about it · {learningGoal.skill}</summary>
+            <p className="mt-2 leading-relaxed">{learningGoal.reflect}</p>
+          </details>
+        )}
+
         {/* Enter Mission Game Room CTA */}
         <button
           id="victoryWallRunBtn"
@@ -318,12 +343,12 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         </button>
 
         {/* Bottom Action Row */}
-        <div className="flex w-full items-center justify-center gap-3 pt-1">
+        <div className="flex w-full flex-wrap items-center justify-center gap-2 pt-1">
           <button
             type="button"
             onClick={onReplay}
             aria-label="Replay Level"
-            className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-slate-100 hover:border-sky-400 active:scale-95"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-slate-100 hover:border-sky-400 active:scale-95"
           >
             <RotateCcw className="h-7 w-7" />
           </button>
@@ -331,7 +356,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             type="button"
             onClick={onOpenMap}
             aria-label="Level Map"
-            className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-sky-300 hover:border-sky-400 active:scale-95"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-600 bg-slate-800 text-sky-300 hover:border-sky-400 active:scale-95"
           >
             <LayoutGrid className="h-7 w-7" />
           </button>
@@ -341,7 +366,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               type="button"
               onClick={onOpenTrophies}
               aria-label="Open STEM Trophy Shelf"
-              className={`relative flex h-16 w-16 items-center justify-center rounded-2xl border-2 transition-transform active:scale-95 ${
+              className={`relative flex h-12 w-12 items-center justify-center rounded-2xl border-2 transition-transform active:scale-95 ${
                 upgradedPillars.length > 0
                   ? 'border-amber-300 bg-amber-500/25 text-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.45)]'
                   : 'border-slate-600 bg-slate-800 text-amber-300 hover:border-amber-300'
@@ -363,7 +388,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               type="button"
               onClick={onOpenShop}
               aria-label="Open Bolt Upgrade Shop"
-              className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-amber-400/70 bg-amber-500/15 text-amber-300 hover:border-amber-300 active:scale-95"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-amber-400/70 bg-amber-500/15 text-amber-300 hover:border-amber-300 active:scale-95"
             >
               <ShoppingBag className="h-7 w-7" />
             </button>
@@ -380,17 +405,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               <span>Edit Lab</span>
             </button>
           )}
-          {hasNextLevel && (
-            <button
-              type="button"
-              data-start="true"
-              onClick={onNextLevel}
-              aria-label="Next Level"
-              className="flex h-16 flex-1 items-center justify-center rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 text-slate-950 shadow-[0_5px_0_#047857] active:translate-y-0.5"
-            >
-              <Play className="h-8 w-8 fill-slate-950" />
-            </button>
-          )}
+
         </div>
       </div>
     </div>
@@ -448,14 +463,27 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
       className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/82 p-3 sm:p-4"
     >
       <div className="anim-pop touch-pan-y flex max-h-[92dvh] w-full max-w-2xl flex-col gap-3.5 overflow-y-auto rounded-3xl border-2 border-slate-600 bg-slate-900 p-4 shadow-2xl sm:gap-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 text-sky-300">
-            <LayoutGrid className="h-7 w-7 shrink-0" />
+        <div className="flex flex-col gap-2" data-testid="map-compact-header">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 text-base font-black text-white"><LayoutGrid className="h-5 w-5 shrink-0 text-sky-300" aria-hidden="true" /> Missions</h2>
+          <button
+            type="button"
+            onClick={() => {
+              SPEECH.stop();
+              onClose();
+            }}
+            aria-label="Close Map"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 text-sky-300">
             <button
               type="button"
               onClick={onStartDaily}
               aria-label="Daily Challenge"
-              className="flex h-11 items-center gap-1.5 rounded-2xl border-2 border-orange-400 bg-orange-500/20 px-3 text-orange-300"
+              className="flex h-11 items-center gap-1.5 rounded-xl border border-orange-400 bg-orange-500/20 px-2.5 text-orange-300"
             >
               <Flame className="h-5 w-5 fill-orange-400" />
               <span className="tabular font-black">{save.daily.streak || 0}</span>
@@ -463,7 +491,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
             <div
               data-testid="map-streak-shields"
               aria-label={`Streak Shields ${shields} of ${STREAK_SHIELD_MAX}`}
-              className="flex h-11 items-center gap-1.5 rounded-2xl border border-cyan-400/50 bg-cyan-500/15 px-3 text-xs font-black text-cyan-200 tabular-nums"
+              className="flex h-11 items-center gap-1.5 rounded-2xl border border-cyan-400/50 bg-cyan-500/15 px-2.5 text-xs font-black text-cyan-200 tabular-nums"
             >
               <Shield className="h-4 w-4 text-cyan-300" aria-hidden="true" />
               <span>{shields}/{STREAK_SHIELD_MAX}</span>
@@ -477,7 +505,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                   onClose();
                   onOpenSandbox();
                 }}
-                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-2xl border-2 border-amber-400/75 bg-amber-500/20 px-3 text-xs font-black text-amber-200 hover:bg-amber-500/30 active:scale-95"
+                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-amber-400/75 bg-amber-500/20 px-2.5 text-xs font-black text-amber-200 hover:bg-amber-500/30 active:scale-95"
               >
                 <Hammer className="h-4 w-4" aria-hidden="true" />
                 <span>Sandbox</span>
@@ -492,24 +520,14 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                   onClose();
                   onOpenClassCode();
                 }}
-                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-2xl border-2 border-cyan-400/75 bg-cyan-500/20 px-3 text-xs font-black text-cyan-200 hover:bg-cyan-500/30 active:scale-95"
+                className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-cyan-400/75 bg-cyan-500/20 px-2.5 text-xs font-black text-cyan-200 hover:bg-cyan-500/30 active:scale-95"
               >
                 <KeyRound className="h-4 w-4" aria-hidden="true" />
                 <span>Class Code</span>
               </button>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              SPEECH.stop();
-              onClose();
-            }}
-            aria-label="Close Map"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border-2 border-slate-700 bg-slate-800 text-slate-200 hover:border-sky-400"
-          >
-            <X className="h-6 w-6" />
-          </button>
+
         </div>
 
         {/* Story Campaign vs Bug Buster Debug Challenges Switcher */}
@@ -623,10 +641,9 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                 aria-label={chapter.title}
                 className="flex flex-col gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/75 p-3"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-black text-white">{chapter.title}</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-sky-300">{chapter.ageBand}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 text-sm font-black leading-snug text-white">{chapter.title}</h3>
+                  <div className="flex shrink-0 items-center">
                     {speech.supported && (
                       <button
                         type="button"
@@ -642,7 +659,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                             ? `Stop reading ${chapter.title}`
                             : `Listen to ${chapter.title}`
                         }
-                        className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
+                        className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
                           isSpeakingChapter
                             ? 'border-rose-400 bg-rose-500/20 text-rose-100'
                             : 'border-slate-700 bg-slate-900 text-sky-200 hover:border-sky-400'
@@ -689,7 +706,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                               ? `Bonus Level ${lvl.id}`
                               : `Level ${lvl.id}`
                         }
-                        className={`relative flex h-20 flex-col items-center justify-center gap-1 rounded-2xl border-2 px-1 transition-transform active:scale-95 ${
+                        className={`relative flex min-h-24 flex-col items-center justify-center gap-1 rounded-2xl border-2 px-1 py-2 transition-transform active:scale-95 ${
                           active
                             ? 'border-amber-300 bg-amber-400/20'
                             : isBoss
@@ -723,6 +740,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
                         <span className="max-w-full truncate text-[10px] font-bold text-slate-300">
                           {lvl.name}
                         </span>
+                        <span className="max-w-full text-center text-[10px] leading-tight text-sky-200">{getMissionLearningGoal(lvl)?.skill}</span>
                         <div className="flex gap-0.5">
                           {[1, 2, 3].map((s) => (
                             <Star

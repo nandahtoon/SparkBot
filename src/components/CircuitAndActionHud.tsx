@@ -52,7 +52,7 @@ export const CircuitOverlay: React.FC<CircuitOverlayProps> = ({
   return (
     <div className="pointer-events-none safe-bottom fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-1.5 px-2 pb-1 sm:gap-2 sm:px-3 sm:pb-1.5">
       {hintBanner}
-      <div className="pointer-events-auto flex max-w-full items-center gap-1.5 rounded-2xl border border-cyan-400/70 bg-slate-900/94 px-2.5 py-1.5 shadow-2xl backdrop-blur-md sm:gap-2 sm:px-3 sm:py-2">
+      <div className="pointer-events-auto flex max-w-full items-center gap-1.5 rounded-3xl border border-cyan-400/55 bg-slate-900/95 px-2.5 py-2 shadow-2xl backdrop-blur-md sm:gap-2 sm:px-3 sm:py-2">
         {/* Core Power Tally */}
         <div
           aria-label={`Cores ${trace.litCount} of ${trace.totalCores}`}
@@ -76,7 +76,7 @@ export const CircuitOverlay: React.FC<CircuitOverlayProps> = ({
               onOpenDemo(mirrors.some((m) => m.type === 'splitter') ? 'CIRCUIT_SPLITTER' : 'CIRCUIT_MIRROR')
             }
             aria-label="Laser Optics Visual Demo"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-400/70 bg-slate-800 text-cyan-300 shadow hover:border-cyan-200 active:scale-95 sm:h-10 sm:w-10"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/70 bg-slate-800 text-cyan-300 shadow hover:border-cyan-200 active:scale-95 sm:h-11 sm:w-11"
           >
             <BookOpen className="h-4 w-4" />
           </button>
@@ -88,7 +88,7 @@ export const CircuitOverlay: React.FC<CircuitOverlayProps> = ({
             type="button"
             onClick={onRequestHint}
             aria-label="Circuit Hint"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/70 bg-amber-500/15 text-amber-300 shadow hover:border-amber-200 active:scale-95 sm:h-10 sm:w-10"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-400/70 bg-amber-500/15 text-amber-300 shadow hover:border-amber-200 active:scale-95 sm:h-11 sm:w-11"
           >
             <Lightbulb className="h-4 w-4" />
           </button>
@@ -110,7 +110,7 @@ export const CircuitOverlay: React.FC<CircuitOverlayProps> = ({
                 data-circuit-cell={`${m.r},${m.c}`}
                 onClick={() => onTapCell(m.r, m.c)}
                 aria-label={`Rotate ${m.type} ${m.r + 1},${m.c + 1}`}
-                className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-transform active:scale-90 sm:h-10 sm:w-10 ${
+                className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-transform active:scale-90 sm:h-11 sm:w-11 ${
                   isHint
                     ? 'border-amber-300 bg-amber-400/25 shadow-[0_0_14px_rgba(251,191,36,0.65)]'
                     : m.type === 'splitter'

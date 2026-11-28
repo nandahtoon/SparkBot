@@ -169,29 +169,9 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'c
                   </button>
                 </div>
 
-                {/* Option 2: Download Ready-to-Build Native Android Studio Project (.zip) */}
-                <div className="rounded-2xl p-3.5 bg-indigo-500/10 border border-indigo-400/35">
-                  <div className="flex items-center gap-2 text-sm font-bold text-indigo-200 mb-1.5">
-                    <Package className="w-4 h-4 shrink-0 text-indigo-300" />
-                    <span>Native Android APK / Play Store Project (.zip)</span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed mb-3">
-                    Download the pre-synced Capacitor Android Studio project (
-                    <span className="font-mono text-indigo-200">com.sparkbot.academy</span>) with
-                    immersive edge-to-edge mode &amp; adaptive tablet rotation. Unzip, open{' '}
-                    <span className="font-mono text-amber-300">android/</span> in Android Studio,
-                    and click <span className="font-bold text-white">Build → Build APK(s)</span>.
-                  </p>
-                  <a
-                    id="downloadAndroidZipBtn"
-                    href="/downloads/sparkbot-android-project.zip"
-                    download="sparkbot-android-project.zip"
-                    onClick={() => HAPTICS.trigger('tap')}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-3.5 py-2.5 text-xs font-black text-white shadow-lg shadow-indigo-500/25 transition-colors hover:bg-indigo-400 active:scale-[0.99]"
-                  >
-                    <Download className="w-4 h-4 shrink-0" />
-                    <span>Download Android Project (.zip)</span>
-                  </a>
+                <div className="rounded-2xl p-3 border border-slate-700 bg-slate-800/55 text-xs text-slate-300">
+                  <p className="font-bold text-slate-100">Native Android build</p>
+                  <p className="mt-1">This preview is a web edition. A matching native build will be published after acceptance.</p>
                 </div>
 
                 {/* iOS compact note */}
@@ -248,7 +228,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'c
               <div className="text-[11px] font-medium leading-tight text-slate-300">
                 {isInstallable
                   ? 'One-tap offline home screen install'
-                  : 'Install offline or download Android project'}
+                  : 'Install for offline play'}
               </div>
             </div>
           </div>

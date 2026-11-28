@@ -1030,7 +1030,6 @@ const BugDetectiveGame: React.FC<{
             <span className="text-slate-600" aria-hidden="true">·</span>
             <span className="font-black text-white">{puzzle.title}</span>
             <span className="text-slate-600" aria-hidden="true">·</span>
-            <span className="text-slate-400">{puzzle.ageBand}</span>
           </div>
           <span className="font-black text-emerald-300">Lesson: {puzzle.bugLesson}</span>
         </div>
@@ -1289,7 +1288,6 @@ const LogicGateLabGame: React.FC<{
             <span className="text-slate-600" aria-hidden="true">·</span>
             <span className="font-black text-white">{puzzle.title}</span>
             <span className="text-slate-600" aria-hidden="true">·</span>
-            <span className="text-slate-400">{puzzle.ageBand}</span>
           </div>
           <span className={evalRes.outputActive ? 'font-black text-emerald-300' : 'text-slate-400'}>
             Live Output: {evalRes.outputActive ? '1 (ON)' : '0 (OFF)'}

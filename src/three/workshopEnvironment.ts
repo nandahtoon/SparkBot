@@ -307,6 +307,39 @@ export function buildWorkshopEnvironment(
     windmills.push(rotor);
   });
 
+  // Chapter 5 solar arrays: background-only, shared geometry and materials.
+  const energyArrays = new THREE.Group();
+  energyArrays.visible = false;
+  const panelGeo = trackDisposable(new THREE.BoxGeometry(3.2, 0.12, 1.9));
+  const panelMat = trackDisposable(new THREE.MeshStandardMaterial({color: 0x204b79, metalness: 0.35, roughness: 0.48}));
+  const frameGeo = trackDisposable(new THREE.BoxGeometry(3.38, 0.13, 2.08));
+  const frameMat = trackDisposable(new THREE.MeshStandardMaterial({color: 0x8caeb8, roughness: 0.7}));
+  const standGeo = trackDisposable(new THREE.BoxGeometry(0.25, 2.6, 0.25));
+  const solarPanels = new THREE.InstancedMesh(panelGeo, panelMat, 8);
+  const solarFrames = new THREE.InstancedMesh(frameGeo, frameMat, 8);
+  const solarStands = new THREE.InstancedMesh(standGeo, frameMat, 8);
+  const solarTransform = new THREE.Object3D();
+  for (let i = 0; i < 8; i++) {
+    const x = (i < 4 ? -1 : 1) * (14 + (i % 2) * 4);
+    const z = -19 - Math.floor((i % 4) / 2) * 7;
+    solarTransform.position.set(x, -3.8, z);
+    solarTransform.rotation.set(-0.38, 0, 0);
+    solarTransform.updateMatrix();
+    solarFrames.setMatrixAt(i, solarTransform.matrix);
+    solarTransform.position.y += 0.12;
+    solarTransform.updateMatrix();
+    solarPanels.setMatrixAt(i, solarTransform.matrix);
+    solarTransform.position.set(x, -5.1, z);
+    solarTransform.rotation.set(0, 0, 0);
+    solarTransform.updateMatrix();
+    solarStands.setMatrixAt(i, solarTransform.matrix);
+  }
+  solarPanels.instanceMatrix.needsUpdate = true;
+  solarFrames.instanceMatrix.needsUpdate = true;
+  solarStands.instanceMatrix.needsUpdate = true;
+  energyArrays.add(solarFrames, solarPanels, solarStands);
+  skyportGroup.add(energyArrays);
+
   // 3. Upgraded Dual-Tier Studio Workshop Pedestal & Gantry
   const workshopGroup = new THREE.Group();
 
@@ -633,6 +666,7 @@ export function buildWorkshopEnvironment(
   };
 
   const applyBiome = (biome: BiomeThemeDef) => {
+    energyArrays.visible = biome.id === 'energy_valley';
     hemi.color.setHex(biome.hemiSkyHex);
     hemi.groundColor.setHex(biome.hemiGroundHex);
     key.color.setHex(biome.keyLightHex);
