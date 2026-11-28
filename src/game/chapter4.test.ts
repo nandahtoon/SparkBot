@@ -71,7 +71,7 @@ test('Chapter 4 Level 13 (Rhythm Crossing): Timed Laser Barriers, IF/ELSE & WAIT
         {
           id: 'loop_inner',
           type: 'LOOP',
-          count: 2,
+          count: 3,
           children: [
             {
               id: 'if_haz',
