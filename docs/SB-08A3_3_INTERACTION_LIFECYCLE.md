@@ -1,0 +1,5 @@
+# SB-08A3-3 — Interaction and lifecycle hardening
+Baseline 245827f7c12a9df3185ceaeb73e1bfd8660a868b, exact CI 46165337204 PASS. Isolated draft #38 only.
+Extract cancellable frame chain with generation token. Test idle, finite completion, replacement, stale callback after cancellation, disposal and stop inside a frame using injected fake frame clock. Catch render, resize, update and animation errors and fall back to existing 2D board. Add legacy MediaQueryList listener fallback. No new renderer or rule changes.
+Experimental-only keyboard controls: focused robot controls use absolute arrows and R, no modifier or repeated-key command, native Enter/Space behavior preserved. Pause code playback when hidden; preserve cursor and require explicit resume. Touch buttons retain 48px height and focus visibility. Smaller responsive canvas height and safe-area padding, scrollable lab. Camera orientation and logical mapping unchanged.
+Tests are not browser/device evidence. No measured FPS, thermal or visual acceptance. Physical A3-4 and A2 acceptance remain pending. No integration/main runtime merge or production deployment. Rollback to A3-2 preview.
