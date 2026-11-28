@@ -1,10 +1,11 @@
 import React,{useState} from 'react';
 import { Bot,Check,Lock,Star,ChevronRight } from 'lucide-react';
-import { buildAdventureMap,type AdventureSave } from '../game/adventureMap';
+import type { AdventureSave } from '../game/adventureMap';
+import { buildMainGameSnapshot } from '../game/mainGameFoundation';
 import { CharacterVoiceButton } from './CharacterVoiceButton';
 const symbols=['⚙','☀','✦','⚡','▧','≈'];
 export function AdventureMap({save,currentLevelId,onSelectLevel,muted}:{save:AdventureSave;currentLevelId:number;onSelectLevel:(id:number)=>void;muted:boolean}){
- const chapters=buildAdventureMap(save);
+ const {chapters}=buildMainGameSnapshot(save);
  const initial=chapters.find(c=>c.missions.some(m=>m.id===currentLevelId))?.id??chapters[0].id;
  const [selected,setSelected]=useState(initial);
  const chapter=chapters.find(c=>c.id===selected)??chapters[0];

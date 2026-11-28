@@ -43,10 +43,10 @@
     ]
   },
   "work": {
-    "stage": "SB-M01",
-    "status": "OWNER_TEST_MERGE_AUTHORIZED",
-    "next": "SB-M02",
-    "nextGate": "Owner authorized main testing merge and deployment before physical acceptance; production promotion and experimental integration remain HOLD. Independent review remains pending; confirm exact CI before merge and physical family acceptance before release.",
+    "stage": "SB-M02",
+    "status": "PROPOSED_JOURNEY_REVIEW_REQUIRED",
+    "next": "SB-M03",
+    "nextGate": "Exact M02 CI and independent review; owner test merge authorization for this increment, physical QA pending. A2/experimental integration and production/native/commercial HOLD.",
     "evidence": {
       "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
       "gameplayCiRun": 46103652601,
@@ -141,6 +141,19 @@
         "stable": "archive/v0.3-family",
         "productionAutoDeploy": "DISABLED_IN_VERCEL_JSON",
         "physicalAcceptance": "PENDING"
+      },
+      "m01": {
+        "mainSha": "dfe6aa10823b4fcba9a8b8a824e95d2cb98cb255",
+        "integrationSha": "7a2615873908cbea052173aee839215d0c84d173",
+        "ciRun": 46185157126,
+        "preview": "https://sparkbot-5xk0jaokq-btk10.vercel.app",
+        "physical": "NOT_RUN"
+      },
+      "currentJourney": {
+        "document": "docs/SB-M02_MAIN_GAME_JOURNEY.md",
+        "baseSha": "7a2615873908cbea052173aee839215d0c84d173",
+        "physical": "NOT_RUN",
+        "ci": "VERIFY_EXACT_PR_HEAD"
       }
     }
   },
@@ -153,6 +166,7 @@
     "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md",
     "docs/SB-08A3_SPATIAL_ADVENTURE_ARCHITECTURE.md",
     "docs/SB-08A3_EXPERIMENTAL_GATE.md",
-    "docs/SB-M01_MAIN_GAME_FOUNDATION.md"
+    "docs/SB-M01_MAIN_GAME_FOUNDATION.md",
+    "docs/SB-M02_MAIN_GAME_JOURNEY.md"
   ]
 }

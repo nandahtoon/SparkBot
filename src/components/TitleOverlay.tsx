@@ -9,6 +9,7 @@ import {
   Gem,
   Gift,
   LayoutGrid,
+  Map,
   Play,
   Rocket,
   Settings,
@@ -35,7 +36,8 @@ import { HazardIcon, SparkBotEmblem } from './Icons';
 import { MuteIndicator, useMuteFlash } from './MuteIndicator';
 import { FullscreenToggleButton } from './FullscreenToggleButton';
 
-import { getMissionLearningGoal } from '../game/missionCurriculum';
+import { getMainGameLaunch, type MainGameSnapshot } from '../game/mainGameFoundation';
+import { CharacterVoiceButton } from './CharacterVoiceButton';
 
 type LaunchMode = 'story' | 'daily';
 
@@ -53,7 +55,7 @@ function extractTrackHazards(track: TrackTile[], hasDynamicHazards = false): Sen
 }
 
 interface TitleOverlayProps {
-  nextLevelId: number;
+  journey: MainGameSnapshot;
   profileName: string;
   activeCharacter: BotCharacterId;
   totalStars: number;
@@ -77,7 +79,7 @@ interface TitleOverlayProps {
 }
 
 export const TitleOverlay: React.FC<TitleOverlayProps> = ({
-  nextLevelId,
+  journey,
   profileName,
   activeCharacter,
   totalStars,
@@ -108,15 +110,16 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   const monthNum = Number(rawMonth) || 1;
   const dayNum = Number(rawDay) || 1;
 
-  const nextLevel = useMemo(() => getLevelById(nextLevelId) || LEVELS[0], [nextLevelId]);
-  const storyLearningGoal = getMissionLearningGoal(nextLevel);
+  const launch = getMainGameLaunch(journey);
+  const nextLevelId = launch.missionId;
+  const nextLevel = useMemo(() => (nextLevelId === null ? null : getLevelById(nextLevelId)) || LEVELS[0], [nextLevelId]);
   const storyHazards = useMemo(
-    () => extractTrackHazards(nextLevel.track, Boolean(nextLevel.hazards?.length)),
-    [nextLevel]
+    () => nextLevelId === null ? [] : extractTrackHazards(nextLevel.track, Boolean(nextLevel.hazards?.length)),
+    [nextLevel, nextLevelId]
   );
   const storyCrystals = useMemo(
-    () => nextLevel.track.filter((t) => t.crystal).length,
-    [nextLevel]
+    () => nextLevelId === null ? 0 : nextLevel.track.filter((t) => t.crystal).length,
+    [nextLevel, nextLevelId]
   );
 
   const dailyChallenge = useMemo(() => generateDailyChallenge(todayKey), [todayKey]);
@@ -283,14 +286,13 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             <span className="tabular text-xs font-black text-amber-200 sm:text-sm">{trophyTiers}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenLevelMap}
-            aria-label="Level Map, Bug Buster, Sandbox, and Class Code"
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-600/80 bg-slate-900/95 text-sky-300 shadow-md transition-transform active:scale-95 hover:border-sky-400"
-          >
-            <LayoutGrid className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-          </button>
+          {onOpenGameRoom && (
+            <button id="titleGameRoomBtn" type="button" onClick={onOpenGameRoom}
+              aria-label="Open Mini-Games Arcade"
+              className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-indigo-400 bg-slate-900 px-2 text-xs font-bold text-indigo-100 focus-visible:outline-2 focus-visible:outline-white">
+              <Gamepad2 className="h-4 w-4 shrink-0" aria-hidden="true"/> Games
+            </button>
+          )}
           </div>
         </details>
       </div>
@@ -310,13 +312,13 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
       </div>
 
       {/* Compact Unified Bottom Launch Console: One Mode Switcher + One Unmistakable Play CTA */}
-      <div className="flex justify-center pb-0.5 sm:pb-1">
+      <div className="flex min-h-0 justify-center pb-0.5 sm:pb-1">
         <section
           id="dailyMissionSection"
           aria-label="Mission Launch Console"
           data-daily-date={todayKey}
           data-streak={streak}
-          className={`pointer-events-auto flex w-full max-w-[480px] flex-col gap-2 rounded-2xl border bg-slate-950/90 p-3 shadow-[0_14px_32px_rgba(2,6,23,0.55)] backdrop-blur-md transition-colors sm:gap-2.5 sm:p-2.5 ${
+          className={`pointer-events-auto flex max-h-full w-full max-w-[480px] flex-col gap-2 overflow-y-auto rounded-2xl border bg-slate-950/90 p-3 shadow-[0_14px_32px_rgba(2,6,23,0.55)] backdrop-blur-md transition-colors sm:gap-2.5 sm:p-2.5 ${
             isDailyMode ? 'border-amber-400/55' : 'border-emerald-400/40'
           }`}
         >
@@ -340,7 +342,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               }`}
             >
               <Rocket className={`h-4 w-4 ${!isDailyMode ? 'text-emerald-300' : 'text-slate-400'}`} />
-              <span>Story · {nextLevelId}</span>
+              <span>Adventure</span>
             </button>
 
             <button
@@ -373,15 +375,21 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             </button>
           </div>
 
-          {/* Flat Contextual Mission Info Strip (Zero Card-Inside-Card Nesting) */}
+          {!isDailyMode && nextLevelId !== null && (
+            <div data-testid="main-journey-context" className="flex items-center justify-between gap-2 px-1 text-xs font-semibold text-sky-200">
+              <span className="min-w-0">World {launch.chapterId} · {launch.chapterTitle} · Mission {nextLevelId}</span>
+              <span className="shrink-0 tabular" aria-label={journey.completedMissions+' of '+journey.totalMissions+' missions complete'}>{journey.completedMissions}/{journey.totalMissions}</span>
+            </div>
+          )}
+          {/* Flat Contextual Mission Info Strip */}
           {!isDailyMode ? (
             <div className="flex items-center justify-between gap-2 px-1 text-xs">
               <div className="flex min-w-0 items-center gap-1.5">
-                {nextLevel.isBoss && (
+                {nextLevelId !== null && nextLevel.isBoss && (
                   <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-label="Boss Mission" />
                 )}
                 <span className="truncate font-extrabold text-slate-100">
-                  {nextLevel.name}
+                  {nextLevelId === null ? 'Choose your next mission' : nextLevel.name}
                 </span>
               </div>
 
@@ -507,19 +515,22 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             </button>
           )}
 
-          {!isDailyMode && storyLearningGoal && (
-            <p data-testid="mission-learning-goal" className="px-1 text-center text-xs font-semibold leading-tight text-sky-200">{storyLearningGoal.goal}</p>
+          {!isDailyMode && launch.goal && (
+            <div className="flex items-center gap-2 px-1">
+              <p data-testid="mission-learning-goal" className="min-w-0 flex-1 text-xs font-semibold leading-tight text-sky-200">{launch.goal}</p>
+              <CharacterVoiceButton id="main_journey_goal" text={launch.goal} muted={muted}/>
+            </div>
           )}
 
-          {/* Primary Action Row: Chunky 3D Play CTA + Distinct Mini-Games Button */}
+          {/* Primary adventure action; optional activities remain in More. */}
           <div className="flex items-center gap-2">
             <button
               id={isDailyMode ? 'dailyMissionPlayBtn' : 'storyMissionPlayBtn'}
               type="button"
               data-start="true"
               onClick={handlePrimaryPlay}
-              aria-label={isDailyMode ? 'Play Daily Mission' : `Play Mission ${nextLevelId}`}
-              className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl border-2 px-4 text-base font-black text-slate-950 transition-all active:translate-y-0.5 sm:text-lg ${
+              aria-label={isDailyMode ? 'Play Daily Mission' : launch.actionLabel + (nextLevelId === null ? '' : ', Mission '+nextLevelId)}
+              className={`flex min-h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border-2 px-2 text-sm font-black text-slate-950 transition-all active:translate-y-0.5 sm:text-lg ${
                 isDailyMode
                   ? 'border-amber-200 bg-gradient-to-b from-amber-300 to-orange-500 shadow-[0_5px_0_#b45309,0_10px_22px_rgba(245,158,11,0.32)] active:shadow-[0_1px_0_#b45309]'
                   : 'border-emerald-200 bg-gradient-to-b from-emerald-400 to-emerald-600 shadow-[0_5px_0_#047857,0_10px_22px_rgba(16,185,129,0.36)] active:shadow-[0_1px_0_#047857]'
@@ -527,22 +538,14 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             >
               <Play className="h-6 w-6 fill-slate-950 text-slate-950" />
               <span className="tabular">
-                {isDailyMode ? (dailyStars > 0 ? 'DAILY' : 'PLAY') : `Play Mission ${nextLevelId}`}
+                {isDailyMode ? (dailyStars > 0 ? 'DAILY' : 'PLAY') : launch.actionLabel}
               </span>
             </button>
-
-            {onOpenGameRoom && (
-              <button
-                id="titleGameRoomBtn"
-                type="button"
-                onClick={onOpenGameRoom}
-                aria-label="Open Mini-Games Arcade"
-                className="flex h-14 shrink-0 items-center justify-center gap-1.5 rounded-2xl border-2 border-indigo-300/75 bg-gradient-to-b from-indigo-500 to-indigo-700 px-4 text-sm font-black text-white shadow-[0_5px_0_#312e81] transition-all active:translate-y-0.5 active:shadow-[0_1px_0_#312e81]"
-              >
-                <Gamepad2 className="h-5 w-5 text-amber-300" />
-                <span>Games</span>
-              </button>
-            )}
+            <button id="titleAdventureMapBtn" type="button" onClick={onOpenLevelMap}
+              aria-label="Adventure Map, Bug Buster, Sandbox, and Class Code"
+              className="flex min-h-14 shrink-0 items-center justify-center gap-1 rounded-xl border border-sky-400 bg-slate-900 px-3 text-sm font-bold text-sky-100 focus-visible:outline-2 focus-visible:outline-white">
+              <Map className="h-5 w-5 shrink-0" aria-hidden="true"/> Map
+            </button>
           </div>
         </section>
       </div>

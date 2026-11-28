@@ -128,7 +128,8 @@ import type { UnifiedWorldController, WorldMode } from './three/worldScene';
 import { getNextCodeCameraPreset, type CodeCameraPreset } from './three/codeCamera';
 import type { HeadScreenPoint, SlotScreenPoint } from './three/robotRig';
 import { TitleOverlay } from './components/TitleOverlay';
-import { getMissionLearningGoal, getRecommendedCampaignLevel } from './game/missionCurriculum';
+import { getMissionLearningGoal } from './game/missionCurriculum';
+import { buildMainGameSnapshot, getMainGameLaunch } from './game/mainGameFoundation';
 import { getCollectionRequirement, getMissionObjectiveLabel, getSurveyStations, isMissionComplete, requiresMissionCircuit } from './game/missionObjectives';
 import { getMissionPrototype } from './game/missionPrototypes';
 import { getOceanPresentation } from './game/oceanPresentation';
@@ -254,6 +255,8 @@ export default function App() {
   }
 
   const [save, setSave] = useState<SaveProfile>(() => initialSessionRef.current!.save);
+  const mainGame = useMemo(() => buildMainGameSnapshot(save), [save]);
+  const mainGameLaunch = getMainGameLaunch(mainGame);
   const [roster, setRoster] = useState<ProfileRosterState>(() => initialSessionRef.current!.roster);
 
   const [mode, setMode] = useState<WorldMode>('TITLE');
@@ -2492,7 +2495,7 @@ export default function App() {
       {/* Title Screen Overlay */}
       {mode === 'TITLE' && (
         <TitleOverlay
-          nextLevelId={getRecommendedCampaignLevel(save).id}
+          journey={mainGame}
           activeCharacter={activeCharacter}
           profileName={activeProfileName}
           totalStars={totalStarsEarned}
@@ -2505,7 +2508,9 @@ export default function App() {
           onStartJunior={handleStartJunior}
           onStartMission={() => {
             SFX.click();
-            beginLevel(getRecommendedCampaignLevel(save));
+            const target = mainGameLaunch.missionId === null ? null : getLevelById(mainGameLaunch.missionId);
+            if (target && canEnterCampaign(target, save)) beginLevel(target);
+            else { setMapInitialTab('story'); setShowMap(true); }
           }}
           onStartDaily={() => {
             SFX.click();
@@ -3186,7 +3191,7 @@ export default function App() {
       <LevelMapModal
         visible={showMap}
         save={save}
-        currentLevelId={currentLevel.id}
+        currentLevelId={mode === 'TITLE' ? (mainGameLaunch.missionId ?? currentLevel.id) : currentLevel.id}
         initialTab={mapInitialTab}
         onSelectLevel={(id) => {
           SFX.click();
