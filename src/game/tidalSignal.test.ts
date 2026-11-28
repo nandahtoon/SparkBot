@@ -4,6 +4,7 @@ import {getLevelById} from './levels';
 import {simulateProgram,type CodeBlock,calculateStars,computeChassisInfo,countBlocks} from './engine';
 import {getSignalPatterns} from './signalPatterns';
 import {evaluateHazardAtTick} from './hazards';
+import type {DynamicHazardDef} from './types';
 const l=getLevelById(23)!;
 const run=(...types:CodeBlock['type'][])=>simulateProgram(l,l.starterChassis!,types.map((type,i)=>({id:'sig'+i,type})));
 test('two different tide patterns use actual hazard ticks, including second-gate failure',()=>{
@@ -15,7 +16,7 @@ test('two different tide patterns use actual hazard ticks, including second-gate
  assert.equal(ok.status,'win');assert.equal(ok.finalPos,6);
  assert.deepEqual(ok.events.filter(e=>e.action==='WAIT').map(e=>e.toPos),[1,4]);
  for(let tick=0;tick<12;tick++)for(const pattern of getSignalPatterns(l.hazards!,tick)){
-  const hazard=l.hazards!.find(h=>h.id===pattern.id)!;
+  const hazard:DynamicHazardDef=l.hazards!.find(h=>h.id===pattern.id)!;
   assert.equal(pattern.nextActive,evaluateHazardAtTick(hazard,tick+1).active);
   assert.ok(pattern.beats.every(b=>b.blocked===evaluateHazardAtTick(hazard,b.tick).active));
  }
