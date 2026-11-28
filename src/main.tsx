@@ -8,12 +8,14 @@ import './index.css';
 
 updateSplashProgress(48);
 
-if (typeof window !== 'undefined') {
+// This draft branch is a dedicated test build. The accepted game is opt-in.
+const legacyGame = new URLSearchParams(window.location.search).get('legacyGame') === '1';
+if (legacyGame) {
   registerSW({ immediate: true });
 }
 
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
-    {new URLSearchParams(window.location.search).get('campaignTest') === '1' ? <AdventureSlicePreview /> : <App />}
+    {legacyGame ? <App /> : <AdventureSlicePreview />}
   </ErrorBoundary>
 );
