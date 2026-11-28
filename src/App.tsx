@@ -739,8 +739,8 @@ export default function App() {
   }, [program, programHistory]);
 
   useEffect(() => {
-    worldRef.current?.setLivePathPreview(livePathPreview, showPathPreview);
-  }, [livePathPreview, showPathPreview]);
+    worldRef.current?.setLivePathPreview(livePathPreview, showPathPreview && !pendingPredictQuiz);
+  }, [livePathPreview, showPathPreview, pendingPredictQuiz]);
 
   useEffect(() => {
     worldRef.current?.setHoveredCodeBlock(mode === 'CODE_3D' ? hoveredCodeBlockId : null);
@@ -2762,6 +2762,10 @@ export default function App() {
       {mode === 'CODE_3D' && pendingPredictQuiz && (
         <PredictBeforeRunCard
           question={pendingPredictQuiz.question}
+          track={currentLevel.track}
+          program={program}
+          muted={save.muted}
+          autoReadAloud={Boolean(save.readAloudEnabled)}
           onComplete={handlePredictQuizComplete}
         />
       )}
