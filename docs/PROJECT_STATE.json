@@ -108,13 +108,13 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "Verify ultimate fusion, mobile controls and full expedition acceptance; no release until gates reviewed",
-      "experimentalStatus": "SPACE_ULTIMATE_FUSION_PENDING_CI",
+      "nextPackage": "Verify projected companion mesh and sprite budget; physical playtest, balance and acceptance before additional expansion",
+      "experimentalStatus": "SPACE_3D_MESH_PRESENTATION_PENDING_CI",
       "experimentalEntry": "/?experiment=rescue3d",
       "lastVerifiedExperiment": {
-        "sha": "aa0834ff20bd3f45abc7810e0df5c5fdb6284da2",
-        "ciRun": 46182988817,
-        "preview": "https://sparkbot-fbfvfr53t-btk10.vercel.app/"
+        "sha": "7faab2108124012fd6bad1c3e2400135b2d43469",
+        "ciRun": 46183482648,
+        "preview": "https://sparkbot-mpr9dlo5g-btk10.vercel.app/"
       },
       "policyIntegration": {
         "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",

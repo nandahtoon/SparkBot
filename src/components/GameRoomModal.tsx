@@ -77,6 +77,7 @@ import { ArcadeSceneArt } from './KidVisualArt';
 import { WallBreakerCanvasGame } from './WallBreakerCanvasGame';
 import { SPACE_BOT_FORM_INFO, SPACE_TRANSFORM_DURATION, nextSpaceBotForm, spaceBotShots, spaceBotImpact, type SpaceBotForm } from '../game/spaceBotForms';
 import { drawSpaceBot } from '../game/spaceBotArt';
+import {createSpaceMeshPainter} from '../game/spaceBotMeshPainter';
 import {SPACE_ABILITIES,SPACE_CORE_MAX,spaceEvolutionEnabled,rechargeSpaceCore,canUseSpaceAbility,activateSpaceAbility,spaceAbilitySpeed,spacePulseWave} from '../game/spaceBotEvolution';
 import {ULTIMATE_STAGE,ULTIMATE_COST,newUltimate,canActivateUltimate,activateUltimate,tickUltimate,absorbUltimateHit,ultimateArmorBlend} from '../game/spaceUltimate';
 import {drawExpeditionBackdrop} from '../game/spaceBackdrop';
@@ -300,9 +301,10 @@ const PowerConnectGame: React.FC<{
  * ========================================================================== */
 const SpaceShooterRound: React.FC<{
   mode: SpaceRoundMode;
+  meshVisuals:boolean;
   character: BotCharacterId;
   onFinish: (score: number, bolts: number, won: boolean, detail: string) => void;
-}> = ({ character, mode, onFinish }) => {
+}> = ({ character, mode, meshVisuals, onFinish }) => {
   const expedition=mode==='expedition',stageCount=spaceStageCount(mode);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -333,6 +335,7 @@ const SpaceShooterRound: React.FC<{
     if (!container || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const paintMesh=createSpaceMeshPainter();
 
     let arenaW = Math.max(320, Math.floor(container.clientWidth || window.innerWidth));
     let arenaH = Math.max(180, Math.floor(container.clientHeight || window.innerHeight - 48));
@@ -730,7 +733,8 @@ const SpaceShooterRound: React.FC<{
       ctx.save();
       ctx.translate(shipX,shipY);
       if(invulnTimer>0&&!reducedMotion.matches&&Math.floor(invulnTimer*16)%2===0)ctx.globalAlpha=.65;
-      drawSpaceBot(ctx,character,previousForm,form,transformTime/SPACE_TRANSFORM_DURATION,guardCooldown<=0,spaceEvolutionEnabled(expedition,wave),boostRemaining>0,abilityFlash,ultimateArmorBlend(ultimate.remaining,reducedMotion.matches),ultimate.shield);
+      const meshPose={character,from:previousForm,to:form,progress:transformTime/SPACE_TRANSFORM_DURATION,evolved:spaceEvolutionEnabled(expedition,wave),fusion:ultimateArmorBlend(ultimate.remaining,reducedMotion.matches),boost:boostRemaining>0};
+      if(!meshVisuals||!paintMesh(ctx,meshPose,guardCooldown<=0,abilityFlash,ultimate.shield))drawSpaceBot(ctx,character,previousForm,form,meshPose.progress,guardCooldown<=0,meshPose.evolved,meshPose.boost,abilityFlash,meshPose.fusion,ultimate.shield);
       ctx.restore();
 
       // Sparks
@@ -776,7 +780,7 @@ const SpaceShooterRound: React.FC<{
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerdown', onPointerDown);
     };
-  }, [character,mode,expedition,stageCount]);
+  }, [character,mode,expedition,stageCount,meshVisuals]);
 
   const evolved=spaceEvolutionEnabled(expedition,hud.wave),ability=SPACE_ABILITIES[hud.form];
   return (
@@ -847,13 +851,15 @@ const SpaceShooterRound: React.FC<{
 
 const SpaceShooterGame: React.FC<{character:BotCharacterId;onFinish:(score:number,bolts:number,won:boolean,detail:string)=>void}>=({character,onFinish})=>{
  const [mode,setMode]=useState<SpaceRoundMode|null>(null);
- if(mode)return <SpaceShooterRound character={character} mode={mode} onFinish={onFinish}/>;
+ const [meshVisuals,setMeshVisuals]=useState(true);
+ if(mode)return <SpaceShooterRound character={character} mode={mode} meshVisuals={mode==='expedition'&&meshVisuals} onFinish={onFinish}/>;
  return <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto bg-slate-950 p-4" data-testid="space-mode-select">
   <h3 className="text-xl font-black text-white">Space Transform</h3><p className="text-sm text-sky-200">{BOT_CHARACTERS[character].name} · Choose your adventure</p>
   <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2">
    <button type="button" onClick={()=>setMode('classic')} className="min-h-24 rounded-2xl border-2 border-sky-400 bg-sky-950 p-3 text-left text-white"><span className="block text-lg font-black">Classic</span><span className="block text-sm">4 waves · 35 seconds</span><span className="block text-xs text-sky-200">Practice transformations</span></button>
    <button type="button" onClick={()=>setMode('expedition')} className="min-h-24 rounded-2xl border-2 border-emerald-400 bg-emerald-950 p-3 text-left text-white"><span className="block text-lg font-black">Expedition</span><span className="block text-sm">8 stages · No timer</span><span className="block text-xs text-emerald-200">Explore, transform, rescue</span></button>
   </div>
+  <button type="button" aria-pressed={meshVisuals} onClick={()=>setMeshVisuals(v=>!v)} className="min-h-11 rounded-xl border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white">Expedition robot: {meshVisuals?'3D model':'2D classic'}</button>
  </div>;
 };
 
