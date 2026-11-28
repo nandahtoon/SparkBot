@@ -5,6 +5,7 @@ import {
   levelHasDynamicHazards
 } from './hazards';
 import { findCircuitFixCell } from './optics';
+import { getRouteObjectiveFailure } from './missionObjectives';
 import {
   PARTS,
   parseNonNegInt,
@@ -567,7 +568,10 @@ export function simulateProgram(
         terminated = makeResult('fail', 'Reached the gate, but need Laser Emitter on front slot!', 'missing_part', 'laser');
         return;
       }
-      terminated = makeResult('win', null, null, null);
+      const objectiveFailure = getRouteObjectiveFailure(level, Object.keys(collectedSet).length);
+      terminated = objectiveFailure
+        ? makeResult('fail', objectiveFailure, 'objective_unmet', null)
+        : makeResult('win', null, null, null);
     }
   }
 

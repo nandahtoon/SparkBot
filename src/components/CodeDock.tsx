@@ -95,6 +95,9 @@ function getTierBadgeStyle(optimality: LogicPathOptimality): string {
 }
 
 interface CodeDockProps {
+  objectiveLabel?: string;
+  objectiveTarget?: number | null;
+  objectiveFeedback?: string | null;
   junior?: boolean;
   program: CodeBlock[];
   functionBody?: CodeBlock[];
@@ -256,6 +259,9 @@ const TILE_BADGE_STYLE: Record<TileType, string> = {
 };
 
 export const CodeDock: React.FC<CodeDockProps> = ({
+  objectiveLabel,
+  objectiveTarget = null,
+  objectiveFeedback = null,
   junior = false,
   program,
   functionBody = [],
@@ -1187,6 +1193,13 @@ export const CodeDock: React.FC<CodeDockProps> = ({
           data-logic-optimality={programTiers.optimality}
           className="pointer-events-auto w-full max-w-4xl rounded-3xl border border-slate-600/70 bg-slate-900/95 px-2.5 py-2 shadow-2xl backdrop-blur-md sm:px-3 sm:py-2"
         >
+          {objectiveLabel && (
+            <div className="mb-2 rounded-xl border border-cyan-400/50 bg-cyan-950/45 px-3 py-2 text-xs font-bold text-cyan-100" data-testid="mission-objective">
+              <p>{objectiveLabel}</p>
+              {objectiveTarget !== null && stepInspection && <p aria-live="polite">Collected: {stepInspection.crystalsCollected}/{objectiveTarget}</p>}
+              {!simulating && objectiveFeedback && <p role="status" className="mt-1 text-amber-200">{objectiveFeedback}</p>}
+            </div>
+          )}
           {/* Boss Mission Header Banner (Chapter 4 Finale) */}
           {bossMeta && (
             <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl border border-rose-400/45 bg-rose-950/55 px-2.5 py-1 text-[11px]">

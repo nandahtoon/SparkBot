@@ -906,7 +906,7 @@ export function recordSkillMastery(
       sim.events.some((ev) => ev.action === 'SCAN' && ev.scanMatch)
         ? 1
         : 0),
-    circuitsSolved: cur.circuitsSolved + 1,
+    circuitsSolved: cur.circuitsSolved + (level.objective && level.objective.kind !== 'power' ? 0 : 1),
     ...(cur.bugsDebugged !== undefined ? { bugsDebugged: cur.bugsDebugged } : {}),
     ...(cur.logicGatesSolved !== undefined ? { logicGatesSolved: cur.logicGatesSolved } : {}),
     ...(cur.functionsUsed !== undefined || usedFunc

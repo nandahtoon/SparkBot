@@ -203,7 +203,14 @@ export interface CircuitCell {
 
 export type CircuitGrid = CircuitCell[][];
 
+export type MissionObjective =
+  | { kind: 'delivery' }
+  | { kind: 'collect'; requiredCrystals: number }
+  | { kind: 'power' }
+  | { kind: 'repair' };
+
 export interface LevelDef {
+  objective?: MissionObjective;
   id: number;
   name: string;
   ageLabel: string;
@@ -309,6 +316,7 @@ export interface SimResult {
     | 'ramp'
     | 'laser_gate'
     | 'patrol_drone'
+    | 'objective_unmet'
     | null;
   missingPart: PartId | null;
   events: SimEvent[];

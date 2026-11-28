@@ -123,6 +123,7 @@ import { getNextCodeCameraPreset, type CodeCameraPreset } from './three/codeCame
 import type { HeadScreenPoint, SlotScreenPoint } from './three/robotRig';
 import { TitleOverlay } from './components/TitleOverlay';
 import { getMissionLearningGoal, getRecommendedCampaignLevel } from './game/missionCurriculum';
+import { getCollectionRequirement, getMissionObjectiveLabel, isMissionComplete, requiresMissionCircuit } from './game/missionObjectives';
 import { TopHud, type MoodCue } from './components/TopHud';
 import { BuildDock } from './components/BuildDock';
 import { PaintBoothDock } from './components/PaintBoothDock';
@@ -744,10 +745,11 @@ export default function App() {
   }, [hoveredCodeBlockId, mode]);
 
   const finalizeMissionVictory = useCallback(
-    (sim: SimResult) => {
+    (sim: SimResult, completedCircuit?: ReturnType<typeof traceCircuit>) => {
       const cur = stateRef.current;
       const isDebug = Boolean(cur.currentLevel.isDebug);
-      if (isDebug) {
+      if (cur.currentLevel.objective && !isMissionComplete(cur.currentLevel, sim, completedCircuit)) return;
+      if (isDebug || cur.currentLevel.objective?.kind === 'repair') {
         SFX.bugSquashed();
       } else {
         SFX.laserSolved();
@@ -945,7 +947,7 @@ export default function App() {
       const trace = traceCircuit(nextGrid);
       if (trace.solved) {
         const sim = simulateProgram(cur.currentLevel, cur.chassis, cur.program, cur.functionBody);
-        finalizeMissionVictory(sim);
+        finalizeMissionVictory(sim, trace);
       }
     },
     [finalizeMissionVictory]
@@ -976,7 +978,7 @@ export default function App() {
         setLastFailedSim(null);
         setAdaptiveHintTier(0);
         setMoodCue({ mood: 'happy' });
-        if (stateRef.current.currentLevel.isDebug) {
+        if (!requiresMissionCircuit(stateRef.current.currentLevel)) {
           finalizeMissionVictory(res);
           return;
         }
@@ -1027,6 +1029,7 @@ export default function App() {
       res.failCode === 'empty' ||
       res.failCode === 'empty_container' ||
       res.failCode === 'empty_function' ||
+      res.failCode === 'objective_unmet' ||
       res.failCode === 'short'
     ) {
       setMoodCue({ mood: 'confused' });
@@ -2662,6 +2665,9 @@ export default function App() {
       {/* Stage 2: 3D Track Visual Coding */}
       {(mode === 'CODE_3D' || mode === 'SIMULATING') && !pendingPredictQuiz && (
         <CodeDock
+          objectiveLabel={currentLevel.objective ? getMissionObjectiveLabel(currentLevel) : undefined}
+          objectiveTarget={currentLevel.objective ? getCollectionRequirement(currentLevel) : null}
+          objectiveFeedback={lastFailedSim?.failCode === 'objective_unmet' ? lastFailedSim.failReason : null}
           junior={juniorSession}
           program={program}
           functionBody={functionBody}
