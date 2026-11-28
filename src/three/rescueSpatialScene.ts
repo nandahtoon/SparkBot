@@ -48,7 +48,17 @@ export function createRescueSpatialScene(map:RescueMap){
  scene.add(new THREE.HemisphereLight(0xe0f2fe,0x78613c,2.2));
  const sun=new THREE.DirectionalLight(0xffffff,2.0);sun.position.set(3,9,5);scene.add(sun);
  const camera=new THREE.OrthographicCamera(-6,6,6,-6,.1,60);camera.position.set(0,12,10);camera.lookAt(0,.1,0);
- function resize(width:number,height:number){const aspect=Math.max(.1,width/Math.max(1,height));const span=Math.max(map.cells.length,Math.max(...map.cells.map(r=>r.length)))*RESCUE_TILE_SIZE/2+1.1;const halfH=Math.max(span,span/aspect);camera.left=-halfH*aspect;camera.right=halfH*aspect;camera.top=halfH;camera.bottom=-halfH;camera.updateProjectionMatrix();}
+ // Fit the projected board envelope, rather than a square world-space radius.
+ const halfX=Math.max(...map.cells.map(r=>r.length))*RESCUE_TILE_SIZE/2+.1,halfZ=map.cells.length*RESCUE_TILE_SIZE/2+.1;
+ const fitPoints:THREE.Vector3[]=[];
+ for(const x of [-halfX,halfX])for(const z of [-halfZ,halfZ])for(const y of [-.4,2.05])fitPoints.push(new THREE.Vector3(x,y,z));
+ function resize(width:number,height:number){
+  const aspect=Math.max(.1,width/Math.max(1,height));camera.updateMatrixWorld(true);
+  const p=fitPoints.map(v=>v.clone().applyMatrix4(camera.matrixWorldInverse));
+  const minX=Math.min(...p.map(v=>v.x)),maxX=Math.max(...p.map(v=>v.x)),minY=Math.min(...p.map(v=>v.y)),maxY=Math.max(...p.map(v=>v.y));
+  const cx=(minX+maxX)/2,cy=(minY+maxY)/2,halfH=Math.max((maxY-minY)/2+.32,((maxX-minX)/2+.32)/aspect);
+  camera.left=cx-halfH*aspect;camera.right=cx+halfH*aspect;camera.top=cy+halfH;camera.bottom=cy-halfH;camera.updateProjectionMatrix();
+ }
  function clearPose(){robot.position.y=.09;arms.forEach(a=>a.rotation.x=0);feet.forEach(f=>f.position.z=0);effect.visible=false;warning.visible=false;}
  function update(state:RescueState){if(disposed)return;const snap=rescueSpatialSnapshot(map,state);clearPose();robot.position.set(snap.robot.x,.09,snap.robot.z);for(const tile of snap.tiles){const beacon=beacons.get(tile.id);if(beacon){beacon.lamp.material=tile.repaired?on:off;beacon.flag.visible=tile.repaired;}}}
  function animate(motion:RescueMotion,elapsed:number){if(disposed)return false;const p=sampleRescueMotion(motion,elapsed);clearPose();robot.position.set(p.x,.09+p.bob,p.z);if(motion.heading!==null)robot.rotation.y=motion.heading;

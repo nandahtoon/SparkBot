@@ -651,7 +651,9 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
         )}
 
         {mapTab==='story' && <section className="rounded-2xl border border-emerald-500/60 bg-emerald-950/30 p-3" data-testid="adventure-first-practice">
-          <button type="button" aria-expanded={rescueOpen} onClick={()=>setRescueOpen(v=>!v)} className="flex min-h-12 w-full items-center justify-between gap-2 rounded-xl bg-emerald-800 px-3 text-left font-black text-white"><span>🛟 Rescue Adventure · Try it</span><span aria-hidden="true">{rescueOpen?'−':'▶'}</span></button>
+          <a href="/?experiment=rescue3d" data-testid="rescue-adventure-entry" className="flex min-h-12 w-full items-center justify-between gap-2 rounded-xl bg-emerald-800 px-3 text-left font-black text-white"><span>🛟 Rescue Adventure</span><span aria-hidden="true">▶</span></a>
+          <p className="mt-1 text-xs text-emerald-100">Explore the islands, repair the beacons and come home.</p>
+          <button type="button" aria-expanded={rescueOpen} onClick={()=>setRescueOpen(v=>!v)} className="mt-1 flex min-h-11 w-full items-center justify-between rounded-lg px-3 text-sm font-bold text-emerald-100"><span>2D practice map</span><span aria-hidden="true">{rescueOpen?'−':'+'}</span></button>
           {rescueOpen&&<RescueAdventure muted={save.muted}/>}
         </section>}
         {mapTab === 'story' && onSelectPrototype && (

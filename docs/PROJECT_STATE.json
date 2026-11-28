@@ -108,13 +108,13 @@
       "familyCandidateSha": "b3c1013c57d2b13984b35736f55c59232092406a",
       "familyAcceptance": "PENDING",
       "integrationOfExperiment": "BLOCKED_PENDING_A2_REVIEW",
-      "nextPackage": "A3-3 exact CI and preview; A3-4 device/family interaction acceptance",
-      "experimentalStatus": "A3_3_IMPLEMENTED_PENDING_CI",
+      "nextPackage": "Review screenshot-driven navigation and compact layout; physical A3-4 acceptance remains pending",
+      "experimentalStatus": "A3_4_NAVIGATION_UI_REFINEMENT_PENDING_CI",
       "experimentalEntry": "/?experiment=rescue3d",
       "lastVerifiedExperiment": {
-        "sha": "245827f7c12a9df3185ceaeb73e1bfd8660a868b",
-        "ciRun": 46165337204,
-        "preview": "https://sparkbot-kkctuciau-btk10.vercel.app/?experiment=rescue3d"
+        "sha": "f2f38bcc6f7fdef183b095a2ad2bda5187f2aa42",
+        "ciRun": 46165606832,
+        "preview": "https://sparkbot-asnsnu9rv-btk10.vercel.app/?experiment=rescue3d"
       },
       "policyIntegration": {
         "sha": "a176a7f54ab8b30540a7b62e2baa4e694f3ad197",
