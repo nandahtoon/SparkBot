@@ -7,3 +7,6 @@ Use integration/sb-08r as the consolidated testing baseline until an explicitly 
 Keep 24 campaign mission IDs, 7 Game Room activities, pre-reader visuals, speech, audio, offline behavior and prior local progress. No new child PII, telemetry, ads, purchases, logins or network dependencies without approval and privacy review.
 For each increment: bun install --frozen-lockfile; bun run lint; node --import tsx --test src/game/*.test.ts tests/*.test.ts; bun run build. Verify exact-head GitHub Actions, distinguish automated from physical/child testing. Keep family evidence anonymous; no invented PASS, FPS or learning gains.
 Record changed files, exact SHA, CI run, unresolved gates, rollback and next work. Stop before main merge, production promotion or destructive cleanup unless separately authorized.
+
+## Cross-tool handoff (mandatory)
+Read docs/PROJECT_STATE.json, docs/AI_HANDOFF_PROTOCOL.md and docs/AI_START_PROMPT.md. Before local edits fetch origin and run node scripts/check-project-context.mjs --preflight from a scoped topic branch. CI runs the context contract check. Update state and evidence in the same reviewed increment when the active stage changes. A plain Next means one unblocked package, not release authorization. Never use an AI Studio preview as source of truth.

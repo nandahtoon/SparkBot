@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "fullName": "nandahtoon/SparkBot",
+    "id": 1467911889,
+    "url": "https://github.com/nandahtoon/SparkBot"
+  },
+  "branches": {
+    "stable": "main",
+    "integration": "integration/sb-08r",
+    "topicPrefix": "sb-",
+    "archives": [
+      "archive/v0.2-family",
+      "archive/v0.3-rc1-accepted",
+      "archive/v0.3-family"
+    ]
+  },
+  "stable": {
+    "version": "V0.3",
+    "sha": "7028aaa5aab718aff4cdbcfaea6cc4d11818ff33"
+  },
+  "release": {
+    "production": "HOLD",
+    "commercial": "HOLD",
+    "native": "HOLD",
+    "rc1Pr": 23,
+    "integrationPr": 29
+  },
+  "product": {
+    "promise": "Explore · Help · Invent",
+    "campaignMissions": 24,
+    "gameRoomActivities": 7,
+    "stack": [
+      "React",
+      "TypeScript",
+      "Three.js",
+      "Vite",
+      "Bun",
+      "PWA",
+      "Capacitor"
+    ]
+  },
+  "work": {
+    "stage": "SB-08A2",
+    "status": "AWAITING_FAMILY_ACCEPTANCE",
+    "next": "SB-08A3",
+    "nextGate": "Review physical family rescue trial and outstanding RC1 gates before 3D implementation",
+    "evidence": {
+      "lastVerifiedGameplaySha": "179f485e6a160335fa01f8e069e65d30cf322c24",
+      "gameplayCiRun": 46103652601,
+      "reconciliationSha": "374ba795f2927968dafdaa2cd9ec41245b704292",
+      "reconciliationCiRun": 46104060508
+    },
+    "pending": [
+      "Differentiated worlds",
+      "Clubhouse and mini-games",
+      "Map and next mission",
+      "Mission transition animation",
+      "Rescue family playtest"
+    ]
+  },
+  "requiredReads": [
+    "AGENTS.md",
+    "docs/START_HERE.md",
+    "docs/REPOSITORY_GOVERNANCE.md",
+    "docs/AI_HANDOFF_PROTOCOL.md",
+    "docs/SB-08A_ADVENTURE_FIRST_REDESIGN.md",
+    "docs/SB-08A2_CHILD_PLAYTEST_READINESS.md"
+  ]
+}

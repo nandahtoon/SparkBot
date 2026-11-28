@@ -6,6 +6,8 @@
 - [ ] Visual/touch/audio/learning claims separated from automated tests; family data anonymous.
 - [ ] Rollback path and next work stated.
 
+- [ ] Cross-tool preflight, current state, and handoff checked; state updated if stage/gate changed.
+
 ## Changes
 
 ## Verification (SHA / CI)
