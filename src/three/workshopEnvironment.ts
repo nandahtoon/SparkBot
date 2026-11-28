@@ -349,7 +349,7 @@ export function buildWorkshopEnvironment(
   const oceanLandmarks = {sampling:new THREE.Group(),reef:new THREE.Group(),signal:new THREE.Group(),beacon:new THREE.Group()};
   const floatGeo=trackDisposable(new THREE.CylinderGeometry(0.75,0.9,0.7,12));
   const mastGeo=trackDisposable(new THREE.CylinderGeometry(0.12,0.24,3.0,10));
-  const lampGeo=trackDisposable(new THREE.SphereGeometry(0.42,12,8));
+  const oceanLampGeo=trackDisposable(new THREE.SphereGeometry(0.42,12,8));
   const redMat=trackDisposable(new THREE.MeshStandardMaterial({color:0xf97316,roughness:0.7}));
   const whiteMat=trackDisposable(new THREE.MeshStandardMaterial({color:0xf1f5f9,roughness:0.75}));
   const greenMat=trackDisposable(new THREE.MeshBasicMaterial({color:0x34d399}));
@@ -360,17 +360,17 @@ export function buildWorkshopEnvironment(
   for(const x of [-6,6]){
     for(const z of [-8,-18,-28]){
       addLandmark(oceanLandmarks.sampling,floatGeo,redMat,x,-3.05,z);
-      addLandmark(oceanLandmarks.sampling,lampGeo,whiteMat,x,-2.4,z,0.65);
+      addLandmark(oceanLandmarks.sampling,oceanLampGeo,whiteMat,x,-2.4,z,0.65);
     }
     addLandmark(oceanLandmarks.reef,floatGeo,whiteMat,x,-3.05,-16,1.8);
     addLandmark(oceanLandmarks.reef,mastGeo,whiteMat,x,-0.7,-16);
-    addLandmark(oceanLandmarks.reef,lampGeo,greenMat,x,0.95,-16);
+    addLandmark(oceanLandmarks.reef,oceanLampGeo,greenMat,x,0.95,-16);
     addLandmark(oceanLandmarks.signal,mastGeo,whiteMat,x,-0.8,-12,1.6);
-    addLandmark(oceanLandmarks.signal,lampGeo,amberMat,x,1.8,-12);
+    addLandmark(oceanLandmarks.signal,oceanLampGeo,amberMat,x,1.8,-12);
   }
   addLandmark(oceanLandmarks.beacon,floatGeo,whiteMat,7,-2.5,-24,3);
   addLandmark(oceanLandmarks.beacon,mastGeo,whiteMat,7,1,-24,2.3);
-  addLandmark(oceanLandmarks.beacon,lampGeo,amberMat,7,4.7,-24,2);
+  addLandmark(oceanLandmarks.beacon,oceanLampGeo,amberMat,7,4.7,-24,2);
   for(const group of Object.values(oceanLandmarks)){group.visible=false;oceanGroup.add(group);}
 
   // Chapter 5 solar arrays: background-only, shared geometry and materials.
