@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { JourneyCard } from './JourneyCard';
+import { CharacterVoiceButton } from './CharacterVoiceButton';
+import type { JourneyPreview } from '../game/journey';
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -79,6 +82,8 @@ interface GameRoomModalProps {
   equippedDroneId?: DroneId | null;
   totalBolts: number;
   hasNextLevel: boolean;
+  nextJourney?: JourneyPreview|null;
+  voiceMuted?: boolean;
   chassisInfo?: ChassisInfo;
   externalSummary?: GameRoomRoundSummary | null;
   onClearExternalSummary?: () => void;
@@ -1522,6 +1527,8 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
   equippedDroneId = null,
   totalBolts,
   hasNextLevel,
+  nextJourney,
+  voiceMuted=false,
   chassisInfo,
   externalSummary = null,
   onClearExternalSummary,
@@ -1770,6 +1777,12 @@ export const GameRoomModal: React.FC<GameRoomModalProps> = ({
         <div className="touch-pan-y safe-bottom flex-1 overflow-y-auto px-3 py-3.5 sm:px-6 sm:py-5">
           {view === 'HUB' && (
             <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+              <section className="relative isolate overflow-hidden rounded-3xl border border-violet-500/50 bg-gradient-to-br from-slate-900 via-indigo-950 to-cyan-950 p-4" data-testid="living-game-room">
+                <div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-8 -z-10 h-36 w-36 rounded-full border-[18px] border-cyan-400/20 motion-safe:animate-pulse"/>
+                <div aria-hidden="true" className="pointer-events-none absolute bottom-4 right-12 -z-10 h-8 w-8 rotate-45 rounded-lg bg-violet-400/30 motion-safe:animate-bounce"/>
+                <div className="flex items-center gap-3"><Gamepad2 className="h-10 w-10 text-cyan-300"/><div className="flex-1"><h3 className="text-lg font-black text-white">SparkBot Clubhouse</h3><p className="text-xs text-sky-200">Play a mini-game or keep exploring!</p></div><CharacterVoiceButton id="room_welcome" text="Hey explorer! Welcome to my clubhouse. Pick a game, or let's go on our next adventure!" muted={voiceMuted}/></div>
+              </section>
+              {nextJourney&&hasNextLevel&&<JourneyCard next={nextJourney} onStart={onNextLevel}/>}
               {/* Action Arcade Cartridges First — Visual Scene Cards (Zero Reading Needed!) */}
               <section className="flex flex-col gap-3">
                 <div className="flex items-center gap-2 px-1">

@@ -73,6 +73,9 @@ import {
 import { SFX } from './game/audio';
 import { SPEECH } from './game/readAloud';
 import { missionVoice } from './game/characterGuidance';
+import { soundscapeFor } from './game/soundscape';
+import { getJourneyPreview } from './game/journey';
+import { getBiomeForLevel } from './game/biomes';
 import { getPartPlacementSoundProfile } from './game/partAudio';
 import {
   normalizeGraphicsQualityMode,
@@ -450,6 +453,16 @@ export default function App() {
     SFX.applySettings(save.muted, normalizedAudio);
     SPEECH.applySettings(save.muted, normalizedAudio.voiceVolume);
   }, [save.muted, normalizedAudio]);
+
+  useEffect(()=>{
+    const sync=()=>SFX.setSoundscape(document.hidden||paused?null:soundscapeFor(getBiomeForLevel(currentLevel).id,mode,showGameRoom));
+    sync();document.addEventListener('visibilitychange',sync);
+    return ()=>{document.removeEventListener('visibilitychange',sync);SFX.setSoundscape(null);};
+  },[currentLevel,mode,showGameRoom,paused]);
+  useEffect(()=>{
+    const sync=()=>SFX.setNarrationActive(SPEECH.getSnapshot().speaking);
+    sync();return SPEECH.subscribe(sync);
+  },[]);
 
   useEffect(() => {
     SPEECH.setEnabled(Boolean(save.readAloudEnabled));
@@ -3000,6 +3013,8 @@ export default function App() {
             equippedDroneId={activeLoadout.equippedDroneId}
             totalBolts={save.totalBolts}
             hasNextLevel={Boolean(nextLevelDef)}
+            nextJourney={getJourneyPreview(currentLevel)}
+            voiceMuted={save.muted}
             chassisInfo={chassisInfo}
             externalSummary={planetSummary}
             onClearExternalSummary={() => setPlanetSummary(null)}
@@ -3092,6 +3107,7 @@ export default function App() {
         </div>
       )}
       <VictoryModal
+        nextJourney={getJourneyPreview(currentLevel)}
         missionMessage={getOceanPresentation(currentLevel)?.victory}
         voiceMuted={save.muted}
         autoVoice={Boolean(save.readAloudEnabled)}

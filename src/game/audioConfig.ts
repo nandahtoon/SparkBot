@@ -4,12 +4,16 @@ export interface AudioSettings {
   sfxVolume: number; // 0..1
   uiVolume: number; // 0..1
   voiceVolume: number; // 0..1
+  musicVolume?: number; // independent background score
+  ambienceVolume?: number; // independent environmental bed
 }
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   sfxVolume: 0.92,
   uiVolume: 0.88,
-  voiceVolume: 1.0
+  voiceVolume: 1.0,
+  musicVolume: 0.28,
+  ambienceVolume: 0.22
 };
 
 /** Studio master makeup gain applied after the soft DynamicsCompressor limiter */
@@ -32,7 +36,9 @@ export function normalizeAudioSettings(input?: Partial<AudioSettings> | null): A
   return {
     sfxVolume: clampUnitVolume(input?.sfxVolume, DEFAULT_AUDIO_SETTINGS.sfxVolume),
     uiVolume: clampUnitVolume(input?.uiVolume, DEFAULT_AUDIO_SETTINGS.uiVolume),
-    voiceVolume: clampUnitVolume(input?.voiceVolume, DEFAULT_AUDIO_SETTINGS.voiceVolume)
+    voiceVolume: clampUnitVolume(input?.voiceVolume, DEFAULT_AUDIO_SETTINGS.voiceVolume),
+    musicVolume: clampUnitVolume(input?.musicVolume, DEFAULT_AUDIO_SETTINGS.musicVolume ?? 0.28),
+    ambienceVolume: clampUnitVolume(input?.ambienceVolume, DEFAULT_AUDIO_SETTINGS.ambienceVolume ?? 0.22)
   };
 }
 

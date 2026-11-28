@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getJourneyPreview } from '../game/journey';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type {
@@ -1082,6 +1083,17 @@ export class UnifiedWorldController {
     });
 
     const track = level.track;
+    // A miniature holographic route of the following mission, not traversable geometry.
+    const next=getJourneyPreview(level);
+    if(next){
+      const group=new THREE.Group();group.name='next-mission-hologram';
+      group.position.set(3.7,1.8,TRACK_START_Z-(track.length-1)*TILE_SPACING);
+      const base=new THREE.Mesh(new THREE.CylinderGeometry(.78,.95,.16,12),new THREE.MeshStandardMaterial({color:0x164e63,emissive:0x0891b2,emissiveIntensity:.25}));group.add(base);
+      const mat=new THREE.MeshBasicMaterial({color:0x67e8f9,transparent:true,opacity:.7});const flagMat=new THREE.MeshBasicMaterial({color:0x34d399});
+      const step=new THREE.BoxGeometry(.36,.07,.23);
+      next.track.forEach((tile,i)=>{if(tile.type==='gap')return;const mesh=new THREE.Mesh(step,tile.type==='gate'?flagMat:mat);mesh.position.set(0,.25,-i*.29);group.add(mesh);});
+      this.trackGroup.add(group);
+    }
     for (let i = 0; i < track.length; i++) {
       const tile = track[i];
       const tz = TRACK_START_Z - i * TILE_SPACING;
@@ -2853,6 +2865,7 @@ export class UnifiedWorldController {
       this.applyQualityBudget(adaptiveBudget);
     }
 
+    this.env.animateEnvironment(this.totalTime,this.pathReducedMotion);
     // Spin windmills, solar horizon ring, ambient dust motes & crystals
     for (let i = 0; i < this.env.windmills.length; i++) {
       this.env.windmills[i].rotation.z += dt * (0.7 + i * 0.15);

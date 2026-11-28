@@ -21,6 +21,7 @@ export interface WorkshopEnvironmentHandles {
   moteSeeds: Array<{ x: number; y: number; z: number; phase: number; speed: number; scale: number }>;
   solarRing: THREE.Mesh;
   applyBiome: (biome: BiomeThemeDef) => void;
+  animateEnvironment: (time:number,reduced:boolean) => void;
   setQualityBudget: (budget: GraphicsQualityBudget) => void;
   dispose: () => void;
 }
@@ -776,6 +777,11 @@ export function buildWorkshopEnvironment(
     moteSeeds,
     solarRing,
     applyBiome,
+    animateEnvironment: (time,reduced)=>{
+      if(!oceanGroup.visible)return;
+      waveMat.opacity=reduced?.55:.43+Math.sin(time*.8)*.12;
+      for(const group of Object.values(oceanLandmarks))if(group.visible)group.position.y=reduced?0:Math.sin(time*1.1)*.08;
+    },
     setQualityBudget,
     dispose: () => {
       for (const item of disposables) {

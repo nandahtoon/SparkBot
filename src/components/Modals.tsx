@@ -41,6 +41,8 @@ import {
 } from '../game/educationStrategy';
 import { SPEECH, useReadAloud } from '../game/readAloud';
 import { CharacterVoiceButton } from './CharacterVoiceButton';
+import { JourneyCard } from './JourneyCard';
+import { getJourneyPreview, type JourneyPreview } from '../game/journey';
 import { victoryVoice } from '../game/characterGuidance';
 import { getMissionLearningGoal, type MissionLearningGoal } from '../game/missionCurriculum';
 
@@ -52,6 +54,7 @@ export interface VictorySpeedRunSummary {
 
 interface VictoryModalProps {
   missionMessage?: string;
+  nextJourney?: JourneyPreview | null;
   voiceMuted?: boolean;
   autoVoice?: boolean;
   learningGoal?: MissionLearningGoal | null;
@@ -87,6 +90,7 @@ interface VictoryModalProps {
 export const VictoryModal: React.FC<VictoryModalProps> = ({
   learningGoal = null,
   missionMessage,
+  nextJourney,
   voiceMuted = false,
   autoVoice = false,
   visible,
@@ -312,6 +316,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </button>
         )}
 
+          {hasNextLevel && nextJourney && <JourneyCard next={nextJourney}/>}
           {hasNextLevel && (
             <button
               type="button"
@@ -654,6 +659,7 @@ export const LevelMapModal: React.FC<LevelMapModalProps> = ({
             </div>
           </section>
         )}
+        {mapTab==='story' && (()=>{const level=allLevelsById.get(currentLevelId);const next=level?getJourneyPreview(level):null;return next?<JourneyCard next={next} locked={next.id<=LEVELS.length && next.id>save.unlockedLevel}/>:null;})()}
         {/* Story Campaign */}
         {mapTab === 'story' && (
         <div className="flex flex-col gap-3">

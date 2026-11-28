@@ -242,6 +242,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 p-3 space-y-3">
+          {(['musicVolume','ambienceVolume'] as const).map(key=><label key={key} className="flex items-center gap-2 text-xs font-bold text-sky-100"><span className="w-24">{key==='musicVolume'?'Music':'Environment'}</span><input type="range" min={0} max={100} value={Math.round((audio[key]??0)*100)} aria-label={key==='musicVolume'?'Background Music Volume':'Environment Volume'} onChange={e=>onChangeAudio({[key]:Number(e.target.value)/100})} className="h-8 min-w-0 flex-1 accent-sky-400"/><span className="tabular-nums">{Math.round((audio[key]??0)*100)}%</span></label>)}
+        </div>
+
         {/* 2-Column Tactile Icon Toggle Grid (Zero Reading Needed) */}
         <div className="grid grid-cols-2 gap-2">
           <button
