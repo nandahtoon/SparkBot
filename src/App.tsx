@@ -72,6 +72,7 @@ import {
 } from './game/profileRoster';
 import { SFX } from './game/audio';
 import { SPEECH } from './game/readAloud';
+import { missionVoice } from './game/characterGuidance';
 import { getPartPlacementSoundProfile } from './game/partAudio';
 import {
   normalizeGraphicsQualityMode,
@@ -574,6 +575,7 @@ export default function App() {
 
   const beginLevel = useCallback(
     (lvl: LevelDef, preserveChassis = false, junior = false) => {
+      SPEECH.stop();
       setJuniorSession(junior);
       const hasStarterChassis = Boolean(lvl.starterChassis);
       const startInCode = Boolean((lvl.isDebug || lvl.isPrototype || lvl.objective) && hasStarterChassis);
@@ -1429,6 +1431,7 @@ export default function App() {
 
   const launchSimulation = useCallback(
     (sim: SimResult, stepMode: boolean) => {
+      SPEECH.stop();
       SFX.unlock();
       if (!stepMode) {
         SFX.speakWallE('excited', BOT_CHARACTERS[activeCharacter].voicePitch, touchCounterRef.current++);
@@ -2435,6 +2438,7 @@ export default function App() {
     <AdaptiveHintBanner
       hint={currentAdaptiveHint}
       isGentleRetry={consecutiveFails > 0}
+      muted={save.muted}
       autoReadAloud={Boolean(save.readAloudEnabled)}
       onEscalateTier={handleRequestHint}
       onOpenDemo={(topic, condition) => {
@@ -2526,6 +2530,7 @@ export default function App() {
           mode={mode}
           canCode={chassisInfo.hasDrive && chassisInfo.hasFrontLaser}
           muted={save.muted}
+          missionVoiceText={(mode==='BUILD_3D'||mode==='CODE_3D'||mode==='CIRCUIT_3D') && !activeMissionTutorialStep && !currentAdaptiveHint && !pendingPredictQuiz && !showMap && !showProfile && !paused ? missionVoice(currentLevel) : ''}
           ghostHelp={ghostHelp}
           moodCue={currentAdaptiveHint || activeMissionTutorialStep ? null : moodCue}
           challengeTimerEnabled={challengeTimerEnabled}
@@ -2614,6 +2619,7 @@ export default function App() {
           lastPlacement={lastPlacement}
           hintBanner={mode === 'BUILD_3D' ? adaptiveHintElement : null}
           suppressInlineGuide={Boolean(activeMissionTutorialStep)}
+          muted={save.muted}
           onSelectPart={(p) => {
             SFX.click();
             setSelectedPart(p);
@@ -2863,6 +2869,7 @@ export default function App() {
       <GuidedTutorialOverlay
         junior={juniorSession}
         muted={save.muted}
+        autoReadAloud={Boolean(save.readAloudEnabled)}
         step={activeMissionTutorialStep}
         onAcknowledgeStep={handleAcknowledgeTutorialStep}
         onSkip={handleSkipTutorial}
@@ -3086,6 +3093,8 @@ export default function App() {
       )}
       <VictoryModal
         missionMessage={getOceanPresentation(currentLevel)?.victory}
+        voiceMuted={save.muted}
+        autoVoice={Boolean(save.readAloudEnabled)}
         learningGoal={getMissionLearningGoal(currentLevel)}
         visible={mode === 'VICTORY' && !currentLevel.isPrototype && !showGameRoom && !showShop && !showQuests}
         stars={victoryStars}

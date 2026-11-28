@@ -40,6 +40,8 @@ import {
   type StemFactCardDef
 } from '../game/educationStrategy';
 import { SPEECH, useReadAloud } from '../game/readAloud';
+import { CharacterVoiceButton } from './CharacterVoiceButton';
+import { victoryVoice } from '../game/characterGuidance';
 import { getMissionLearningGoal, type MissionLearningGoal } from '../game/missionCurriculum';
 
 export interface VictorySpeedRunSummary {
@@ -50,6 +52,8 @@ export interface VictorySpeedRunSummary {
 
 interface VictoryModalProps {
   missionMessage?: string;
+  voiceMuted?: boolean;
+  autoVoice?: boolean;
   learningGoal?: MissionLearningGoal | null;
   visible: boolean;
   stars: number;
@@ -83,6 +87,8 @@ interface VictoryModalProps {
 export const VictoryModal: React.FC<VictoryModalProps> = ({
   learningGoal = null,
   missionMessage,
+  voiceMuted = false,
+  autoVoice = false,
   visible,
   stars,
   bonusEarned,
@@ -142,7 +148,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
         )}
 
-        <h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2>
+        <div className="flex items-center justify-center gap-2"><h2 className="text-center text-2xl font-black tracking-tight text-white">You did it!</h2><CharacterVoiceButton id="victory_voice" text={victoryVoice(missionMessage,hasNextLevel)} muted={voiceMuted} auto={autoVoice} label="Hear celebration"/></div>
         <p className="-mt-2 text-center text-sm text-emerald-200">{missionMessage || 'Great work, SparkBot explorer.'}</p>
         {/* 3 Big Stars */}
         <div className="flex items-center gap-3">

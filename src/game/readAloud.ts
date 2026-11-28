@@ -155,12 +155,16 @@ class ReadAloudController {
     }
   }
 
-  toggleSpeak(rawText: string, id: string): boolean {
+  stopOwned(id: string): void {
+    if(this.activeId===id)this.stop();
+  }
+
+  toggleSpeak(rawText: string, id: string, style: SpeechStyle = {}): boolean {
     if (this.speaking && this.activeId === id) {
       this.stop();
       return false;
     }
-    return this.speak(rawText, id);
+    return this.speak(rawText, id, style);
   }
 
   stop(): void {

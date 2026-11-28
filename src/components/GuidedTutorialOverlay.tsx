@@ -6,11 +6,14 @@ import {
   type RectBox
 } from '../game/missionTutorial';
 import { SPEECH, useReadAloud } from '../game/readAloud';
+import { SFX } from '../game/audio';
+import { tutorialVoice } from '../game/characterGuidance';
 import { BlockIcon, PartIcon } from './Icons';
 
 interface GuidedTutorialOverlayProps {
   junior?: boolean;
   muted?: boolean;
+  autoReadAloud?: boolean;
   step: MissionTutorialStepDef | null;
   onAcknowledgeStep: (stepId: MissionTutorialStepDef['id']) => void;
   onSkip: () => void;
@@ -51,6 +54,7 @@ function expandRect(rect: RectBox, pad: number): RectBox {
 export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
   junior = false,
   muted = false,
+  autoReadAloud = false,
   step,
   onAcknowledgeStep,
   onSkip
@@ -142,13 +146,14 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [step, onSkip]);
 
-  const spokenHint = step?.actionHint;
+  const spokenHint = step ? tutorialVoice(step) : '';
   const spokenStepId = step?.id;
   useEffect(() => {
-    if (!junior || muted || !spokenHint || !spokenStepId) return;
-    SPEECH.speak(spokenHint, `junior_${spokenStepId}`);
-    return () => SPEECH.stop();
-  }, [junior, muted, spokenHint, spokenStepId]);
+    if ((!junior && !autoReadAloud) || muted || !spokenHint || !spokenStepId) return;
+    SFX.cancelSpeech();
+    SPEECH.speak(spokenHint, `tut_${spokenStepId}`, {playful:true});
+    return () => SPEECH.stopOwned(`tut_${spokenStepId}`);
+  }, [junior, autoReadAloud, muted, spokenHint, spokenStepId]);
 
   if (!step) return null;
 
@@ -439,12 +444,13 @@ export const GuidedTutorialOverlay: React.FC<GuidedTutorialOverlayProps> = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {speech.supported && (
+            {speech.supported && !muted && (
               <button
                 type="button"
-                onClick={() =>
-                  SPEECH.toggleSpeak(`${step.title}. ${step.body}`, `tut_${step.id}`)
-                }
+                onClick={() => {
+                  SFX.cancelSpeech();
+                  SPEECH.toggleSpeak(tutorialVoice(step), `tut_${step.id}`, {playful:true});
+                }}
                 aria-label="Listen to Step"
                 className={`flex min-h-11 min-w-11 items-center justify-center rounded-xl border transition-transform active:scale-95 ${
                   speech.speaking && speech.activeId === `tut_${step.id}`

@@ -18,6 +18,6 @@ test('junior session keeps timer off, provides spoken guidance and simplified co
  assert.match(app,/!cur.juniorSession && Boolean\(cur.save.challengeTimerEnabled\)/);
  assert.match(app,/junior=\{juniorSession\}/);
  assert.match(code,/junior \? \(\['MOVE'\]/);
- assert.match(guide,/!junior \|\| muted/);
+ assert.match(guide,/!junior && !autoReadAloud/);
  assert.match(guide,/SPEECH.speak\(spokenHint/);
 });
