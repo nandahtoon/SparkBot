@@ -3191,7 +3191,7 @@ export default function App() {
       <LevelMapModal
         visible={showMap}
         save={save}
-        currentLevelId={currentLevel.id}
+        currentLevelId={mode === 'TITLE' ? (mainGameLaunch.missionId ?? currentLevel.id) : currentLevel.id}
         initialTab={mapInitialTab}
         onSelectLevel={(id) => {
           SFX.click();
