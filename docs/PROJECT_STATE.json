@@ -152,11 +152,13 @@
           16
         ],
         "branch": "sb-m03a-campaign-redesign",
-        "previewRoute": "/?campaignTest=1",
+        "previewRoute": "/",
         "physical": "NOT_RUN",
         "uiPr": 42,
         "uiFeedback": "Home layout awkward; gameplay repetitive by Level 13",
-        "integration": "HOLD"
+        "integration": "HOLD",
+        "legacyRoute": "/?legacyGame=1",
+        "previewFeedback": "Owner screenshot showed legacy Level 24; root preview now defaults to rule prototype; actual device retest pending."
       }
     }
   },
