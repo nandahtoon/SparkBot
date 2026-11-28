@@ -17,3 +17,6 @@ E: IDs 21–24 underwater sampling, survey, currents and repair. Each batch must
 4. Existing 24 IDs, 7 games, local saves and offline behavior remain; future migration explicit, idempotent and tested. No production, native or commercial release. Rollback by abandoning isolated branch; stable archive and existing main/preview unchanged.
 ## Evidence
 Exact-head CI required, physical/browser QA pending. This increment implements 24 design contracts and 4 playable 2D rule prototypes, not 24 finished missions. Preview protected by existing Vercel access settings. No changes to #42 or its preview. Reconcile #42 state and overlapping entrypoints before any future approved integration.
+
+## Preview entry correction — owner screenshot
+Owner screenshot showed legacy Level 24 on the test deployment; cause of route loss or cache not confirmed. Isolated draft preview now opens the four rule prototypes at root, with legacy App explicitly accessible via /?legacyGame=1. Preview does not register the service worker (legacy path still does); use the new exact deployment origin to avoid previous cached assets. This is not a main-game integration or release, and the temporary entrypoint must not merge as-is. Physical confirmation remains pending.
