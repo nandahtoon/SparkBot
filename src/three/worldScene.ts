@@ -1153,7 +1153,7 @@ export class UnifiedWorldController {
           // Pontoon flotation, plank seams, and bright side bumpers replace the industrial runway look.
           const floatMat=new THREE.MeshStandardMaterial({color:0xe9b878,roughness:.9});
           const trimMat=new THREE.MeshStandardMaterial({color:oceanStyle.trim,roughness:.7});
-          for(const x of [-deckW*.37,deckW*.37]){const pontoon=new THREE.Mesh(new RoundedBoxGeometry(.85,.75,TILE_SPACING-.24,2,.09),floatMat);pontoon.position.set(x,-.68,tz);this.trackGroup.add(pontoon);}
+          for(const x of [-deckW*.37,deckW*.37]){const pontoon=new THREE.Mesh(new RoundedBoxGeometry(.85,.75,TILE_SPACING-.24,2,.09),floatMat);pontoon.position.set(x,-3.05,tz);this.trackGroup.add(pontoon);const riser=new THREE.Mesh(new THREE.BoxGeometry(.38,2.3,.5),floatMat);riser.position.set(x,-1.57,tz);this.trackGroup.add(riser);}
           for(const dz of [-.85,0,.85]){const seam=new THREE.Mesh(new THREE.BoxGeometry(deckW-.25,.014,.035),trimMat);seam.position.set(0,.009,tz+dz);this.trackGroup.add(seam);}
         }
 

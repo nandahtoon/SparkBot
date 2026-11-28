@@ -80,7 +80,7 @@ export function createOceanDestinationPreview(next:JourneyPreview,currentLength:
  const deck=new THREE.BoxGeometry(2.3,.25,2.25),float=new THREE.BoxGeometry(2.55,.6,2.4),gem=new THREE.OctahedronGeometry(.21),box=new THREE.BoxGeometry(1,1,1);
  const deckMat=new THREE.MeshStandardMaterial({color:0x80c8c7,roughness:.8}),floatMat=new THREE.MeshStandardMaterial({color:0xe9bb75,roughness:.9}),white=new THREE.MeshStandardMaterial({color:0xf3f4e5,roughness:.8}),roof=new THREE.MeshStandardMaterial({color:0x287890,roughness:.8}),mark=new THREE.MeshBasicMaterial({color:0x67e8f9});
  const add=(geo:THREE.BufferGeometry,mat:THREE.Material,x:number,y:number,z:number,sx=1,sy=1,sz=1)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(sx,sy,sz);group.add(m);};
- next.track.forEach((tile,i)=>{if(tile.type==='gap')return;const z=-i*2.4;add(float,floatMat,0,-.45,z);add(deck,deckMat,0,0,z);if(tile.crystal)add(gem,mark,0,.56,z);});
+ next.track.forEach((tile,i)=>{if(tile.type==='gap')return;const z=-i*2.4;add(float,floatMat,0,-1.7,z);add(box,floatMat,0,-.8,z,.4,1.35,.5);add(deck,deckMat,0,0,z);if(tile.crystal)add(gem,mark,0,.56,z);});
  const z=-(next.track.length-1)*2.4-1.8;
  add(box,white,0,1.05,z,3.3,2,1.9);add(box,roof,0,2.15,z,3.6,.3,2.2);add(box,mark,0,1.3,z+1,1.8,.62,.06);
  // Near entrance flag makes the route visible as a separate upcoming location.
